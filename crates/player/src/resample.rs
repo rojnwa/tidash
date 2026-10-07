@@ -71,7 +71,10 @@ impl Resampler {
             out.extend_from_slice(input);
             return;
         };
-        debug_assert!(input.len().is_multiple_of(s.ch), "input not a whole number of frames");
+        debug_assert!(
+            input.len().is_multiple_of(s.ch),
+            "input not a whole number of frames"
+        );
         s.pending.extend_from_slice(input);
         s.in_frames += (input.len() / s.ch) as u64;
         loop {
@@ -96,7 +99,17 @@ impl Resampler {
         let mut left = s.pending.len() / ch;
         let base = out.len();
         // Zero-padded final chunk(s); enough of them to push the filter delay out.
-        while s.out_frames < target {
+        // Iterations are capped at what the buffered input plus remaining delay can
+        // need, so a zero-output chunk or an unreachable target can never spin.
+        let (in_next, out_next) = (
+            s.fft.input_frames_next().max(1),
+            s.fft.output_frames_next().max(1),
+        );
+        let max_iters = left.div_ceil(in_next) + s.skip.div_ceil(out_next) + 3;
+        for _ in 0..max_iters {
+            if s.out_frames >= target {
+                break;
+            }
             let n = left.min(s.fft.input_frames_next());
             s.in_buf[..n * ch].copy_from_slice(&s.pending[..n * ch]);
             s.pending.drain(..n * ch);
@@ -105,9 +118,9 @@ impl Resampler {
                 break; // rubato error: stop rather than spin
             }
         }
-        let extra = s.out_frames - target;
+        let extra = s.out_frames.saturating_sub(target);
         out.truncate(out.len().saturating_sub(extra as usize * ch).max(base));
-        s.out_frames = target;
+        s.out_frames = s.out_frames.min(target);
     }
 }
 
@@ -211,7 +224,12 @@ mod tests {
         }
         r.flush(&mut chunked);
         let diff = (whole.len() as i64 - chunked.len() as i64).abs() / 2;
-        assert!(diff <= 1024, "whole {} vs chunked {}", whole.len() / 2, chunked.len() / 2);
+        assert!(
+            diff <= 1024,
+            "whole {} vs chunked {}",
+            whole.len() / 2,
+            chunked.len() / 2
+        );
     }
 
     #[test]
@@ -224,7 +242,8 @@ mod tests {
         let mut out = Vec::new();
         r.process(&input, &mut out);
         r.flush(&mut out);
-        let ch = |x: &[f32], c: usize| -> Vec<f32> { x.iter().skip(c).step_by(2).copied().collect() };
+        let ch =
+            |x: &[f32], c: usize| -> Vec<f32> { x.iter().skip(c).step_by(2).copied().collect() };
         let (l_in, l_out, r_out) = (ch(&input, 0), ch(&out, 0), ch(&out, 1));
         assert!(rms(&r_out) < 1e-4, "R rms = {}", rms(&r_out));
         assert!((rms(&l_out) / rms(&l_in) - 1.0).abs() < 0.01);
@@ -240,5 +259,18 @@ mod tests {
         r.process(&[0.1; 20], &mut out); // 10 frames
         r.flush(&mut out);
         assert_eq!(out.len() / 2, 11); // round(10 * 48000/44100)
+    }
+
+    #[test]
+    fn flush_stops_when_target_unreachable() {
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        let mut out = Vec::new();
+        r.process(&[0.1; 20], &mut out);
+        // Corrupt bookkeeping so the target can never be reached.
+        if let Some(i) = r.inner.as_mut() {
+            i.in_frames = u64::MAX / 4;
+        }
+        r.flush(&mut out); // must terminate without panic or underflow
+        assert!(out.len() < 100_000);
     }
 }

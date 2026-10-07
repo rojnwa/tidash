@@ -6,5 +6,5 @@ mod stream;
 
 pub use decode::{DecodeError, Decoder, Pcm};
 
-pub use stream::ProgressiveFile;
 pub use resample::Resampler;
+pub use stream::ProgressiveFile;
