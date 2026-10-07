@@ -3,7 +3,9 @@
 use crate::{ClientConfig, Error, Result};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngExt;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -88,6 +90,136 @@ pub fn code_from_redirect(redirect: &str, expected_state: &str) -> Result<String
     }
     Ok(code)
 }
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Session {
+    pub access_token: String,
+    pub refresh_token: String,
+    /// Unix seconds.
+    pub expires_at: u64,
+    pub user_id: u64,
+    pub country_code: String,
+}
+
+#[derive(Deserialize)]
+struct TokenResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: u64,
+    user_id: Option<u64>,
+    user: Option<TokenUser>,
+}
+
+#[derive(Deserialize)]
+struct TokenUser {
+    #[serde(rename = "userId")]
+    user_id: Option<u64>,
+    #[serde(rename = "countryCode")]
+    country_code: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct OAuthError {
+    error: String,
+    error_description: Option<String>,
+}
+
+async fn post_token(
+    http: &reqwest::Client,
+    cfg: &ClientConfig,
+    mut form: Vec<(&str, String)>,
+) -> Result<TokenResponse> {
+    if let Some(secret) = &cfg.client_secret {
+        form.push(("client_secret", secret.clone()));
+    }
+    let url = cfg
+        .auth_base
+        .join("oauth2/token")
+        .map_err(|e| Error::Auth(format!("bad auth_base: {e}")))?;
+    let resp = http.post(url).form(&form).send().await?;
+    let status = resp.status();
+    let body = resp.text().await?;
+    if status.is_success() {
+        return Ok(serde_json::from_str(&body)?);
+    }
+    if matches!(status.as_u16(), 400 | 401)
+        && let Ok(e) = serde_json::from_str::<OAuthError>(&body)
+    {
+        return Err(Error::Auth(match e.error_description {
+            Some(d) => format!("{}: {d}", e.error),
+            None => e.error,
+        }));
+    }
+    Err(Error::Status {
+        status: status.as_u16(),
+        sub_status: None,
+        message: body,
+    })
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+pub async fn exchange_code(
+    http: &reqwest::Client,
+    cfg: &ClientConfig,
+    code: &str,
+    pkce: &Pkce,
+) -> Result<Session> {
+    let form = vec![
+        ("code", code.to_owned()),
+        ("client_id", cfg.client_id.clone()),
+        ("grant_type", "authorization_code".to_owned()),
+        ("redirect_uri", cfg.redirect_uri.clone()),
+        ("scope", cfg.scopes.clone()),
+        ("code_verifier", pkce.verifier.clone()),
+        ("client_unique_key", pkce.unique_key.clone()),
+    ];
+    let t = post_token(http, cfg, form).await?;
+    let user = t.user.as_ref();
+    let user_id = t
+        .user_id
+        .or_else(|| user.and_then(|u| u.user_id))
+        .ok_or_else(|| Error::Auth("token response has no user id".into()))?;
+    let country_code = user
+        .and_then(|u| u.country_code.clone())
+        .ok_or_else(|| Error::Auth("token response has no country code".into()))?;
+    Ok(Session {
+        access_token: t.access_token,
+        refresh_token: t
+            .refresh_token
+            .ok_or_else(|| Error::Auth("token response has no refresh token".into()))?,
+        expires_at: now_secs() + t.expires_in,
+        user_id,
+        country_code,
+    })
+}
+
+/// Refresh sends no scope (S1). Fields the response omits keep the old session's values.
+pub async fn refresh(http: &reqwest::Client, cfg: &ClientConfig, old: &Session) -> Result<Session> {
+    let form = vec![
+        ("grant_type", "refresh_token".to_owned()),
+        ("refresh_token", old.refresh_token.clone()),
+        ("client_id", cfg.client_id.clone()),
+    ];
+    let t = post_token(http, cfg, form).await?;
+    let user = t.user.as_ref();
+    Ok(Session {
+        access_token: t.access_token,
+        refresh_token: t.refresh_token.unwrap_or_else(|| old.refresh_token.clone()),
+        expires_at: now_secs() + t.expires_in,
+        user_id: t
+            .user_id
+            .or_else(|| user.and_then(|u| u.user_id))
+            .unwrap_or(old.user_id),
+        country_code: user
+            .and_then(|u| u.country_code.clone())
+            .unwrap_or_else(|| old.country_code.clone()),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
