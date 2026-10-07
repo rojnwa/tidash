@@ -27,6 +27,7 @@ reqwest 0.13 (rustls), tokio 1.53, keyring-core 1, wiremock 0.6 (tests).
 - Soft limit ~800 lines per file; one file per view.
 - Look up every library API with ctx7 before using it (`npx ctx7@latest library <name> "<topic>"`): symphonia 0.6, rubato 5, cpal 0.18 and egui 0.36 differ from older examples.
 - All user-visible UI strings go through fastframe-i18n; English only.
+- `tidal` and `player` re-export every public type named in an Interfaces block from the crate root (e.g. `tidal::Track`, `player::PlayState`).
 
 ## Review Focus
 
@@ -58,7 +59,7 @@ Spike code lives in `spikes/<name>/`, each a standalone project with its own man
 
 - [ ] **Step 1: Collect candidate client IDs.** Sources: the official web client bundle served by `https://desktop.tidal.com/` (look for the PKCE `client_id`, `appMode`, redirect route `login/auth`); SONE's `src-tauri/src/embedded_config.rs` + `scripts/gen_credentials.py`; python-tidal's `tidalapi/session.py`. Record each candidate's client ID, redirect URI and whether a secret exists.
 
-- [ ] **Step 2: Write `probe.py` with subcommands** `login <candidate>` (PKCE S256, print and open the authorize URL, read the pasted redirect URL, exchange the code, save the token JSON to `.secrets/<candidate>.json`), `refresh <candidate>` (refresh without a client secret), `info <candidate> <track_id>` (call both `/v1/tracks/{id}/playbackinfo` and `/v1/tracks/{id}/playbackinfopostpaywall` with `playbackmode=STREAM&assetpresentation=FULL` for LOW, HIGH, LOSSLESS and HI_RES_LOSSLESS; print `manifestMimeType`, the decoded manifest's `mimeType`, `codecs`, `encryptionType`, plus `bitDepth`, `sampleRate`), `fixtures <candidate>` (save the fixture files listed above for a known multi-disc album with more than 100 tracks or two pages of items at `limit=50`).
+- [ ] **Step 2: Write `probe.py` with subcommands** `login <candidate>` (PKCE S256, print and open the authorize URL, read the pasted redirect URL, exchange the code, save the token JSON to `.secrets/<candidate>.json`), `refresh <candidate>` (refresh without a client secret), `info <candidate> <track_id>` (call both `/v1/tracks/{id}/playbackinfo` and `/v1/tracks/{id}/playbackinfopostpaywall` with `playbackmode=STREAM&assetpresentation=FULL` for LOW, HIGH, LOSSLESS and HI_RES_LOSSLESS; print `manifestMimeType`, the decoded manifest's `mimeType`, `codecs`, `encryptionType`, plus `bitDepth`, `sampleRate`), `fixtures <candidate>` (save the fixture files listed above for a known multi-disc album with more than 50 tracks, so its items span two pages at `limit=50`).
 
 - [ ] **Step 3: Run** `login`, `refresh` and `info` for each candidate. For one LOSSLESS and one HI_RES_LOSSLESS track, download the first 1 MB of the stream URL and confirm `ffprobe` identifies FLAC with the expected rate and bit depth.
 
@@ -128,7 +129,7 @@ ffmpeg -i full.flac -af "atrim=start_sample=288037,asetpts=N/SR/TB" -c:a flac -s
 
 **Files:**
 - Create: `Cargo.toml` (workspace: `members = ["crates/*"]`, `resolver = "3"`, `[workspace.package]`, `[workspace.lints]`, `[workspace.dependencies]` for shared crates, `[patch.crates-io]`, `[profile.release]` with `lto = "thin"`, `codegen-units = 1`, `strip = true`)
-- Create: `crates/tidal/Cargo.toml`, `crates/tidal/src/lib.rs`; `crates/player/Cargo.toml`, `crates/player/src/lib.rs`; `crates/app/Cargo.toml` (bin name `tidalfast`), `crates/app/src/main.rs` (opens an empty eframe window titled "tidalfast")
+- Create: `crates/tidal/Cargo.toml`, `crates/tidal/src/lib.rs`; `crates/player/Cargo.toml`, `crates/player/src/lib.rs`; `crates/app/Cargo.toml` (package and bin name `tidalfast`), `crates/app/src/main.rs` (opens an empty eframe window titled "tidalfast")
 - Create: `LICENSE` (verbatim from https://www.gnu.org/licenses/gpl-3.0.txt), `README.md`, `.gitignore` (`/target`), `.github/workflows/ci.yml`
 
 - [ ] **Step 1: Write the files.** `README.md`: one-paragraph purpose, the legal stance from spec §2 verbatim, build instructions (`cargo run -p tidalfast`), Linux build deps. CI: jobs `quality` (ubuntu: `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`) and `test` (matrix `ubuntu-latest`, `windows-latest`, `macos-latest`: `cargo test --locked --all-targets`), using `actions/checkout@v7`, `dtolnay/rust-toolchain@stable`, `Swatinem/rust-cache@v2`; Linux step `sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev`.
@@ -421,21 +422,22 @@ ffmpeg -i s24_96000.flac -f s32le s24_96000.raw
 
 Engine algorithm (pinned):
 - One player thread owns the decoder, the resampler, the ring producer and (in device mode) the `fastframe_audio::Output`. Ring: `rtrb` of `f32`, capacity 0.5 s at the device rate × channels.
-- Shared atomics: `volume` (f32 bits, default 1.0), `flush` (bool), `frames` (u64, frames of the current track rendered), `device_rate`, `device_channels`.
+- Shared atomics: `volume` (f32 bits, default 1.0), `paused` (bool), `flush` (bool), `pending_base_ns`, `base_ns`, `frames` (u64, frames of the current track rendered since `base_ns`), `device_rate`, `device_channels`.
 - Loop: drain commands with `try_recv`; when there is nothing to decode (no track, paused with a full ring, or waiting on `flush`), block on `recv_timeout(50 ms)`. In device mode call `output.maintain()` about once per second and drain `output.take_errors()` (fatal → `PlayerEvent::Error` for the current track).
 - Decode step: `Pcm` → f32 (`s as f32 / 2_147_483_648.0`) → `Resampler` (from track rate to `device_rate`; rebuilt when `device_rate` changes) → push into the ring; keep whatever doesn't fit as pending for the next iteration. Never push while `flush` is set.
-- Flush (Load, Seek, Stop): set `flush`; the renderer, on its next callback, discards everything readable, resets `frames` to 0, clears `flush` and outputs silence for that callback. While paused the flag stays set until resume; no stale audio can play.
-- Position = seek base + `frames / device_rate`.
+- Flush (Load, Seek, Stop): store the new position in `pending_base_ns`, then set `flush`; the renderer, on its next callback, discards everything readable, sets `base_ns = pending_base_ns`, `frames = 0`, clears `flush` and outputs silence for that callback. In device mode no callbacks run while paused, so the flag waits for resume; no stale audio can play.
+- Position = `base_ns + frames / device_rate` (read without locking; momentary inconsistency is fine for UI).
+- Device rate change (`configure` reported a new rate, or `maintain()` returned `Reopened`): handled as `Seek(position())` with the resampler rebuilt for the new rate, so no ring audio plays at the wrong pitch.
 - End of track: decoder returned `None`, resampler flushed, pending empty, ring empty → emit `TrackEnded(id)` and `State(Stopped)`; drop the decoder.
 - Errors from `Decoder::new`/`next` → `PlayerEvent::Error { id, message }`, `State(Stopped)`.
-- Renderer: output `ring sample × volume`; silence on underrun (does not advance `frames`); maps source channel `i` to device channel `i`, duplicates a mono source to both, leaves extra device channels silent; `configure` stores `device_rate`/`device_channels`.
-- `Play`/`Pause` call `output.resume()`/`pause()` in device mode and emit `State`. `Load` emits `State(Buffering)`, then `TrackStarted(id)` and `State(Playing)` once the first samples are in the ring.
+- Renderer: while `paused`, output silence and consume nothing; otherwise output `ring sample × volume`; silence on underrun (does not advance `frames`); maps source channel `i` to device channel `i`, duplicates a mono source to both, leaves extra device channels silent; `configure` stores `device_rate`/`device_channels`.
+- `Play`/`Pause` set `paused`, call `output.resume()`/`pause()` in device mode and emit `State`. `Load` emits `State(Buffering)`, then `TrackStarted(id)` and `State(Playing)` once the first samples are in the ring.
 
 - [ ] **Step 1: Write failing tests** (all with `spawn_manual`, `renderer.configure(48_000, 2)`, a helper `render_ms(&mut renderer, ms)` that calls `render` in 10 ms blocks and returns the samples, and `Source` built from the fixture files):
   - `plays_track_to_end`: Load s16_44100 + Play → events `Buffering, TrackStarted(1), Playing`; render until `TrackEnded(1)` (deadline 5 s); total non-silent frames within ±1% of 24 000.
   - `volume_scales_output`: SetVolume(0.5) → peak of rendered audio ≈ half of the full-volume run (±2%).
-  - `pause_stops_and_play_resumes`: Pause → `State(Paused)`; position unchanged after further `render` calls with paused output simulated by not calling render; Play → `Playing`.
-  - `seek_while_paused_has_no_stale_audio`: Pause, Seek(400 ms), Play, render 20 ms → `position()` ≥ 400 ms; samples match the decoded file at ≥ 400 ms (compare against `Decoder` output resampled with a fresh `Resampler`, tolerance 1e-4 after the first 10 ms). (Review Focus 3)
+  - `pause_stops_and_play_resumes`: Pause → `State(Paused)`; rendering 100 ms yields only silence and `position()` is unchanged; Play → `State(Playing)` and the next 50 ms contain audio.
+  - `seek_while_paused_has_no_stale_audio`: Load, Play, render 50 ms, Pause, Seek(400 ms), Play, render until `TrackEnded` → the non-silent frames rendered after the seek total 4 800 ± 10% (the remaining 100 ms at 48 kHz), proving pre-seek ring audio was discarded; `position()` ≥ 400 ms right after the seek. (Review Focus 3)
   - `seek_past_end_ends_track`: Seek(10 s) on a 0.5 s file → `TrackEnded` within 500 ms of rendering. (Review Focus 3)
   - `device_rate_change_mid_track`: after 100 ms, `renderer.configure(44_100, 2)`; track still ends with total duration 0.5 s ± 2% as measured by `position()` just before `TrackEnded`. (Review Focus 2)
   - `stream_error_emits_error`: Source reader that fails after 4 KiB → `PlayerEvent::Error { id: 1, .. }` then `State(Stopped)`, within 2 s. (Review Focus 1)
@@ -459,7 +461,7 @@ Engine algorithm (pinned):
   - `pub enum Action { BeginLogin, FinishLogin(String), Logout, Search(String), OpenAlbum(u64), PlayTracks { tracks: Vec<tidal::Track>, start: usize }, Play, Pause, Next, Previous, Seek(std::time::Duration), SetVolume(f32), LoadImage { cover: String, size: u32 } }`
   - `pub enum Event { LoginUrl(String), LoggedIn, LoggedOut, CredentialsNotPersistent, SearchResults { query: String, results: tidal::SearchResults }, Album { album: tidal::Album, tracks: Vec<tidal::Track> }, Queue(QueueSnapshot), Playback(PlaybackSnapshot), Image { cover: String, size: u32, image: egui::ColorImage }, Error(String) }`
   - `#[derive(Clone, Debug, Default)] pub struct QueueSnapshot { pub tracks: Vec<tidal::Track>, pub current: Option<usize> }` and `#[derive(Clone, Debug, Default)] pub struct PlaybackSnapshot { pub state: Option<player::PlayState>, pub track: Option<tidal::Track>, pub volume: f32 }`
-  - `pub struct Model { pub route: Route, pub history: Vec<Route>, pub logged_in: bool, pub login_url: Option<String>, pub search: Option<(String, tidal::SearchResults)>, pub albums: HashMap<u64, (tidal::Album, Vec<tidal::Track>)>, pub queue: QueueSnapshot, pub playback: PlaybackSnapshot, pub errors: Vec<String> }` with `pub fn apply(&mut self, ev: Event)` (images are handled by the UI's texture cache, not `Model`), `pub fn navigate(&mut self, r: Route)`, `pub fn back(&mut self) -> bool`.
+  - `pub struct Model { pub route: Route, pub history: Vec<Route>, pub logged_in: bool, pub login_url: Option<String>, pub search: Option<(String, tidal::SearchResults)>, pub albums: HashMap<u64, (tidal::Album, Vec<tidal::Track>)>, pub queue: QueueSnapshot, pub playback: PlaybackSnapshot, pub errors: Vec<String> }` with `pub fn apply(&mut self, ev: Event)` (images are handled by the UI's texture cache, not `Model`; `CredentialsNotPersistent` pushes the warning "Login will not be remembered: no system credential store available" to `errors`), `pub fn navigate(&mut self, r: Route)`, `pub fn back(&mut self) -> bool`.
   - `pub fn backend::start(waker: impl Fn() + Send + Sync + 'static) -> (tokio::sync::mpsc::UnboundedSender<Action>, std::sync::mpsc::Receiver<Event>)` — builds a 2-worker tokio runtime on its own thread; every sent `Event` is followed by `waker()` (the UI passes `ctx.request_repaint`).
 
 - [ ] **Step 1: Write failing tests** in `model.rs`: `logged_in_moves_to_search` (`apply(LoggedIn)` from `Route::Login` → `Route::Search`, `logged_in == true`); `logged_out_returns_to_login`; `navigate_and_back` (Search → Album(1) → Album(2); `back()` twice → Search; third `back()` → false); `errors_are_collected` (`apply(Error("x"))` pushes to `errors`).
@@ -498,10 +500,12 @@ Engine algorithm (pinned):
 - Consumes: `player::{Player, PlayerCmd, PlayerEvent, Source}`, `Client::{stream_info, report_playback}`, `tidal::{classify, Failure, Quality, new_session_id, PlaybackReport}`.
 - Produces:
   - `pub struct Queue` with `pub fn replace(&mut self, tracks: Vec<tidal::Track>, start: usize) -> Option<&tidal::Track>` (first `stream_ready` track at or after `start`), `pub fn current(&self) -> Option<&tidal::Track>`, `pub fn next(&mut self) -> Option<&tidal::Track>` (skips `!stream_ready`; `None` at the end), `pub fn previous(&mut self) -> Option<&tidal::Track>` (skips `!stream_ready`; `None` at the start), `pub fn snapshot(&self) -> QueueSnapshot`.
+  - `backend::start` now creates the player first and returns `(tokio::sync::mpsc::UnboundedSender<Action>, std::sync::mpsc::Receiver<Event>, player::Player)`; the UI keeps the `Player` clone only to read `position()`.
   - `playback.rs`: backend-side glue. Owns `Queue`, the `Player`, and the current play report. `start_current()`: `stream_info(id, Quality::Lossless)` → in `spawn_blocking` open `reqwest::blocking` GET (content length as `len`) → `PlayerCmd::Load` + `Play`. Results for a track that is no longer current are dropped.
 
 Rules (pinned):
 - `PlayerEvent::TrackEnded` → send the play report, `queue.next()` → `start_current()`, or stop at the end.
+- `PlayerEvent::Error` (e.g. the stream dropped): once per track, `start_current()` again and `Seek` to the last known position; a second error for the same track is handled like `Terminal`.
 - `Previous`: if `player.position() > 3 s` → `Seek(0)`; else `queue.previous()` → `start_current()`.
 - `stream_info` error: `Terminal` → `Event::Error("<title> is unavailable")` and advance; `Retryable` → one retry after 2 s, then same as `Terminal`. Three consecutive failures → stop playback with an error.
 - Player events reach the backend through a std thread that forwards the player's `Receiver` into the backend's tokio channel.
