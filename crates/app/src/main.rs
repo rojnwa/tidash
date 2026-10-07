@@ -2,6 +2,7 @@
 
 mod backend;
 mod i18n;
+mod images;
 mod model;
 mod ui;
 
@@ -38,7 +39,10 @@ fn setup_look(ctx: &egui::Context) {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         while let Ok(ev) = self.events.try_recv() {
-            self.model.apply(ev);
+            match ev {
+                Event::Image { cover, size, image } => self.ui.images.insert(ui.ctx(), cover, size, image),
+                ev => self.model.apply(ev),
+            }
         }
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.model.apply(ev);

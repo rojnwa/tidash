@@ -69,6 +69,8 @@ pub enum Event {
     Error(String),
     /// Dismiss the error at this index (out of range is ignored).
     DismissError(usize),
+    Navigate(Route),
+    Back,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -136,6 +138,10 @@ impl Model {
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } => {} // handled by the UI's texture cache
             Event::Error(e) => self.errors.push(e),
+            Event::Navigate(r) => self.navigate(r),
+            Event::Back => {
+                self.back();
+            }
             Event::DismissError(i) => {
                 if i < self.errors.len() {
                     self.errors.remove(i);
@@ -194,6 +200,16 @@ mod tests {
         assert!(m.back());
         assert_eq!(m.route, Route::Search);
         assert!(!m.back());
+    }
+
+    #[test]
+    fn navigate_and_back_events() {
+        let mut m = Model::default();
+        m.apply(Event::LoggedIn);
+        m.apply(Event::Navigate(Route::Album(7)));
+        assert_eq!(m.route, Route::Album(7));
+        m.apply(Event::Back);
+        assert_eq!(m.route, Route::Search);
     }
 
     #[test]
