@@ -27,6 +27,8 @@ pub(crate) struct Shared {
     pub(crate) frames: AtomicU64,
     pub(crate) device_rate: AtomicU32,
     pub(crate) device_channels: AtomicU32,
+    /// Render calls so far: tells the player thread whether the device is calling back.
+    pub(crate) callbacks: AtomicU64,
 }
 
 impl Default for Shared {
@@ -42,17 +44,18 @@ impl Default for Shared {
             frames: AtomicU64::new(0),
             device_rate: AtomicU32::new(0),
             device_channels: AtomicU32::new(0),
+            callbacks: AtomicU64::new(0),
         }
     }
 }
 
 impl Shared {
-    /// `base_ns + frames / device_rate`; a pending flush (seek, load) already counts.
-    /// Read without locking: a momentary inconsistency is fine for UI.
     pub(crate) fn flush_pending(&self) -> bool {
         self.flush_ack.load(Acquire) != self.flush_req.load(Acquire)
     }
 
+    /// `base_ns + frames / device_rate`; a pending flush (seek, load) already counts.
+    /// Read without locking: a momentary inconsistency is fine for UI.
     pub(crate) fn position(&self) -> Duration {
         if self.flush_pending() {
             return Duration::from_nanos(self.pending_base_ns.load(Relaxed));
@@ -125,6 +128,7 @@ impl fastframe_audio::Render for Renderer {
     fn render(&mut self, out: &mut [f32]) {
         out.fill(0.0);
         let s = &*self.shared;
+        s.callbacks.fetch_add(1, Relaxed);
         if s.paused.load(Acquire) {
             return;
         }

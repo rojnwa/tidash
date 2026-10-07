@@ -3,7 +3,8 @@
 use std::fmt;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use symphonia::core::io::MediaSource;
 
 const CHUNK: usize = 64 * 1024;
@@ -14,8 +15,6 @@ struct State {
     done: bool,
     stop: bool,
     error: Option<(io::ErrorKind, String)>,
-    /// Raised [`Interrupt`]s not yet `handled`; while any are, waiting reads fail.
-    interrupts: u32,
 }
 
 type Shared = Arc<(Mutex<State>, Condvar)>;
@@ -39,23 +38,43 @@ pub(crate) fn is_interrupt(e: &io::Error) -> bool {
     e.get_ref().is_some_and(|e| e.is::<Interrupted>())
 }
 
-/// Makes reads of a [`ProgressiveFile`] that wait for the network give up, so the reading
-/// thread can see to something else. Cheap to clone; usable from any thread.
-#[derive(Clone)]
-pub struct Interrupt(Shared);
+/// Makes reads that wait for the network give up, so the reading thread can see to something
+/// else. One per reading thread, shared by every [`ProgressiveFile`] spawned with it, so it
+/// also reaches a file that does not exist yet. Cheap to clone; usable from any thread.
+#[derive(Clone, Default)]
+pub struct Interrupt(Arc<Raised>);
+
+#[derive(Default)]
+struct Raised {
+    /// `interrupt`s not yet `handled`; while any are, waiting reads fail.
+    pending: AtomicU32,
+    /// The newest file spawned with this interrupt: the one a waiting read can be blocked on.
+    file: Mutex<Weak<(Mutex<State>, Condvar)>>,
+}
 
 impl Interrupt {
     /// From now until the matching [`handled`](Self::handled), a read that has to wait for
     /// bytes (including one waiting already) fails with an interrupt error instead.
     pub fn interrupt(&self) {
-        lock(&self.0).interrupts += 1;
-        self.0.1.notify_all();
+        self.0.pending.fetch_add(1, SeqCst);
+        let file = self.0.file.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(file) = file.upgrade() {
+            // Taking the lock orders this after a reader's check of `pending`: no lost wakeup.
+            drop(lock(&file));
+            file.1.notify_all();
+        }
     }
 
     /// The reason for one `interrupt` has been dealt with; once all are, reads wait again.
     pub fn handled(&self) {
-        let mut st = lock(&self.0);
-        st.interrupts = st.interrupts.saturating_sub(1);
+        let _ = self
+            .0
+            .pending
+            .fetch_update(SeqCst, SeqCst, |n| n.checked_sub(1));
+    }
+
+    pub(crate) fn raised(&self) -> bool {
+        self.0.pending.load(SeqCst) > 0
     }
 }
 
@@ -125,11 +144,19 @@ pub struct ProgressiveFile {
     pos: u64,
     len: Option<u64>,
     shared: Shared,
+    interrupt: Interrupt,
+    /// The original, not a `forward` view: dropping it stops the download.
+    owner: bool,
 }
 
 impl ProgressiveFile {
-    /// Start copying `reader` into a temp file on a background thread.
-    pub fn spawn(reader: Box<dyn Read + Send>, len: Option<u64>) -> io::Result<Self> {
+    /// Start copying `reader` into a temp file on a background thread. Waiting reads give up
+    /// while `interrupt` is raised.
+    pub fn spawn(
+        reader: Box<dyn Read + Send>,
+        len: Option<u64>,
+        interrupt: &Interrupt,
+    ) -> io::Result<Self> {
         let writer = tempfile::tempfile()?;
         let read_handle = writer.try_clone()?;
         let shared: Shared = Arc::default();
@@ -146,16 +173,31 @@ impl ProgressiveFile {
                 drop(st);
                 thread_shared.1.notify_all();
             })?;
+        *interrupt
+            .0
+            .file
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Arc::downgrade(&shared);
         Ok(Self {
             reader: read_handle,
             pos: 0,
             len,
             shared,
+            interrupt: interrupt.clone(),
+            owner: true,
         })
     }
 
-    pub fn interrupt_handle(&self) -> Interrupt {
-        Interrupt(Arc::clone(&self.shared))
+    /// A forward-only view from the first byte (see [`Forward`]); the download stays with `self`.
+    pub fn forward(&self) -> io::Result<Forward> {
+        Ok(Forward(ProgressiveFile {
+            reader: self.reader.try_clone()?,
+            pos: 0,
+            len: self.len,
+            shared: Arc::clone(&self.shared),
+            interrupt: self.interrupt.clone(),
+            owner: false,
+        }))
     }
 
     /// Wait until `ready(state)`, the download ended / failed, or an interrupt is raised.
@@ -163,9 +205,36 @@ impl ProgressiveFile {
         self.shared
             .1
             .wait_while(lock(&self.shared), |s| {
-                !ready(s) && !s.done && s.error.is_none() && s.interrupts == 0
+                !ready(s) && !s.done && s.error.is_none() && !self.interrupt.raised()
             })
             .unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// A forward-only view of a [`ProgressiveFile`]. symphonia streams it (seeking forward by
+/// skipping) instead of first seeking to the end, which waits for the whole download when the
+/// length is unknown (DASH).
+pub struct Forward(ProgressiveFile);
+
+impl Read for Forward {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+impl Seek for Forward {
+    fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+        self.0.seek(from)
+    }
+}
+
+impl MediaSource for Forward {
+    fn is_seekable(&self) -> bool {
+        false
+    }
+
+    fn byte_len(&self) -> Option<u64> {
+        None
     }
 }
 
@@ -243,8 +312,10 @@ impl Drop for ProgressiveFile {
     /// Flags the writer to stop at its next chunk boundary. Not joined: it may be blocked
     /// inside a slow/endless `read()`; it exits (closing the temp file) once that returns.
     fn drop(&mut self) {
-        lock(&self.shared).stop = true;
-        self.shared.1.notify_all();
+        if self.owner {
+            lock(&self.shared).stop = true;
+            self.shared.1.notify_all();
+        }
     }
 }
 
@@ -256,6 +327,10 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
     use symphonia::core::io::MediaSource;
+
+    fn spawn(reader: Box<dyn Read + Send>, len: Option<u64>) -> io::Result<ProgressiveFile> {
+        ProgressiveFile::spawn(reader, len, &Interrupt::default())
+    }
 
     /// Yields `data` in `chunk`-byte pieces with a short sleep; errors once `fail_at` bytes were served.
     struct SlowReader {
@@ -303,7 +378,7 @@ mod tests {
     #[test]
     fn reads_everything_in_order() {
         let src = pseudo_random(1 << 20);
-        let mut f = ProgressiveFile::spawn(slow(src.clone(), 50_000, None), None).unwrap();
+        let mut f = spawn(slow(src.clone(), 50_000, None), None).unwrap();
         assert_eq!(f.byte_len(), None);
         let mut out = Vec::new();
         f.read_to_end(&mut out).unwrap();
@@ -315,8 +390,7 @@ mod tests {
     #[test]
     fn seek_ahead_waits_then_reads() {
         let src = pseudo_random(1 << 20);
-        let mut f = ProgressiveFile::spawn(slow(src.clone(), 65_536, None), Some(src.len() as u64))
-            .unwrap();
+        let mut f = spawn(slow(src.clone(), 65_536, None), Some(src.len() as u64)).unwrap();
         assert_eq!(f.seek(SeekFrom::Start(900_000)).unwrap(), 900_000);
         let mut buf = [0u8; 1000];
         f.read_exact(&mut buf).unwrap();
@@ -331,14 +405,14 @@ mod tests {
     #[test]
     fn seek_end_waits_for_unknown_length() {
         let src = pseudo_random(200_000);
-        let mut f = ProgressiveFile::spawn(slow(src, 65_536, None), None).unwrap();
+        let mut f = spawn(slow(src, 65_536, None), None).unwrap();
         assert_eq!(f.seek(SeekFrom::End(0)).unwrap(), 200_000);
     }
 
     #[test]
     fn error_mid_stream_surfaces() {
         let src = pseudo_random(1 << 20);
-        let mut f = ProgressiveFile::spawn(slow(src.clone(), 10_000, Some(100_000)), None).unwrap();
+        let mut f = spawn(slow(src.clone(), 10_000, Some(100_000)), None).unwrap();
         let mut got = vec![0u8; 100_000];
         f.read_exact(&mut got).unwrap();
         assert_eq!(got, src[..100_000]);
@@ -372,8 +446,8 @@ mod tests {
     #[test]
     fn interrupt_unblocks_a_waiting_read_until_handled() {
         let (go, gate) = std::sync::mpsc::channel();
-        let f = ProgressiveFile::spawn(Box::new(Gate(gate)), None).unwrap();
-        let interrupt = f.interrupt_handle();
+        let interrupt = Interrupt::default();
+        let f = ProgressiveFile::spawn(Box::new(Gate(gate)), None, &interrupt).unwrap();
         let waiting = read_on_thread(f);
         std::thread::sleep(Duration::from_millis(50)); // let it block
         let at = Instant::now();
@@ -408,7 +482,7 @@ mod tests {
     #[test]
     fn drop_stops_writer() {
         let exited = Arc::new(AtomicBool::new(false));
-        let f = ProgressiveFile::spawn(Box::new(Endless(exited.clone())), None).unwrap();
+        let f = spawn(Box::new(Endless(exited.clone())), None).unwrap();
         std::thread::sleep(Duration::from_millis(30));
         let t = Instant::now();
         drop(f);
