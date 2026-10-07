@@ -1,9 +1,0 @@
-S3 RESULTS
-rows=834 cols=12 row_h=228 scrollable_h=191297
-MEM first screen: working_set=99.8 MB private=277.8 MB os_peak_ws=103.0 MB
-IDLE 10s: repaints(update calls, excluding the wake-up frame)=2 cpu_time=0.016s (0.02% of one core)
-MEM after scroll 3000 px/s: working_set=103.5 MB private=441.3 MB os_peak_ws=106.7 MB
-MEM after scroll 12000 px/s: working_set=105.0 MB private=445.9 MB os_peak_ws=106.8 MB
-PEAK sampled per frame: working_set=106.8 MB private=447.8 MB; OS peak working set=106.8 MB (final ws=105.0, priv=445.9)
-SCROLL 3000 px/s: frames=14731 dt p50=3.77 ms p99=13.56 ms max=43.42 ms | cpu-frame p50=0.21 ms p99=0.42 ms max=0.73 ms | dt>1.1x interval=1352 >1.5x=1302 >2x=65 (interval 6.94 ms)
-SCROLL 12000 px/s: frames=4236 dt p50=3.65 ms p99=7.08 ms max=8.97 ms | cpu-frame p50=0.25 ms p99=0.45 ms max=0.60 ms | dt>1.1x interval=10 >1.5x=0 >2x=0 (interval 6.94 ms)
