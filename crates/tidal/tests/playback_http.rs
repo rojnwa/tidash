@@ -206,6 +206,12 @@ fn malformed_timelines_are_rejected() {
             r#"<Representation codecs="flac"><SegmentTemplate initialization="i" media="m-$Number$" startNumber="18446744073709551615"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
         ),
         mpd(
+            r#"<Representation codecs=""><SegmentTemplate initialization="i" media="m-$Number$"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
+        ),
+        mpd(
+            r#"<Representation codecs=" "><SegmentTemplate initialization="i" media="m-$Number$"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
+        ),
+        mpd(
             r#"<Representation><SegmentTemplate initialization="i" media="m-$Number$"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
         ),
     ];
