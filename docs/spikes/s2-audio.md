@@ -34,27 +34,32 @@ Source: a 6 s 1 kHz sine, 96 kHz, 24-bit FLAC (`full.flac`, 576000 frames), spli
 
 Setup: one WASAPI exclusive, event-driven stream, negotiated **24-bit packed, 96000 Hz, 2 ch, blockalign 6, mask 0x3, PCM**, period 10 ms (100000 hns, 128-byte aligned), buffer 960 frames. A decoder thread decodes a, then opens and decodes b, into a bounded channel of 4 packets (~170 ms), so b is opened while the device is at most ~4 packets ahead. That is the shape the real player will have. The render thread waits on the event, tops up from the channel without blocking, and writes one full buffer per event. The buffer is pre-filled before `Start`.
 
-Underrun instrumentation (R3), counted on every event:
+Underrun instrumentation (R3). UNDERRUNS = the sum of the first four counters:
 - **starved**: the device asked for N frames and fewer than N were queued while the decoder was not finished (the shortfall would be written as silence);
 - **service > period**: the time from wake to `ReleaseBuffer` exceeded one period (deadline miss);
+- **late wakes**: the interval between consecutive events exceeded 1.5 × period (15 ms), counted from the point where the device clock is running (see below);
 - **event timeouts**: no event within 1 s;
-- also recorded: `GetCurrentPadding` at each wake (counts wakes with padding 0 while data remained), max event interval, and max service time.
+- **device-clock check** (corroboration): after `Stop`, compare the frames the device clocked out (`IAudioClock` position) with the frames handed to WASAPI minus the frames still queued. A replayed or inserted buffer (the glitch a missed deadline causes in exclusive mode) would make the difference non-zero;
+- informational only: `GetCurrentPadding` at each wake. In exclusive event mode it always equals the buffer size, so it cannot detect starvation.
 
-Results (4 runs, identical):
+**Start-up vs mid-stream wakes.** Event 1 fires within about 2 µs of `Start`, with the device clock at 0. That is WASAPI asking for the second half of the ping-pong at once, not a device period. Event 2 comes 15.1–15.25 ms later, with the device clock at exactly 960 frames (one buffer played). So the USB device took about 5 ms to start clocking and then signalled exactly at the end of the first buffer. Both intervals happen before the device clock runs, so they are reported as start-up latency, not counted as late wakes. If only event 1 were excluded, every run would count event 2 as one late wake. The device clock shows it is start-up: the wake came exactly one buffer after the clock started, and no frame was replayed. From event 3 on, the largest interval in any run was 10.15 ms.
+
+Results (4 runs after fix round 1; all four agree):
 
 | metric | value |
 |---|---|
-| UNDERRUNS (starved + late + timeouts) | **0** (0 / 0 / 0) in every run |
+| UNDERRUNS (starved + service > period + late wakes + timeouts) | **0** (0 / 0 / 0 / 0) in every run |
+| mid-stream event interval max (device clock running) | 10.09 / 10.12 / 10.13 / 10.15 ms; **0 late wakes** (> 15 ms) |
+| start-up wakes | event 1 at +1.1–2 µs after `Start` (clock 0); event 2 at +15.11–15.25 ms (clock 960 frames) |
+| device clock vs frames handed to WASAPI | clock 6.0200 s = 577920 frames = 576000 real (**6.0000 s**, matches 576000 / 96000) + 1920 silence-pad frames; queued at stop 0; **difference 0 frames** in every run |
 | frames written vs `full.flac` | 576000 vs 576000 |
 | sample equality (every i32 sample, count and values) | **SAMPLE-EQUAL=true**, asserted in code |
-| padding at wake | always 960 (one full buffer still queued). Never 0. |
-| max event interval | 15.1–15.3 ms (one late wake). It was still covered: a full buffer (10 ms) was queued at every wake. |
-| max service time | 0.46–0.48 ms (deadline 10 ms) |
-| opening b (probe + decoder) | 144 µs on the decoder thread |
-| wall time / device clock | 6.026 s / 6.010 s |
+| max service time | 0.45–0.57 ms (deadline 10 ms) |
+| opening b (probe + decoder) | 118–154 µs on the decoder thread (warm local file) |
+| wall time | 6.015 s |
 
 Notes:
-- In exclusive event mode, `wasapi`'s `get_available_space_in_frames()` returns the whole buffer, and `GetCurrentPadding` read at wake equals the buffer size (the other half of the ping-pong is playing). So "padding 0 while data remained" is the real starvation signal; it never fired.
+- In exclusive event mode, `wasapi`'s `get_available_space_in_frames()` returns the whole buffer, and `GetCurrentPadding` at wake reads 960 (the buffer size) every time. The first version of this probe counted "padding 0 while data remained" as starvation. That counter could never fire in this mode, so it was removed. The late-wake count and the device-clock check replace it.
 - Written bytes come straight from symphonia's left-justified i32 (FLAC N-bit samples are shifted to the MSBs; asserted: the low 8 bits are always zero). Packed 24 = bytes 1..4 of the little-endian i32. 24-in-32 / 32-bit would be the i32 bytes as-is (WASAPI valid bits are MSB-aligned). Both are lossless for content of 24 bits or fewer.
 - The tone was played through the DAC. Nobody listened to it during this run; listening is optional and left to the human.
 - The `wasapi` docs warn that event-driven exclusive mode can stutter with the Windows USB class driver. This USB DAC showed no underruns. Keep `PollingExclusive` as a fallback mode if users report stutter.
@@ -125,7 +130,11 @@ Call sequence: `cpal::host_from_id(HostId::Alsa)` → `host.device_by_id(&Device
 - The player takes each track as a forward-only byte stream (`Box<dyn Read + Send>`: init segment bytes, then media segments in order), wraps it in `ReadOnlySource` → `MediaSourceStream` → `get_probe().probe` → `make_audio_decoder`. This keeps `player` free of HTTP and `tidal` types. The app layer adapts TIDAL segment downloads into the `Read`.
 - The track descriptor passed with the stream carries sample rate, bit depth, duration (from the MPD/playbackinfo, since symphonia reports `num_frames = 0`) and `start_frame`.
 - **Seek = restart the stream at a segment.** Pick segment k from the SegmentTimeline (start frame = sum of earlier `d`), feed init + segments k.., add `start_frame` to every pts (symphonia ignores `tfdt`), and drop `target - start_frame` frames after decoding. Use symphonia's own seek only for short forward hops.
-- Gapless: one decoder thread decodes track after track into a bounded queue feeding one open output stream. The next track is opened when the current one hits EOF (probe + decoder took 144 µs). This is exactly what S2 verified: 0 underruns, sample-equal.
+- Gapless: one decoder thread decodes track after track into a bounded queue feeding one open output stream. **S2 verified only the sample continuity of the append**: b's samples follow a's in the same stream with nothing inserted, dropped or changed, with 0 underruns. It did that with a warm local-file open (118–154 µs) and about 170 ms of audio queued. It did **not** measure network open latency. The real engine must therefore:
+  - pre-open the next track well before the current one reaches EOF: resolve playbackinfo, fetch the init segment and the first media segment (about 1.2 MB, 4 s, at hi-res), and probe/create the decoder ahead of time;
+  - size the decode→output queue (and the segment prefetch) for network latency and jitter (seconds, not about 170 ms), so a slow segment fetch cannot drain the output.
+  
+  Opening at EOF, as the probe did, is safe only for local, already-buffered data.
 - Keep samples as left-justified i32 end to end. Convert to the device container only at the output (bytes 1..4 for packed 24, as is for 24-in-32/32, `>> 8` for ALSA `S24_LE`). Never go through f32 on Windows or Linux.
 
 **Output path per OS:**
