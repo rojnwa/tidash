@@ -13,9 +13,12 @@ pub(crate) struct Shared {
     /// Linear gain, as `f32` bits.
     pub(crate) volume: AtomicU32,
     pub(crate) paused: AtomicBool,
-    /// Set by the player thread (after `pending_base_ns` and `channels`), cleared by the
-    /// renderer once it discarded the ring. The player never pushes while it is set.
-    pub(crate) flush: AtomicBool,
+    /// Flush generations. The player thread stores `pending_base_ns` and `channels`, then bumps
+    /// `flush_req`; the renderer discards the ring, takes them and stores that generation in
+    /// `flush_ack`. The player pushes only while `flush_ack == flush_req`. A counter, not a
+    /// flag: a request landing while the renderer handles the previous one is not lost.
+    pub(crate) flush_req: AtomicU64,
+    pub(crate) flush_ack: AtomicU64,
     pub(crate) pending_base_ns: AtomicU64,
     /// Channels of what is pushed after the pending flush.
     pub(crate) channels: AtomicU32,
@@ -31,7 +34,8 @@ impl Default for Shared {
         Self {
             volume: AtomicU32::new(1.0f32.to_bits()),
             paused: AtomicBool::new(false),
-            flush: AtomicBool::new(false),
+            flush_req: AtomicU64::new(0),
+            flush_ack: AtomicU64::new(0),
             pending_base_ns: AtomicU64::new(0),
             channels: AtomicU32::new(2),
             base_ns: AtomicU64::new(0),
@@ -45,8 +49,12 @@ impl Default for Shared {
 impl Shared {
     /// `base_ns + frames / device_rate`; a pending flush (seek, load) already counts.
     /// Read without locking: a momentary inconsistency is fine for UI.
+    pub(crate) fn flush_pending(&self) -> bool {
+        self.flush_ack.load(Acquire) != self.flush_req.load(Acquire)
+    }
+
     pub(crate) fn position(&self) -> Duration {
-        if self.flush.load(Acquire) {
+        if self.flush_pending() {
             return Duration::from_nanos(self.pending_base_ns.load(Relaxed));
         }
         let frames = self.frames.load(Relaxed);
@@ -75,6 +83,8 @@ pub struct Renderer {
     channels: usize,
     /// Channels of the samples in the ring, taken at each flush.
     src_channels: usize,
+    /// Last flush generation handled.
+    acked: u64,
 }
 
 impl Renderer {
@@ -86,6 +96,7 @@ impl Renderer {
             rate: 0,
             channels: 2,
             src_channels: 2,
+            acked: 0,
         }
     }
 }
@@ -118,14 +129,16 @@ impl fastframe_audio::Render for Renderer {
             return;
         }
         let Some(ring) = &mut self.ring else { return };
-        if s.flush.load(Acquire) {
+        let req = s.flush_req.load(Acquire);
+        if req != self.acked {
             if let Ok(stale) = ring.read_chunk(ring.slots()) {
                 stale.commit_all();
             }
             self.src_channels = (s.channels.load(Relaxed) as usize).max(1);
             s.base_ns.store(s.pending_base_ns.load(Relaxed), Relaxed);
             s.frames.store(0, Relaxed);
-            s.flush.store(false, Release);
+            s.flush_ack.store(req, Release);
+            self.acked = req;
             return;
         }
         let (dev, src) = (self.channels, self.src_channels);
