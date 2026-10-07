@@ -61,7 +61,11 @@ pub enum Event {
     LoggedIn,
     LoggedOut,
     CredentialsNotPersistent,
+    /// A search was submitted; results for any other query are stale.
+    SearchStarted(String),
     SearchResults { query: String, results: tidal::SearchResults },
+    AlbumLoading(u64),
+    AlbumFailed(u64),
     Album { album: tidal::Album, tracks: Vec<tidal::Track> },
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
@@ -92,6 +96,8 @@ pub struct Model {
     pub logged_in: bool,
     pub login_url: Option<String>,
     pub search: Option<(String, tidal::SearchResults)>,
+    pub latest_query: Option<String>,
+    pub album_errors: std::collections::HashSet<u64>,
     pub albums: HashMap<u64, (tidal::Album, Vec<tidal::Track>)>,
     pub queue: QueueSnapshot,
     pub playback: PlaybackSnapshot,
@@ -106,6 +112,8 @@ impl Default for Model {
             logged_in: false,
             login_url: None,
             search: None,
+            latest_query: None,
+            album_errors: Default::default(),
             albums: HashMap::new(),
             queue: QueueSnapshot::default(),
             playback: PlaybackSnapshot::default(),
@@ -130,8 +138,20 @@ impl Model {
             Event::CredentialsNotPersistent => self
                 .errors
                 .push(tr("Login will not be remembered: no system credential store available").into_owned()),
-            Event::SearchResults { query, results } => self.search = Some((query, results)),
+            Event::SearchStarted(q) => self.latest_query = Some(q),
+            Event::SearchResults { query, results } => {
+                if self.latest_query.as_deref() == Some(query.as_str()) {
+                    self.search = Some((query, results));
+                }
+            }
+            Event::AlbumLoading(id) => {
+                self.album_errors.remove(&id);
+            }
+            Event::AlbumFailed(id) => {
+                self.album_errors.insert(id);
+            }
             Event::Album { album, tracks } => {
+                self.album_errors.remove(&album.id);
                 self.albums.insert(album.id, (album, tracks));
             }
             Event::Queue(q) => self.queue = q,
@@ -210,6 +230,41 @@ mod tests {
         assert_eq!(m.route, Route::Album(7));
         m.apply(Event::Back);
         assert_eq!(m.route, Route::Search);
+    }
+
+    #[test]
+    fn stale_search_results_are_ignored() {
+        let mut m = Model::default();
+        let res = |q: &str| Event::SearchResults { query: q.into(), results: Default::default() };
+        m.apply(Event::SearchStarted("a".into()));
+        m.apply(Event::SearchStarted("b".into()));
+        m.apply(res("a"));
+        assert!(m.search.is_none());
+        m.apply(res("b"));
+        assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
+        m.apply(res("a"));
+        assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
+    }
+
+    #[test]
+    fn album_failure_state_transitions() {
+        let mut m = Model::default();
+        m.apply(Event::AlbumFailed(5));
+        assert!(m.album_errors.contains(&5));
+        m.apply(Event::AlbumLoading(5));
+        assert!(m.album_errors.is_empty());
+        m.apply(Event::AlbumFailed(5));
+        let album = tidal::Album {
+            id: 5,
+            title: "t".into(),
+            cover: None,
+            artists: vec![],
+            number_of_tracks: 0,
+            duration: 0,
+            release_date: None,
+        };
+        m.apply(Event::Album { album, tracks: vec![] });
+        assert!(m.album_errors.is_empty());
     }
 
     #[test]

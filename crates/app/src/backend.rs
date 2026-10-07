@@ -64,6 +64,7 @@ struct Backend {
     store: Arc<dyn TokenStore>,
     persistent: bool,
     pkce: Option<Pkce>,
+    search_task: Option<tokio::task::JoinHandle<()>>,
     // Shared with spawned tasks by later tasks.
     client: Option<Arc<Client>>,
 }
@@ -85,6 +86,7 @@ impl Backend {
             store,
             persistent,
             pkce: None,
+            search_task: None,
             client: None,
         }
     }
@@ -145,20 +147,29 @@ impl Backend {
             Action::Search(q) => {
                 let Some(c) = self.client.clone() else { return };
                 let emit = self.emit.clone();
-                tokio::spawn(async move {
+                // A newer search supersedes the in-flight one.
+                if let Some(old) = self.search_task.take() {
+                    old.abort();
+                }
+                emit.send(Event::SearchStarted(q.clone()));
+                self.search_task = Some(tokio::spawn(async move {
                     match c.search(&q, 30).await {
                         Ok(results) => emit.send(Event::SearchResults { query: q, results }),
                         Err(e) => emit.send(Event::Error(format!("{}: {e}", tr("Search failed")))),
                     }
-                });
+                }));
             }
             Action::OpenAlbum(id) => {
                 let Some(c) = self.client.clone() else { return };
                 let emit = self.emit.clone();
+                emit.send(Event::AlbumLoading(id));
                 tokio::spawn(async move {
                     match tokio::try_join!(c.album(id), c.album_tracks(id)) {
                         Ok((album, tracks)) => emit.send(Event::Album { album, tracks }),
-                        Err(e) => emit.send(Event::Error(format!("{}: {e}", tr("Could not open album")))),
+                        Err(e) => {
+                            emit.send(Event::AlbumFailed(id));
+                            emit.send(Event::Error(format!("{}: {e}", tr("Could not open album"))));
+                        }
                     }
                 });
             }
