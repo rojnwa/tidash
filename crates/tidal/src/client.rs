@@ -23,7 +23,10 @@ pub struct Client {
 impl Client {
     pub fn new(cfg: ClientConfig, session: Session, store: Arc<dyn TokenStore>) -> Result<Self> {
         Ok(Self {
-            http: reqwest::Client::builder().build()?,
+            http: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .read_timeout(Duration::from_secs(30))
+                .build()?,
             cfg,
             store,
             session: RwLock::new(session),
@@ -52,7 +55,9 @@ impl Client {
             .cfg
             .api_base
             .join(path)
-            .map_err(|e| Error::Auth(format!("bad request path: {e}")))?;
+            .ok()
+            .filter(|u| u.origin() == self.cfg.api_base.origin())
+            .ok_or_else(invalid_path)?;
         url.query_pairs_mut()
             .extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())))
             .append_pair("countryCode", &self.session().country_code);
@@ -70,7 +75,11 @@ impl Client {
                 (Some(t), _) => t.try_clone(),
                 (None, r) => r,
             }
-            .ok_or_else(|| Error::Auth("request cannot be retried".into()))?;
+            .ok_or_else(|| Error::Status {
+                status: 0,
+                sub_status: None,
+                message: "request cannot be retried".into(),
+            })?;
             let resp = {
                 let _permit = self.permits.acquire().await;
                 rb.bearer_auth(&token).send().await?
@@ -89,17 +98,16 @@ impl Client {
             let retryable = template.is_some();
             let code = status.as_u16();
             let err = status_error(code, &resp.text().await?);
+            let playback = matches!(
+                &err,
+                Error::Status {
+                    sub_status: Some(4000..=4999),
+                    ..
+                }
+            );
             match code {
-                401 if retryable
-                    && !refreshed
-                    && !matches!(
-                        &err,
-                        Error::Status {
-                            sub_status: Some(4000..=4999),
-                            ..
-                        }
-                    ) =>
-                {
+                401 if playback => return Err(err),
+                401 if retryable && !refreshed => {
                     self.refresh_after(&token).await?;
                     refreshed = true;
                 }
@@ -128,9 +136,19 @@ impl Client {
         }
         let new = refresh(&self.http, &self.cfg, &old).await?;
         *self.session.write().unwrap_or_else(|e| e.into_inner()) = new.clone();
-        // Best-effort: TIDAL doesn't rotate refresh tokens, so a failed save loses nothing.
-        let _ = self.store.save(&new);
+        // Best-effort, off the async runtime (keyring may block). A failed save can leave the old refresh
+        // token stored; fine, the in-memory session keeps working and the next refresh retries the save.
+        let (store, saved) = (Arc::clone(&self.store), new);
+        let _ = tokio::task::spawn_blocking(move || store.save(&saved)).await;
         Ok(())
+    }
+}
+
+fn invalid_path() -> Error {
+    Error::Status {
+        status: 0,
+        sub_status: None,
+        message: "invalid API path".into(),
     }
 }
 
@@ -157,5 +175,31 @@ fn status_error(status: u16, body: &str) -> Error {
         status,
         sub_status,
         message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::status_error;
+    use crate::Error;
+
+    #[test]
+    fn sub_status_parses_int_and_whole_float() {
+        for body in [r#"{"subStatus":4005}"#, r#"{"subStatus":4005.0}"#] {
+            assert!(matches!(
+                status_error(401, body),
+                Error::Status {
+                    sub_status: Some(4005),
+                    ..
+                }
+            ));
+        }
+        assert!(matches!(
+            status_error(401, r#"{"subStatus":4005.5}"#),
+            Error::Status {
+                sub_status: None,
+                ..
+            }
+        ));
     }
 }

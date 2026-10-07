@@ -115,9 +115,11 @@ async fn concurrent_401s_share_one_refresh() {
 async fn playback_substatus_401_does_not_refresh() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
-        .respond_with(ResponseTemplate::new(401).set_body_json(
-            serde_json::json!({"status":401,"subStatus":4005.0,"userMessage":"nope"}),
-        ))
+        .respond_with(
+            ResponseTemplate::new(401).set_body_json(
+                serde_json::json!({"status":401,"subStatus":4005,"userMessage":"nope"}),
+            ),
+        )
         .mount(&server)
         .await;
     token_ok(&server, 0).await;
@@ -165,4 +167,54 @@ async fn retry_after_is_honored() {
     let t = Instant::now();
     let _: Val = c.get("things", &[]).await.unwrap();
     assert!(t.elapsed() >= Duration::from_secs(1));
+}
+
+#[tokio::test]
+async fn playback_substatus_after_refresh_is_status() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer OLD"))
+        .respond_with(
+            ResponseTemplate::new(401).set_body_json(serde_json::json!({"subStatus":11003})),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer ACCESS"))
+        .respond_with(
+            ResponseTemplate::new(401).set_body_json(serde_json::json!({"subStatus":4005})),
+        )
+        .mount(&server)
+        .await;
+    token_ok(&server, 1).await;
+    let (c, _) = setup(&server, "OLD");
+    let r = c.get::<Val>("things", &[]).await;
+    assert!(
+        matches!(
+            r,
+            Err(Error::Status {
+                sub_status: Some(4005),
+                ..
+            })
+        ),
+        "{r:?}"
+    );
+}
+
+#[tokio::test]
+async fn foreign_origin_path_is_rejected() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ok())
+        .expect(0)
+        .mount(&server)
+        .await;
+    let (c, _) = setup(&server, "ACCESS");
+    for p in ["http://evil.test/x", "//evil.test/x"] {
+        let r = c.get::<Val>(p, &[]).await;
+        assert!(
+            matches!(r, Err(Error::Status { status: 0, .. })),
+            "{p}: {r:?}"
+        );
+    }
 }
