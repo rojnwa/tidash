@@ -1,0 +1,38 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tidash\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/ui/login.rs
+msgid "Log in with TIDAL"
+msgstr ""
+
+#: src/ui/login.rs
+msgid "After logging in, your browser shows a TIDAL page. Copy the full address from the address bar and paste it here."
+msgstr ""
+
+#: src/ui/login.rs
+msgid "Login page"
+msgstr ""
+
+#: src/ui/login.rs
+msgid "Paste the address here"
+msgstr ""
+
+#: src/ui/login.rs
+msgid "Continue"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Dismiss"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Log out"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Logged in. Search and playback arrive in the next tasks."
+msgstr ""
