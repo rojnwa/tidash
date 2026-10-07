@@ -244,6 +244,7 @@ impl Playback {
             Action::PlayTracks { tracks, start } => {
                 log::debug!("play {} tracks from {start}", tracks.len());
                 self.end_here(c);
+                self.failures = 0;
                 if self.queue.replace(tracks, start).is_some() {
                     self.want_play = true;
                     self.start_current(c, None);
@@ -270,17 +271,16 @@ impl Playback {
                 }
             }
             Action::Previous => {
-                if self.state != PlayState::Stopped && self.player.position() > Duration::from_secs(3) {
-                    self.player.send(PlayerCmd::Seek(Duration::ZERO));
+                let active = self.state != PlayState::Stopped;
+                if active && self.player.position() > Duration::from_secs(3) {
+                    self.seek(Duration::ZERO);
+                } else if self.queue.previous().is_some() || !active {
+                    self.change_track(c); // stopped with none before: (re)load this one
                 } else {
-                    self.queue.previous(); // none before: restart this one
-                    self.change_track(c);
+                    self.seek(Duration::ZERO); // the first track
                 }
             }
-            Action::Seek(to) => {
-                self.last_pos = to;
-                self.player.send(PlayerCmd::Seek(to));
-            }
+            Action::Seek(to) => self.seek(to),
             Action::SetVolume(v) => {
                 self.volume = v.clamp(0.0, 1.0);
                 self.player.send(PlayerCmd::SetVolume(self.volume));
@@ -356,6 +356,7 @@ impl Playback {
     pub fn reset(&mut self, c: Option<&Arc<Client>>) {
         self.end_here(c);
         self.queue = Queue::default();
+        self.failures = 0;
         self.stop();
         self.publish_queue();
     }
@@ -373,6 +374,16 @@ impl Playback {
             self.last_pos = self.player.position();
         }
         self.last_pos
+    }
+
+    /// While a stream resolves, the seek waits for its load instead of hitting the old track.
+    fn seek(&mut self, to: Duration) {
+        self.last_pos = to;
+        if self.loading {
+            self.resume_at = Some(to);
+        } else {
+            self.player.send(PlayerCmd::Seek(to));
+        }
     }
 
     fn track_id(&self) -> u64 {
@@ -394,6 +405,7 @@ impl Playback {
         };
         self.seq += 1;
         let (seq, id, c, msgs) = (self.seq, track.id, c.clone(), self.msgs.clone());
+        self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
         self.loading = true;
         self.retried = resume_at.is_some();
         self.resume_at = resume_at;
@@ -451,15 +463,17 @@ impl Playback {
         let report = report_for(&self.play.take()?, end, Instant::now(), now_ms())?;
         let c = c?.clone();
         Some(tokio::spawn(async move {
-            if let Err(e) = c.report_playback(&report).await {
-                log::debug!("play report for track {}: {e}", report.track_id);
+            match c.report_playback(&report).await {
+                Ok(()) => log::debug!("play report sent for track {}", report.track_id),
+                Err(e) => log::debug!("play report for track {}: {e}", report.track_id),
             }
         }))
     }
 
     fn publish(&self) {
         self.emit.send(Event::Playback(PlaybackSnapshot {
-            state: Some(self.state),
+            // A resolving stream shows as buffering, not as the Stop that silenced the old track.
+            state: Some(if self.loading { PlayState::Buffering } else { self.state }),
             track: self.queue.current().cloned(),
             volume: self.volume,
         }));
@@ -560,6 +574,68 @@ mod tests {
         let at = |secs| report_for(&p, End::At(S * secs), t0 + S * 95, 2).expect("report").end_position_s;
         assert_eq!(at(95), 95.0);
         assert_eq!(at(250), 200.0);
+    }
+
+    /// Device-less player, no client: every load stops at once, so no runtime is needed.
+    fn playback() -> (Playback, std::sync::mpsc::Receiver<Event>) {
+        let (player, _events, _renderer) = Player::spawn_manual();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let emit = Arc::new(Emitter { tx, waker: Box::new(|| {}) });
+        let (msgs, _) = tokio::sync::mpsc::unbounded_channel();
+        (Playback::new(player, emit, msgs), rx)
+    }
+
+    fn tracks(n: u64) -> Vec<tidal::Track> {
+        (0..n).map(|id| tidal::Track { id, title: format!("t{id}"), ..track() }).collect()
+    }
+
+    fn errors(rx: &std::sync::mpsc::Receiver<Event>) -> Vec<String> {
+        rx.try_iter().filter_map(|e| if let Event::Error(e) = e { Some(e) } else { None }).collect()
+    }
+
+    #[test]
+    fn three_failures_in_a_row_stop_and_a_new_queue_starts_over() {
+        let (mut p, rx) = playback();
+        p.handle(None, Action::PlayTracks { tracks: tracks(9), start: 0 });
+        p.fail_track(None);
+        p.fail_track(None);
+        p.handle(None, Action::PlayTracks { tracks: tracks(9), start: 0 });
+        assert_eq!(p.failures, 0, "a new queue starts over");
+        for _ in 0..3 {
+            p.fail_track(None);
+        }
+        let errs = errors(&rx);
+        assert_eq!(errs.len(), 6);
+        assert_eq!(errs[0], "t0 is unavailable");
+        assert_eq!(errs[5], "Playback stopped after repeated errors");
+        p.fail_track(None);
+        p.reset(None);
+        assert_eq!(p.failures, 0, "logout starts over");
+    }
+
+    #[test]
+    fn previous_on_the_first_track_seeks_instead_of_reloading() {
+        let (mut p, _rx) = playback();
+        p.queue.replace(tracks(3), 0);
+        p.state = PlayState::Playing;
+        let seq = p.seq;
+        p.handle(None, Action::Previous);
+        assert_eq!(p.seq, seq, "no reload");
+        p.queue.next();
+        p.handle(None, Action::Previous);
+        assert_eq!(p.queue.current().map(|t| t.id), Some(0));
+        assert_ne!(p.seq, seq, "the previous track loads");
+    }
+
+    #[test]
+    fn seek_while_loading_waits_for_the_load() {
+        let (mut p, _rx) = playback();
+        p.loading = true;
+        p.handle(None, Action::Seek(S * 5));
+        assert_eq!(p.resume_at, Some(S * 5));
+        p.loading = false;
+        p.handle(None, Action::Seek(S * 7));
+        assert_eq!(p.resume_at, Some(S * 5), "loaded: goes to the player");
     }
 
     #[test]

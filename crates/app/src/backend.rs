@@ -63,8 +63,8 @@ pub fn start(
 }
 
 pub(crate) struct Emitter {
-    tx: Sender<Event>,
-    waker: Box<dyn Fn() + Send + Sync>,
+    pub(crate) tx: Sender<Event>,
+    pub(crate) waker: Box<dyn Fn() + Send + Sync>,
 }
 
 impl Emitter {
