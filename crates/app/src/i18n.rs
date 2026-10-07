@@ -19,6 +19,11 @@ impl fastframe_i18n::Locale for Locale {
     }
 }
 
+/// Plural-aware phrase; `{n}` is replaced by the count.
+pub fn tr_n(singular: &'static str, plural: &'static str, n: u32) -> String {
+    fastframe_i18n::ngettext(Locale::default(), singular, plural, n).replace("{n}", &n.to_string())
+}
+
 /// Looks up a user-visible string.
 pub fn tr(source: &'static str) -> Cow<'static, str> {
     fastframe_i18n::gettext(Locale::default(), source)

@@ -74,10 +74,6 @@ msgid "Tracks"
 msgstr ""
 
 #: src/ui/album.rs
-msgid "tracks"
-msgstr ""
-
-#: src/ui/album.rs
 msgid "Play"
 msgstr ""
 
@@ -91,4 +87,18 @@ msgstr ""
 
 #: src/backend.rs
 msgid "Could not open album"
+msgstr ""
+
+#: src/ui/album.rs
+msgid "{n} track"
+msgid_plural "{n} tracks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ui/album.rs
+msgid "Couldn't load this album"
+msgstr ""
+
+#: src/ui/album.rs
+msgid "Retry"
 msgstr ""
