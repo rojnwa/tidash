@@ -73,6 +73,11 @@ async fn refresh_keeps_old_refresh_token_and_user_when_absent() {
         country_code: "DE".into(),
     };
     let s = refresh(&reqwest::Client::new(), &cfg, &old).await.unwrap();
+    // S1: refresh sends client_id and no scope.
+    let reqs = server.received_requests().await.unwrap();
+    let body = String::from_utf8(reqs[0].body.clone()).unwrap();
+    assert!(body.contains("client_id="));
+    assert!(!body.contains("scope"));
     assert_eq!(s.access_token, "ACCESS");
     assert_eq!(s.refresh_token, "OLDREF");
     // The refresh fixture carries user data, so it wins; absent-user fallback is covered below.

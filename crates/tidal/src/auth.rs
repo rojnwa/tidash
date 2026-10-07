@@ -90,7 +90,7 @@ pub fn code_from_redirect(redirect: &str, expected_state: &str) -> Result<String
     }
     Ok(code)
 }
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Session {
     pub access_token: String,
     pub refresh_token: String,
@@ -98,6 +98,19 @@ pub struct Session {
     pub expires_at: u64,
     pub user_id: u64,
     pub country_code: String,
+}
+
+// Manual Debug: tokens must never be logged.
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("access_token", &"<redacted>")
+            .field("refresh_token", &"<redacted>")
+            .field("expires_at", &self.expires_at)
+            .field("user_id", &self.user_id)
+            .field("country_code", &self.country_code)
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -156,6 +169,7 @@ async fn post_token(
     })
 }
 
+/// A pre-epoch system clock yields 0, so the session just looks expired and gets refreshed.
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -191,7 +205,7 @@ pub async fn exchange_code(
         refresh_token: t
             .refresh_token
             .ok_or_else(|| Error::Auth("token response has no refresh token".into()))?,
-        expires_at: now_secs() + t.expires_in,
+        expires_at: now_secs().saturating_add(t.expires_in),
         user_id,
         country_code,
     })
@@ -209,7 +223,7 @@ pub async fn refresh(http: &reqwest::Client, cfg: &ClientConfig, old: &Session) 
     Ok(Session {
         access_token: t.access_token,
         refresh_token: t.refresh_token.unwrap_or_else(|| old.refresh_token.clone()),
-        expires_at: now_secs() + t.expires_in,
+        expires_at: now_secs().saturating_add(t.expires_in),
         user_id: t
             .user_id
             .or_else(|| user.and_then(|u| u.user_id))
@@ -226,6 +240,20 @@ mod tests {
 
     use crate::{ClientConfig, Error, Pkce, authorize_url, code_from_redirect};
     use std::collections::HashMap;
+
+    #[test]
+    fn session_debug_redacts_tokens() {
+        let s = crate::Session {
+            access_token: "SECRET_ACC".into(),
+            refresh_token: "SECRET_REF".into(),
+            expires_at: 1,
+            user_id: 2,
+            country_code: "US".into(),
+        };
+        let d = format!("{s:?}");
+        assert!(!d.contains("SECRET_ACC") && !d.contains("SECRET_REF"));
+        assert!(d.contains("redacted"));
+    }
 
     #[test]
     fn challenge_matches_rfc7636_vector() {
