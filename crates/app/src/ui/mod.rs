@@ -3,7 +3,7 @@
 mod login;
 
 use crate::i18n::tr;
-use crate::model::{Action, Model, Route};
+use crate::model::{Action, Event, Model, Route};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Default)]
@@ -11,7 +11,8 @@ pub struct UiState {
     login: login::State,
 }
 
-pub fn draw(ui: &mut egui::Ui, model: &mut Model, tx: &UnboundedSender<Action>, state: &mut UiState) {
+/// Draws the model; returns events for the caller to apply (the UI never mutates `Model`).
+pub fn draw(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, state: &mut UiState) -> Vec<Event> {
     let mut dismiss = None;
     let mut logout = false;
     if !model.errors.is_empty() || model.logged_in {
@@ -29,9 +30,6 @@ pub fn draw(ui: &mut egui::Ui, model: &mut Model, tx: &UnboundedSender<Action>, 
             }
         });
     }
-    if let Some(i) = dismiss {
-        model.errors.remove(i);
-    }
     if logout {
         let _ = tx.send(Action::Logout);
     }
@@ -43,4 +41,5 @@ pub fn draw(ui: &mut egui::Ui, model: &mut Model, tx: &UnboundedSender<Action>, 
             ui.label(tr("Logged in. Search and playback arrive in the next tasks."));
         }
     });
+    dismiss.map(Event::DismissError).into_iter().collect()
 }

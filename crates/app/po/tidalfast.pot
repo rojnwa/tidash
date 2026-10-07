@@ -36,3 +36,23 @@ msgstr ""
 #: src/ui/mod.rs
 msgid "Logged in. Search and playback arrive in the next tasks."
 msgstr ""
+
+#: src/backend.rs
+msgid "Login failed"
+msgstr ""
+
+#: src/backend.rs
+msgid "Logout failed"
+msgstr ""
+
+#: src/backend.rs
+msgid "Login will not be remembered"
+msgstr ""
+
+#: src/backend.rs
+msgid "Login failed: start with \"Log in with TIDAL\" first"
+msgstr ""
+
+#: src/model.rs
+msgid "Login will not be remembered: no system credential store available"
+msgstr ""

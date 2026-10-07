@@ -40,7 +40,9 @@ impl eframe::App for App {
         while let Ok(ev) = self.events.try_recv() {
             self.model.apply(ev);
         }
-        ui::draw(ui, &mut self.model, &self.actions, &mut self.ui);
+        for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
+            self.model.apply(ev);
+        }
     }
 }
 

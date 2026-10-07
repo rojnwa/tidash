@@ -19,7 +19,6 @@ open = "5"
 log = "0.4"
 fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
-fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 
