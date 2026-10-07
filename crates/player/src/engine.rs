@@ -17,6 +17,10 @@ use crate::{DecodeError, Decoder, Interrupt, ProgressiveFile, Resampler};
 const IDLE_WAIT: Duration = Duration::from_millis(50);
 /// The same, while a running output is about to take a flush (start, seek): resume quickly.
 const FLUSH_WAIT: Duration = Duration::from_millis(5);
+/// Callbacks this recent mean the device is running (and will take a pending flush soon).
+const CALLBACK_RECENT: Duration = Duration::from_millis(100);
+/// Longest the device keeps running after a stop, waiting for the renderer to take the flush.
+const STOP_GRACE: Duration = Duration::from_millis(50);
 const MAINTAIN_EVERY: Duration = Duration::from_secs(1);
 
 /// A track to play: a forward-only byte stream and, if known, its length.
@@ -55,10 +59,6 @@ pub enum PlayerEvent {
     },
 }
 
-/// The source the player thread reads, and whether it is still probing it. Locked by
-/// `Player::send` and the player thread, never by the renderer.
-type Reading = Arc<Mutex<Option<(Interrupt, bool)>>>;
-
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -67,9 +67,12 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// command channel, and the thread (and the device output it owns) then exits.
 #[derive(Clone)]
 pub struct Player {
-    cmds: Sender<(PlayerCmd, Option<Interrupt>)>,
+    /// Each command with whether it raised `interrupt`.
+    cmds: Sender<(PlayerCmd, bool)>,
     shared: Arc<Shared>,
-    reading: Reading,
+    interrupt: Interrupt,
+    /// Loads sent whose probe has not finished. Also orders `send`s (see there).
+    loads: Arc<Mutex<u32>>,
 }
 
 impl Player {
@@ -107,15 +110,22 @@ impl Player {
     }
 
     pub fn send(&self, cmd: PlayerCmd) {
-        // Load, Stop and Seek must not queue behind a read waiting on the network: interrupt
-        // it. A Seek leaves a Load's probe alone; it is meant for that track.
-        let interrupt = match (&cmd, &*lock(&self.reading)) {
-            (PlayerCmd::Load(_) | PlayerCmd::Stop, Some((i, _)))
-            | (PlayerCmd::Seek(_), Some((i, false))) => Some(i.clone()),
-            _ => None,
+        // Load, Stop and Seek must not queue behind a read waiting on the network, whichever
+        // source it is reading (even one the thread has yet to open): raise the interrupt. A
+        // Seek leaves unfinished Loads alone; it is meant for that track. The lock keeps the
+        // decision, the interrupt and the queue order together.
+        let mut loads = lock(&self.loads);
+        let interrupt = match cmd {
+            PlayerCmd::Load(_) => {
+                *loads += 1;
+                true
+            }
+            PlayerCmd::Stop => true,
+            PlayerCmd::Seek(_) => *loads == 0,
+            _ => false,
         };
-        if let Some(i) = &interrupt {
-            i.interrupt();
+        if interrupt {
+            self.interrupt.interrupt();
         }
         // The thread only exits once every `Player` is gone, so this cannot fail.
         let _ = self.cmds.send((cmd, interrupt));
@@ -128,13 +138,15 @@ impl Player {
 
 fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
     let shared = Arc::new(Shared::default());
-    let reading = Reading::default();
+    let interrupt = Interrupt::default();
+    let loads = Arc::new(Mutex::new(0));
     let (cmds, cmd_rx) = mpsc::channel();
     let (events, event_rx) = mpsc::channel();
     let (rings, ring_rx) = mpsc::channel();
     let engine = Engine {
         shared: Arc::clone(&shared),
-        reading: Arc::clone(&reading),
+        interrupt: interrupt.clone(),
+        loads: Arc::clone(&loads),
         cmds: cmd_rx,
         events,
         rings: ring_rx,
@@ -144,12 +156,16 @@ fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
         state: PlayState::Stopped,
         scratch: Vec::new(),
         output: None,
+        pause_by: None,
+        callbacks_seen: 0,
+        callback_at: Instant::now(),
     };
     let renderer = Renderer::new(Arc::clone(&shared), rings);
     let player = Player {
         cmds,
         shared,
-        reading,
+        interrupt,
+        loads,
     };
     (player, event_rx, renderer, engine)
 }
@@ -165,14 +181,20 @@ fn resampler(decoder: &Decoder, device_rate: u32) -> Resampler {
     Resampler::new(decoder.rate(), to, decoder.channels())
 }
 
-/// A read given up because a Load, Stop or Seek arrived: no error, that command decides.
-fn interrupted(e: &DecodeError) -> bool {
-    matches!(e, DecodeError::Io(e) if is_interrupt(e))
+/// An error caused by a Load, Stop or Seek arriving (a read given up): not reported, that
+/// command decides what happens next. symphonia's probe turns a failed read into "no format
+/// found", so any error while an interrupt is pending counts; a real one comes back after.
+fn superseded(e: &DecodeError, interrupt: &Interrupt) -> bool {
+    matches!(e, DecodeError::Io(e) if is_interrupt(e)) || interrupt.raised()
 }
 
 struct Track {
     id: u64,
+    /// The download; the decoder reads a forward-only view of it.
+    file: ProgressiveFile,
     decoder: Decoder,
+    /// Source frames the decoder has gone through: where its next packet starts.
+    decoded: u64,
     resampler: Resampler,
     channels: usize,
     /// Source frames still to drop after a seek (it lands at or before the target).
@@ -183,10 +205,26 @@ struct Track {
     started: bool,
 }
 
+impl Track {
+    /// The decoder only reads forward: going back starts a new one at byte 0 (downloaded
+    /// already, so local) and seeks forward from there. Returns where it landed.
+    fn seek(&mut self, to: Duration) -> Result<Duration, DecodeError> {
+        let rate = f64::from(self.decoder.rate());
+        if to.as_secs_f64() * rate < self.decoded as f64 {
+            self.decoder = Decoder::new(Box::new(self.file.forward()?))?;
+            self.decoded = 0;
+        }
+        let at = self.decoder.seek(to)?;
+        self.decoded = (at.as_secs_f64() * rate).round() as u64;
+        Ok(at)
+    }
+}
+
 struct Engine {
     shared: Arc<Shared>,
-    reading: Reading,
-    cmds: Receiver<(PlayerCmd, Option<Interrupt>)>,
+    interrupt: Interrupt,
+    loads: Arc<Mutex<u32>>,
+    cmds: Receiver<(PlayerCmd, bool)>,
     events: Sender<PlayerEvent>,
     rings: Receiver<NewRing>,
     ring: Option<Producer<f32>>,
@@ -196,6 +234,10 @@ struct Engine {
     state: PlayState,
     scratch: Vec<f32>,
     output: Option<Output<Renderer>>,
+    /// Set by a stop: the latest moment to pause the device (see `output_action`).
+    pause_by: Option<Instant>,
+    callbacks_seen: u64,
+    callback_at: Instant,
 }
 
 impl Engine {
@@ -204,17 +246,15 @@ impl Engine {
         let mut idle = false;
         loop {
             self.sync_output();
-            let wait = if !idle {
-                Duration::ZERO // a try_recv: commands first
-            } else if self.shared.flush_pending() && self.output_wanted() {
-                FLUSH_WAIT
+            let wait = if idle {
+                self.idle_wait()
             } else {
-                IDLE_WAIT
+                Duration::ZERO // a try_recv: commands first
             };
             match self.cmds.recv_timeout(wait) {
-                Ok((cmd, interrupt)) => {
-                    if let Some(i) = interrupt {
-                        i.handled();
+                Ok((cmd, raised)) => {
+                    if raised {
+                        self.interrupt.handled();
                     }
                     self.command(cmd);
                     idle = false;
@@ -232,16 +272,55 @@ impl Engine {
         }
     }
 
-    /// The device runs only while a track is loaded and the user has not paused: stopped (also
-    /// right after opening) it makes no callbacks. A Load resumes it: its flush needs one.
+    /// Poll fast only while a flush is about to be taken: the output should run and has
+    /// called back lately. A device that is gone (no callbacks) gets the normal wait.
+    fn idle_wait(&mut self) -> Duration {
+        let n = self.shared.callbacks.load(Relaxed);
+        if n != self.callbacks_seen {
+            self.callbacks_seen = n;
+            self.callback_at = Instant::now();
+        }
+        if self.shared.flush_pending()
+            && self.output_wanted()
+            && self.callback_at.elapsed() < CALLBACK_RECENT
+        {
+            FLUSH_WAIT
+        } else {
+            IDLE_WAIT
+        }
+    }
+
+    /// A track is loaded and the user has not paused.
     fn output_wanted(&self) -> bool {
         self.track.is_some() && !self.shared.paused.load(Acquire)
     }
 
+    /// What the device should do: run (`Some(true)`) while wanted, pause (`Some(false)`)
+    /// otherwise — so stopped (also right after opening) it makes no callbacks. On a stop it
+    /// first keeps running (`None`) until the renderer took the stop flush, at most
+    /// `STOP_GRACE`, so no period of the old track stays in the device buffer to play at the
+    /// next resume.
+    fn output_action(&self) -> Option<bool> {
+        if self.output_wanted() {
+            return Some(true);
+        }
+        let grace =
+            self.shared.flush_pending() && self.pause_by.is_some_and(|by| Instant::now() < by);
+        (!grace).then_some(false)
+    }
+
     fn sync_output(&mut self) {
-        let run = self.output_wanted();
-        if let Some(out) = &mut self.output {
-            if run { out.resume() } else { out.pause() }
+        let action = self.output_action();
+        let Some(out) = &mut self.output else { return };
+        match action {
+            Some(true) => {
+                if out.is_paused() {
+                    self.callback_at = Instant::now(); // expect callbacks from now on
+                }
+                out.resume();
+            }
+            Some(false) => out.pause(),
+            None => {}
         }
     }
 
@@ -260,7 +339,7 @@ impl Engine {
                     self.set_state(PlayState::Paused);
                 }
             }
-            PlayerCmd::Stop => self.stop(),
+            PlayerCmd::Stop => self.stop(Duration::ZERO),
             PlayerCmd::Seek(to) => self.seek(to),
             PlayerCmd::SetVolume(v) => self.shared.volume.store(v.to_bits(), Relaxed),
         }
@@ -271,24 +350,23 @@ impl Engine {
         self.adopt_ring(); // so the resampler is built for the current device rate
         self.flush(Duration::ZERO); // the old track stops now, not after the probe
         self.set_state(PlayState::Buffering);
-        let file = match ProgressiveFile::spawn(src.reader, src.len) {
-            Ok(file) => file,
-            Err(e) => {
-                self.fail(src.id, e.to_string());
-                return;
-            }
-        };
-        *lock(&self.reading) = Some((file.interrupt_handle(), true));
-        match Decoder::new(Box::new(file)) {
-            Ok(decoder) => {
-                if let Some((_, probing)) = lock(&self.reading).as_mut() {
-                    *probing = false;
-                }
+        let opened = ProgressiveFile::spawn(src.reader, src.len, &self.interrupt)
+            .and_then(|file| Ok((file.forward()?, file)))
+            .map_err(DecodeError::Io)
+            .and_then(|(view, file)| Ok((Decoder::new(Box::new(view))?, file)));
+        // This Load's probe is over: Seeks may interrupt reads again.
+        let mut loads = lock(&self.loads);
+        *loads = loads.saturating_sub(1);
+        drop(loads);
+        match opened {
+            Ok((decoder, file)) => {
                 self.track = Some(Track {
                     id: src.id,
                     resampler: resampler(&decoder, self.rate),
                     channels: usize::from(decoder.channels().max(1)),
+                    file,
                     decoder,
+                    decoded: 0,
                     skip: 0,
                     pending: Vec::new(),
                     eof: false,
@@ -296,14 +374,14 @@ impl Engine {
                 });
                 self.flush(Duration::ZERO); // again, now with the track's channels
             }
-            Err(e) if interrupted(&e) => {}
+            Err(e) if superseded(&e, &self.interrupt) => {}
             Err(e) => self.fail(src.id, e.to_string()),
         }
     }
 
     fn seek(&mut self, to: Duration) {
         let Some(t) = &mut self.track else { return };
-        match t.decoder.seek(to) {
+        match t.seek(to) {
             Ok(at) => {
                 let skip = to.saturating_sub(at).as_secs_f64() * f64::from(t.decoder.rate());
                 t.skip = skip.round() as usize;
@@ -312,7 +390,7 @@ impl Engine {
                 t.resampler = resampler(&t.decoder, self.rate);
                 self.flush(to);
             }
-            Err(e) if interrupted(&e) => {} // the next command re-seeks or drops the track
+            Err(e) if superseded(&e, &self.interrupt) => {} // the next command re-seeks or drops the track
             Err(DecodeError::Io(e)) => {
                 let id = t.id;
                 self.fail(id, e.to_string());
@@ -321,7 +399,7 @@ impl Engine {
                 // symphonia knows no fMP4 duration up front: a refused seek is past the end.
                 let id = t.id;
                 self.emit(PlayerEvent::TrackEnded(id));
-                self.stop();
+                self.stop(Duration::ZERO);
             }
         }
     }
@@ -337,15 +415,18 @@ impl Engine {
         s.flush_req.fetch_add(1, Release);
     }
 
-    fn stop(&mut self) {
+    /// Drop the track and flush (the clock then reads `at`); the device pauses once the
+    /// renderer took that flush (`output_action`).
+    fn stop(&mut self, at: Duration) {
         self.track = None;
-        self.flush(Duration::ZERO);
+        self.flush(at);
+        self.pause_by = Some(Instant::now() + STOP_GRACE);
         self.set_state(PlayState::Stopped);
     }
 
     fn fail(&mut self, id: u64, message: String) {
         self.emit(PlayerEvent::Error { id, message });
-        self.stop();
+        self.stop(Duration::ZERO);
     }
 
     /// A ring from `configure` (first open, or a device rate/channel change): what the old
@@ -412,15 +493,16 @@ impl Engine {
                 return false; // still playing out
             }
             let id = t.id;
-            self.track = None;
             self.emit(PlayerEvent::TrackEnded(id));
-            self.set_state(PlayState::Stopped);
+            self.stop(self.shared.position()); // the clock stays at the end
             return true;
         }
         match t.decoder.next() {
             Ok(Some(pcm)) => {
                 let ch = t.channels;
-                let drop = t.skip.min(pcm.samples.len() / ch);
+                let frames = pcm.samples.len() / ch;
+                t.decoded += frames as u64;
+                let drop = t.skip.min(frames);
                 t.skip -= drop;
                 self.scratch.clear();
                 self.scratch.extend(
@@ -435,7 +517,7 @@ impl Engine {
                 t.eof = true;
             }
             // The interrupting command is queued (or about to be): wait for it, not spin.
-            Err(e) if interrupted(&e) => return false,
+            Err(e) if superseded(&e, &self.interrupt) => return false,
             Err(e) => {
                 let id = t.id;
                 self.fail(id, e.to_string());
@@ -473,32 +555,40 @@ mod tests {
         }
     }
 
-    /// The device output follows `output_wanted` at the top of every loop iteration
-    /// (`sync_output`); this drives the engine synchronously through each transition.
+    /// `sync_output` applies `output_action` at the top of every loop iteration; this drives
+    /// the engine synchronously through each transition.
     #[test]
     fn output_runs_only_with_an_unpaused_track() {
         let (_player, _events, mut r, mut e) = parts();
+        let mut block = [0.0f32; 960];
         r.configure(48_000, 2);
-        assert!(!e.output_wanted(), "stopped at launch");
+        assert_eq!(e.output_action(), Some(false), "stopped at launch");
         e.command(PlayerCmd::Play);
-        assert!(!e.output_wanted(), "play with nothing loaded");
+        assert_eq!(e.output_action(), Some(false), "play with nothing loaded");
         e.command(PlayerCmd::Load(fixture(1)));
-        assert!(e.output_wanted(), "loaded");
+        assert_eq!(e.output_action(), Some(true), "loaded");
+        r.render(&mut block); // takes the load flushes
         e.command(PlayerCmd::Pause);
-        assert!(!e.output_wanted(), "paused");
+        assert_eq!(e.output_action(), Some(false), "paused");
         e.command(PlayerCmd::Play);
-        assert!(e.output_wanted(), "playing");
+        assert_eq!(e.output_action(), Some(true), "playing");
         e.command(PlayerCmd::Stop);
-        assert!(!e.output_wanted(), "stopped");
+        assert_eq!(
+            e.output_action(),
+            None,
+            "runs until the stop flush is taken"
+        );
+        r.render(&mut block);
+        assert_eq!(e.output_action(), Some(false), "stopped");
         let broken = Source {
             id: 2,
             reader: Box::new(io::empty()),
             len: None,
         };
         e.command(PlayerCmd::Load(broken));
-        assert!(!e.output_wanted(), "load failed");
+        r.render(&mut block);
+        assert_eq!(e.output_action(), Some(false), "load failed");
         e.command(PlayerCmd::Load(fixture(3)));
-        let mut block = [0.0f32; 960];
         for _ in 0..10_000 {
             if e.track.is_none() {
                 break;
@@ -507,6 +597,27 @@ mod tests {
             e.step();
         }
         assert!(e.track.is_none(), "track did not end");
-        assert!(!e.output_wanted(), "track ended");
+        assert_eq!(e.output_action(), None, "ended: takes the stop flush first");
+        r.render(&mut block);
+        assert_eq!(e.output_action(), Some(false), "ended");
+        // A device that never calls back is paused anyway once the grace is over.
+        e.command(PlayerCmd::Load(fixture(4)));
+        e.command(PlayerCmd::Stop);
+        assert_eq!(e.output_action(), None);
+        std::thread::sleep(STOP_GRACE + Duration::from_millis(10));
+        assert_eq!(e.output_action(), Some(false), "no callback: paused anyway");
+    }
+
+    #[test]
+    fn polls_fast_for_a_flush_only_while_called_back() {
+        let (_player, _events, mut r, mut e) = parts();
+        let mut block = [0.0f32; 960];
+        r.configure(48_000, 2);
+        e.command(PlayerCmd::Load(fixture(1)));
+        r.render(&mut block); // takes the load flushes: a callback just now
+        e.command(PlayerCmd::Seek(Duration::from_millis(100)));
+        assert_eq!(e.idle_wait(), FLUSH_WAIT);
+        std::thread::sleep(CALLBACK_RECENT + Duration::from_millis(10));
+        assert_eq!(e.idle_wait(), IDLE_WAIT, "no callbacks: device gone");
     }
 }

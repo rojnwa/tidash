@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
 use std::io::{self, Read};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
@@ -311,6 +313,78 @@ fn stop_is_not_stuck_behind_a_stalled_stream() {
     player.send(PlayerCmd::Load(source(2, "s16_44100")));
     player.send(PlayerCmd::Play);
     render_until(&mut r, &events, &TrackStarted(2));
+}
+
+#[test]
+fn load_then_stop_back_to_back() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    player.send(PlayerCmd::Load(Cut::source(1, "s16_44100", 4096, true)));
+    stop_promptly(&player, &events); // no render, no sleep in between
+    player.send(PlayerCmd::Load(source(2, "s16_44100")));
+    player.send(PlayerCmd::Play);
+    render_until(&mut r, &events, &TrackStarted(2));
+}
+
+/// Delivers a fixture 2 KiB at a time, 10 ms apart; flags when its last byte went out.
+struct Trickle {
+    file: std::fs::File,
+    left: u64,
+    last: Arc<AtomicBool>,
+}
+
+impl Read for Trickle {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        std::thread::sleep(Duration::from_millis(10));
+        let n = buf.len().min(2048);
+        let n = self.file.read(&mut buf[..n])?;
+        self.left = self.left.saturating_sub(n as u64);
+        if self.left == 0 {
+            self.last.store(true, Ordering::SeqCst);
+        }
+        Ok(n)
+    }
+}
+
+#[test]
+fn starts_before_download_completes() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    let file = fixture("s24_96000"); // 60 KB: about 300 ms to trickle in
+    let left = file.metadata().unwrap().len();
+    let last = Arc::new(AtomicBool::new(false));
+    player.send(PlayerCmd::Load(Source {
+        id: 1,
+        reader: Box::new(Trickle {
+            file,
+            left,
+            last: Arc::clone(&last),
+        }),
+        len: None, // as with DASH
+    }));
+    player.send(PlayerCmd::Play);
+    render_until(&mut r, &events, &TrackStarted(1));
+    assert!(
+        !last.load(Ordering::SeqCst),
+        "started only after the whole download"
+    );
+}
+
+#[test]
+fn seek_backwards_after_progress() {
+    let (player, events, mut r) = start("s16_44100");
+    render_until(&mut r, &events, &State(Playing));
+    render_ms(&mut r, 300);
+    let target = Duration::from_millis(100);
+    player.send(PlayerCmd::Seek(target));
+    let deadline = Instant::now() + DEADLINE;
+    while player.position() != target {
+        assert!(Instant::now() < deadline, "at {:?}", player.position());
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let (out, _) = render_until(&mut r, &events, &TrackEnded(1));
+    let frames = nonsilent_frames(&out);
+    assert!((19_008..=19_392).contains(&frames), "frames = {frames}"); // 400 ms ± 1%
 }
 
 #[test]

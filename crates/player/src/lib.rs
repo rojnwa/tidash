@@ -10,4 +10,4 @@ pub use decode::{DecodeError, Decoder, Pcm};
 pub use engine::{PlayState, Player, PlayerCmd, PlayerEvent, Source};
 pub use render::Renderer;
 pub use resample::Resampler;
-pub use stream::{Interrupt, ProgressiveFile};
+pub use stream::{Forward, Interrupt, ProgressiveFile};
