@@ -1,5 +1,6 @@
 //! Tokio backend on its own thread: receives `Action`s, sends `Event`s.
 
+use crate::i18n::tr;
 use crate::model::{Action, Event};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -105,7 +106,7 @@ impl Backend {
                 self.client = Some(Arc::new(c));
                 self.emit.send(Event::LoggedIn);
             }
-            Err(e) => self.emit.send(Event::Error(format!("Login failed: {e}"))),
+            Err(e) => self.emit.send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
     }
 
@@ -124,10 +125,11 @@ impl Backend {
             Action::Logout => {
                 self.client = None;
                 self.pkce = None;
-                match self.store.clear() {
-                    Ok(()) => self.emit.send(Event::LoggedOut),
-                    Err(e) => self.emit.send(Event::Error(format!("Logout failed: {e}"))),
+                // The user asked to log out: do so even if the stored copy could not be removed.
+                if let Err(e) = self.store.clear() {
+                    self.emit.send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
                 }
+                self.emit.send(Event::LoggedOut);
             }
             // ponytail: search, albums, playback and images arrive in tasks 18-20.
             _ => {}
@@ -136,7 +138,7 @@ impl Backend {
 
     async fn finish_login(&mut self, redirect: &str) {
         let Some(pkce) = self.pkce.clone() else {
-            self.emit.send(Event::Error("Login failed: start with \"Log in with TIDAL\" first".into()));
+            self.emit.send(Event::Error(tr("Login failed: start with \"Log in with TIDAL\" first").into_owned()));
             return;
         };
         let session = match tidal::code_from_redirect(redirect, &pkce.state) {
@@ -146,12 +148,12 @@ impl Backend {
         match session {
             Ok(session) => {
                 if let Err(e) = self.store.save(&session) {
-                    self.emit.send(Event::Error(format!("Login will not be remembered: {e}")));
+                    self.emit.send(Event::Error(format!("{}: {e}", tr("Login will not be remembered"))));
                 }
                 self.pkce = None;
                 self.log_in(session);
             }
-            Err(e) => self.emit.send(Event::Error(format!("Login failed: {e}"))),
+            Err(e) => self.emit.send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
     }
 }

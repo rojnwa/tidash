@@ -2,6 +2,7 @@
 // ponytail: the search/album/queue/playback parts are consumed by tasks 18-20.
 #![allow(dead_code)]
 
+use crate::i18n::tr;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -12,7 +13,7 @@ pub enum Route {
     Album(u64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Action {
     BeginLogin,
     FinishLogin(String),
@@ -29,6 +30,31 @@ pub enum Action {
     LoadImage { cover: String, size: u32 },
 }
 
+// Debug is manual: `FinishLogin` carries the redirect URL with the authorization code.
+impl std::fmt::Debug for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BeginLogin => f.write_str("BeginLogin"),
+            Self::FinishLogin(_) => f.write_str("FinishLogin(<redacted>)"),
+            Self::Logout => f.write_str("Logout"),
+            Self::Search(q) => f.debug_tuple("Search").field(q).finish(),
+            Self::OpenAlbum(id) => f.debug_tuple("OpenAlbum").field(id).finish(),
+            Self::PlayTracks { tracks, start } => {
+                f.debug_struct("PlayTracks").field("tracks", tracks).field("start", start).finish()
+            }
+            Self::Play => f.write_str("Play"),
+            Self::Pause => f.write_str("Pause"),
+            Self::Next => f.write_str("Next"),
+            Self::Previous => f.write_str("Previous"),
+            Self::Seek(d) => f.debug_tuple("Seek").field(d).finish(),
+            Self::SetVolume(v) => f.debug_tuple("SetVolume").field(v).finish(),
+            Self::LoadImage { cover, size } => {
+                f.debug_struct("LoadImage").field("cover", cover).field("size", size).finish()
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Event {
     LoginUrl(String),
@@ -41,6 +67,8 @@ pub enum Event {
     Playback(PlaybackSnapshot),
     Image { cover: String, size: u32, image: egui::ColorImage },
     Error(String),
+    /// Dismiss the error at this index (out of range is ignored).
+    DismissError(usize),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -99,7 +127,7 @@ impl Model {
             }
             Event::CredentialsNotPersistent => self
                 .errors
-                .push("Login will not be remembered: no system credential store available".into()),
+                .push(tr("Login will not be remembered: no system credential store available").into_owned()),
             Event::SearchResults { query, results } => self.search = Some((query, results)),
             Event::Album { album, tracks } => {
                 self.albums.insert(album.id, (album, tracks));
@@ -108,6 +136,11 @@ impl Model {
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } => {} // handled by the UI's texture cache
             Event::Error(e) => self.errors.push(e),
+            Event::DismissError(i) => {
+                if i < self.errors.len() {
+                    self.errors.remove(i);
+                }
+            }
         }
     }
 
@@ -168,5 +201,22 @@ mod tests {
         let mut m = Model::default();
         m.apply(Event::Error("x".into()));
         assert_eq!(m.errors, vec!["x".to_string()]);
+    }
+
+    #[test]
+    fn dismiss_error_removes_only_that_error() {
+        let mut m = Model::default();
+        for e in ["a", "b", "c"] {
+            m.apply(Event::Error(e.into()));
+        }
+        m.apply(Event::DismissError(1));
+        m.apply(Event::DismissError(9));
+        assert_eq!(m.errors, vec!["a".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn finish_login_debug_hides_the_code() {
+        let a = Action::FinishLogin("https://tidal.com/android/login/auth?code=SECRET123&state=s".into());
+        assert!(!format!("{a:?}").contains("SECRET123"));
     }
 }
