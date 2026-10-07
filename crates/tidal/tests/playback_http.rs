@@ -65,7 +65,28 @@ async fn lossless_fixture_yields_segment_urls() {
     assert_eq!(s.quality, "LOSSLESS");
     assert_eq!(s.track_gain, Some(-5.56));
     assert_eq!(s.album_peak, Some(0.988439));
-    assert_eq!(s.urls.len(), 1 + 69);
+    let xml = String::from_utf8(
+        STANDARD
+            .decode(
+                serde_json::from_str::<serde_json::Value>(LOSSLESS).unwrap()["manifest"]
+                    .as_str()
+                    .unwrap(),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    let expected: usize = xml
+        .split("<S ")
+        .skip(1)
+        .map(|s| {
+            let tag = s.split("/>").next().unwrap();
+            1 + tag
+                .split("r=\"")
+                .nth(1)
+                .map_or(0, |r| r.split('"').next().unwrap().parse().unwrap())
+        })
+        .sum();
+    assert_eq!(s.urls.len(), 1 + expected);
     assert_eq!(s.urls[0], "https://example.invalid/stream.flac");
     assert_eq!(s.urls[1], "https://example.invalid/stream-1.flac");
     assert_eq!(s.urls[69], "https://example.invalid/stream-69.flac");
@@ -166,4 +187,30 @@ async fn error_fixture_is_terminal() {
         }
     ));
     assert_eq!(classify(&err), Failure::Terminal);
+}
+
+fn timeline(attrs: &str, s: &str) -> String {
+    mpd(&format!(
+        r#"<Representation codecs="flac"><SegmentTemplate initialization="i" media="m-$Number{attrs}$"{}><SegmentTimeline>{s}</SegmentTimeline></SegmentTemplate></Representation>"#,
+        ""
+    ))
+}
+
+#[test]
+fn malformed_timelines_are_rejected() {
+    let cases = [
+        timeline("", r#"<S d="1" r="18446744073709551615"/>"#),
+        timeline("", r#"<S d="1" r="-1"/>"#),
+        timeline("", ""),
+        timeline("%05d", r#"<S d="1"/>"#),
+        mpd(
+            r#"<Representation codecs="flac"><SegmentTemplate initialization="i" media="m-$Number$" startNumber="18446744073709551615"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
+        ),
+        mpd(
+            r#"<Representation><SegmentTemplate initialization="i" media="m-$Number$"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#,
+        ),
+    ];
+    for b64 in cases {
+        assert!(matches!(dash_segments(&b64), Err(Error::Manifest(_))));
+    }
 }

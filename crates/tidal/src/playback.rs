@@ -131,15 +131,26 @@ pub fn dash_segments(manifest_b64: &str) -> Result<(String, Vec<String>)> {
             Some(r) => r.parse().map_err(|_| bad("bad repeat count"))?,
             None => 0,
         };
-        count = count.saturating_add(1 + r);
+        count = count.saturating_add(r.saturating_add(1));
+    }
+    if count == 0 {
+        return Err(bad("empty SegmentTimeline"));
     }
     if count > 100_000 {
         return Err(bad("implausible segment count"));
     }
+    let end = start
+        .checked_add(count)
+        .ok_or_else(|| bad("bad startNumber"))?;
+    let codec = rep
+        .attribute("codecs")
+        .or_else(|| rep.parent().and_then(|p| p.attribute("codecs")))
+        .filter(|c| !c.is_empty())
+        .ok_or_else(|| bad("missing codecs"))?;
     let urls = std::iter::once(init.to_owned())
-        .chain((start..start + count).map(|n| media.replace("$Number$", &n.to_string())))
+        .chain((start..end).map(|n| media.replace("$Number$", &n.to_string())))
         .collect();
-    Ok((rep.attribute("codecs").unwrap_or_default().to_owned(), urls))
+    Ok((codec.to_owned(), urls))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
