@@ -370,6 +370,73 @@ fn starts_before_download_completes() {
     );
 }
 
+/// Serves the first `first` bytes of a fixture, then the rest once the test opens the gate.
+struct Gated {
+    file: std::fs::File,
+    first: usize,
+    gate: Option<std::sync::mpsc::Receiver<()>>,
+}
+
+impl Read for Gated {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.first == 0
+            && let Some(gate) = self.gate.take()
+        {
+            let _ = gate.recv();
+        }
+        let n = if self.first > 0 {
+            buf.len().min(self.first)
+        } else {
+            buf.len()
+        };
+        let n = self.file.read(&mut buf[..n])?;
+        self.first = self.first.saturating_sub(n);
+        Ok(n)
+    }
+}
+
+#[test]
+fn second_forward_seek_after_interrupted_seek() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    let (open, gate) = std::sync::mpsc::channel();
+    let file = fixture("s24_96000");
+    let first = file.metadata().unwrap().len() as usize * 2 / 5; // ~200 ms of 500
+    player.send(PlayerCmd::Load(Source {
+        id: 1,
+        reader: Box::new(Gated {
+            file,
+            first,
+            gate: Some(gate),
+        }),
+        len: None,
+    }));
+    player.send(PlayerCmd::Play);
+    let (_, mut seen) = render_until(&mut r, &events, &State(Playing));
+    render_ms(&mut r, 50);
+    player.send(PlayerCmd::Seek(Duration::from_millis(450))); // waits for bytes
+    std::thread::sleep(Duration::from_millis(50));
+    let target = Duration::from_millis(300);
+    player.send(PlayerCmd::Seek(target)); // interrupts it
+    std::thread::sleep(Duration::from_millis(50));
+    open.send(()).unwrap();
+    let deadline = Instant::now() + DEADLINE;
+    while player.position() != target {
+        seen.extend(events.try_iter());
+        let at = player.position();
+        assert!(Instant::now() < deadline, "at {at:?}; saw {seen:?}");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let (out, rest) = render_until(&mut r, &events, &TrackEnded(1));
+    seen.extend(rest);
+    assert!(
+        !seen.iter().any(|e| matches!(e, PlayerEvent::Error { .. })),
+        "{seen:?}"
+    );
+    let frames = nonsilent_frames(&out);
+    assert!((9_504..=9_696).contains(&frames), "frames = {frames}"); // 200 ms ± 1%
+}
+
 #[test]
 fn seek_backwards_after_progress() {
     let (player, events, mut r) = start("s16_44100");
