@@ -1,0 +1,1137 @@
+{
+  "limit": 50,
+  "offset": 50,
+  "totalNumberOfItems": 63,
+  "items": [
+    {
+      "item": {
+        "id": 283039838,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": X. Die du gro\u00dfen S\u00fcnderinnen (Live)",
+        "duration": 92,
+        "replayGain": -3.91,
+        "peak": 0.207367,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 10,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039838",
+        "isrc": "DEFU72114051",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039839,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XI. Neige, neige, du Ohnegleiche (Live)",
+        "duration": 49,
+        "replayGain": -3.91,
+        "peak": 0.298828,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 11,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039839",
+        "isrc": "DEFU72114052",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039840,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XII. Er \u00fcberw\u00e4chst uns schon (Live)",
+        "duration": 225,
+        "replayGain": -3.91,
+        "peak": 0.45285,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 12,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039840",
+        "isrc": "DEFU72114053",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039841,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XIII. Komm! Hebe dich (Live)",
+        "duration": 60,
+        "replayGain": -3.91,
+        "peak": 0.084259,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 13,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039841",
+        "isrc": "DEFU72114054",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039843,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XIV. Blicket auf, alle reuig Zarten (Live)",
+        "duration": 229,
+        "replayGain": -3.91,
+        "peak": 0.513306,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 14,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039843",
+        "isrc": "DEFU72114055",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039844,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XV. Flie\u00dfend (Live)",
+        "duration": 129,
+        "replayGain": -3.91,
+        "peak": 0.458405,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 15,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 7,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039844",
+        "isrc": "DEFU72114056",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 7317564,
+          "name": "Dortmunder Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039845,
+        "title": "Symphony No. 8 in E-Flat Major \"Symphony of a Thousand\", Pt. 2 \"Schlussszene von Goethes Faust\": XVI. Alles Verg\u00e4ngliche ist nur ein Gleichnis (Live)",
+        "duration": 371,
+        "replayGain": -3.91,
+        "peak": 0.95636,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 16,
+        "volumeNumber": 12,
+        "version": null,
+        "popularity": 7,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039845",
+        "isrc": "DEFU72114057",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 12140943,
+          "name": "Emily Newton",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 12140943,
+            "name": "Emily Newton",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4780906,
+            "name": "Czech Philharmonic Choir, Brno",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 8633890,
+            "name": "Knabenchor der Chorakademie Dortmund",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 5922728,
+            "name": "Slovak Philharmonic Choir",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "79046f96-3f77-410e-8913-bc6f359a630d"
+          },
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039846,
+        "title": "Symphony No. 9: I. Andante comodo (Live)",
+        "duration": 1713,
+        "replayGain": -3.91,
+        "peak": 0.971954,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 13,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039846",
+        "isrc": "DEFU72114058",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 7317564,
+          "name": "Dortmunder Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039847,
+        "title": "Symphony No. 9: II. Im Tempo eines gem\u00e4chlichen L\u00e4ndlers (Live)",
+        "duration": 956,
+        "replayGain": -3.91,
+        "peak": 0.637115,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 2,
+        "volumeNumber": 13,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039847",
+        "isrc": "DEFU72114059",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 7317564,
+          "name": "Dortmunder Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039848,
+        "title": "Symphony No. 9: III. Rondo-Burleske (Live)",
+        "duration": 782,
+        "replayGain": -3.91,
+        "peak": 0.970825,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 3,
+        "volumeNumber": 13,
+        "version": null,
+        "popularity": 5,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039848",
+        "isrc": "DEFU72114060",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 7317564,
+          "name": "Dortmunder Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039850,
+        "title": "Symphony No. 9: IV. Adagio (Live)",
+        "duration": 1597,
+        "replayGain": -3.91,
+        "peak": 0.968842,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 14,
+        "version": null,
+        "popularity": 7,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039850",
+        "isrc": "DEFU72114061",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 7317564,
+          "name": "Dortmunder Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 7317564,
+            "name": "Dortmunder Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039851,
+        "title": "Symphony No. 10 in F-Sharp Minor (Excerpts): I. Adagio [Live]",
+        "duration": 1567,
+        "replayGain": -3.91,
+        "peak": 0.90451,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 2,
+        "volumeNumber": 14,
+        "version": null,
+        "popularity": 8,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039851",
+        "isrc": "DEFU72114062",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 3577462,
+          "name": "Stuttgarter Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 3577462,
+            "name": "Stuttgarter Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 283039852,
+        "title": "Symphony No. 10 in F-Sharp Minor (Excerpts): III. Purgatorio. Allegretto moderato [Live]",
+        "duration": 287,
+        "replayGain": -3.91,
+        "peak": 0.883514,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2022-04-15T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 3,
+        "volumeNumber": 14,
+        "version": null,
+        "popularity": 8,
+        "copyright": "Dreyer Gaido",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/283039852",
+        "isrc": "DEFU72114063",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 3577462,
+          "name": "Stuttgarter Philharmoniker",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 3577462,
+            "name": "Stuttgarter Philharmoniker",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 4029034,
+            "name": "Gabriel Feltz",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+          }
+        ],
+        "album": {
+          "id": 283039787,
+          "title": "Mahler: The Complete Symphonies (Live)",
+          "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+          "vibrantColor": "#e9d09d",
+          "videoCover": null
+        },
+        "mixes": {}
+      },
+      "type": "track"
+    }
+  ]
+}

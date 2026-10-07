@@ -1,0 +1,68 @@
+{
+  "id": 283039787,
+  "title": "Mahler: The Complete Symphonies (Live)",
+  "duration": 44328,
+  "streamReady": true,
+  "payToStream": false,
+  "adSupportedStreamReady": true,
+  "djReady": true,
+  "stemReady": false,
+  "streamStartDate": "2022-04-15T00:00:00.000+0000",
+  "allowStreaming": true,
+  "premiumStreamingOnly": false,
+  "numberOfTracks": 63,
+  "numberOfVideos": 0,
+  "numberOfVolumes": 14,
+  "releaseDate": "2022-04-15",
+  "copyright": "Dreyer Gaido",
+  "type": "ALBUM",
+  "version": null,
+  "url": "http://www.tidal.com/album/283039787",
+  "cover": "d7b7a55e-8c5a-4957-b7ba-786184496354",
+  "vibrantColor": "#e9d09d",
+  "videoCover": null,
+  "explicit": false,
+  "upc": "4260014871409",
+  "popularity": 5,
+  "audioQuality": "LOSSLESS",
+  "audioModes": [
+    "STEREO"
+  ],
+  "mediaMetadata": {
+    "tags": [
+      "LOSSLESS"
+    ]
+  },
+  "upload": false,
+  "ai": false,
+  "artist": {
+    "id": 3577462,
+    "name": "Stuttgarter Philharmoniker",
+    "handle": null,
+    "type": "MAIN",
+    "picture": null
+  },
+  "artists": [
+    {
+      "id": 3577462,
+      "name": "Stuttgarter Philharmoniker",
+      "handle": null,
+      "type": "MAIN",
+      "picture": null
+    },
+    {
+      "id": 7317564,
+      "name": "Dortmunder Philharmoniker",
+      "handle": null,
+      "type": "MAIN",
+      "picture": null
+    },
+    {
+      "id": 4029034,
+      "name": "Gabriel Feltz",
+      "handle": null,
+      "type": "MAIN",
+      "picture": "60fec226-2711-406d-8a5e-e2aa2d39ceef"
+    }
+  ]
+}
