@@ -359,12 +359,17 @@ fn play_cmd(a: &str, b: &str, full: &str) {
     let mut q = VecDeque::new();
     let mut written: Vec<i32> = Vec::with_capacity(expected.samples.len());
     let mut bytes = Vec::with_capacity(block_bytes);
-    let (mut fin, mut starved, mut late, mut timeouts, mut pad_zero, mut events, mut tail) = (false, 0, 0, 0, 0, 0, 0);
-    let (mut max_interval, mut max_service) = (Duration::ZERO, Duration::ZERO);
+    let (mut fin, mut starved, mut late, mut timeouts, mut events, mut tail) = (false, 0, 0, 0, 0, 0);
+    let (mut late_wakes, mut late_wake_at, mut early) = (0, Vec::new(), Vec::new());
+    let (mut startup, mut clock_running, mut max_interval, mut max_service) =
+        (Vec::new(), false, Duration::ZERO, Duration::ZERO);
     let (mut pad_min, mut pad_max) = (u32::MAX, 0);
+    let late_wake_limit = period_dur * 3 / 2;
+    let mut blocks = 0usize; // device buffers handed to WASAPI (real data + silence pad)
 
     // One device buffer from the queue; silence-pad only after the last real sample.
     let mut write_block = |q: &mut VecDeque<i32>, fin: bool, starved: &mut u32| {
+        blocks += 1;
         let have = q.len().min(need);
         if have < need && !fin {
             *starved += 1;
@@ -390,15 +395,34 @@ fn play_cmd(a: &str, b: &str, full: &str) {
         }
         let woke = Instant::now();
         events += 1;
-        max_interval = max_interval.max(woke - last);
+        let interval = woke - last;
         last = woke;
+        // An interval is mid-stream only if the device clock was already running at the previous wake.
+        // Before that it contains device start-up: Start signals event 1 at once (fill the second half of
+        // the ping-pong) and the USB device needs a few ms before it clocks the first frame.
+        let running_before = clock_running;
+        if !clock_running || events <= 3 {
+            let (p, _) = clock.get_position().expect("clock position");
+            let f = clock.get_frequency().expect("clock frequency");
+            clock_running = p > 0;
+            if events <= 3 {
+                early.push((events, interval, (p as f64 / f as f64 * rate as f64).round() as i64));
+            }
+        }
+        if running_before {
+            max_interval = max_interval.max(interval);
+            if interval > late_wake_limit {
+                late_wakes += 1;
+                late_wake_at.push((events, interval));
+            }
+        } else {
+            startup.push((events, interval));
+        }
+        // Informational only: in exclusive event mode this reads the full buffer at every wake.
         let pad = client.get_current_padding().expect("padding");
         (pad_min, pad_max) = (pad_min.min(pad), pad_max.max(pad));
         fin |= top_up(&rx, &mut q, need, false);
         let data_remains = !(fin && q.is_empty());
-        if pad == 0 && data_remains {
-            pad_zero += 1;
-        }
         if !data_remains {
             tail += 1; // let the last real buffer drain, then stop
             if tail > 2 {
@@ -412,19 +436,46 @@ fn play_cmd(a: &str, b: &str, full: &str) {
             late += 1;
         }
     }
-    let (pos, _) = clock.get_position().unwrap_or((0, 0));
-    let freq = clock.get_frequency().unwrap_or(1);
+    let wall = t0.elapsed();
     client.stop_stream().expect("stop");
+    // After Stop the clock and the queue are frozen: frames the device actually clocked out must equal
+    // frames handed to it minus frames still queued. Any replayed/inserted frames (a glitch) would show
+    // up as a positive delta.
+    let (pos, _) = clock.get_position().expect("clock position");
+    let freq = clock.get_frequency().expect("clock frequency");
+    let queued = client.get_current_padding().expect("padding at stop") as i64;
+    let played = (pos as f64 / freq as f64 * rate as f64).round() as i64;
+    let handed = (blocks * buf_frames) as i64;
+    let real = (written.len() / ch) as i64;
     let open_b = dec.join().expect("decoder thread");
 
-    let underruns = starved + late + timeouts;
+    let underruns = starved + late + late_wakes + timeouts;
     let diff = first_diff(&written, &expected.samples);
     println!("RESULT {rate} Hz {fmt:?}:");
-    println!("  events {events}, wall {:?}, device clock {:.4} s", t0.elapsed(), pos as f64 / freq as f64);
+    let startup_late = startup.iter().filter(|(e, i)| *e > 1 && *i > late_wake_limit).count();
+    println!("  events {events}, wall {wall:?}");
+    println!(
+        "  start-up wakes, before the device clock ran (event, interval since previous wake/Start): {startup:?}; \
+         of these after event 1 and > 1.5 x period: {startup_late} (not counted as underruns)"
+    );
+    println!(
+        "  device clock {:.4} s = {played} frames; handed to device {handed} (real {real} = {:.4} s, silence pad {}); \
+         queued at stop {queued}; clock - (handed - queued) = {} frames",
+        pos as f64 / freq as f64,
+        real as f64 / rate as f64,
+        handed - real,
+        played - (handed - queued)
+    );
     println!("  opening b (probe + decoder) took {open_b:?} on the decoder thread");
-    println!("  event interval max {max_interval:?}, service time max {max_service:?} (deadline = period {period_dur:?})");
-    println!("  padding at wake: min {pad_min} max {pad_max} frames; wakes with padding 0 while data remained: {pad_zero}");
-    println!("  UNDERRUNS = {underruns} (starved {starved}, service > period {late}, event timeouts {timeouts})");
+    println!("  first wakes (event, interval since previous/Start, device clock frames at wake): {early:?}");
+    println!(
+        "  mid-stream (device clock running) interval max {max_interval:?}; late wakes (> {late_wake_limit:?} = 1.5 x period) {late_wakes} at (event, interval) {late_wake_at:?}"
+    );
+    println!("  service time max {max_service:?} (deadline = period {period_dur:?})");
+    println!("  padding at wake (informational, = buffer in exclusive event mode): min {pad_min} max {pad_max} frames");
+    println!(
+        "  UNDERRUNS = {underruns} (starved {starved}, service > period {late}, late wakes {late_wakes}, event timeouts {timeouts})"
+    );
     println!(
         "  frames written {} vs full.flac {}; SAMPLE-EQUAL={}{}",
         written.len() / ch,
