@@ -102,3 +102,31 @@ msgstr ""
 #: src/ui/album.rs
 msgid "Retry"
 msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Previous"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Pause"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Next"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Volume"
+msgstr ""
+
+#: src/backend.rs
+msgid "No audio output device"
+msgstr ""
+
+#: src/playback.rs
+msgid "{title} is unavailable"
+msgstr ""
+
+#: src/playback.rs
+msgid "Playback stopped after repeated errors"
+msgstr ""

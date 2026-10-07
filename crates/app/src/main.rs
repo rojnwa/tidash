@@ -4,10 +4,13 @@ mod backend;
 mod i18n;
 mod images;
 mod model;
+mod playback;
+mod queue;
 mod ui;
 
 use model::{Action, Event, Model};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
 struct App {
@@ -21,8 +24,24 @@ impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_look(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
-        let (actions, events) = backend::start(move || ctx.request_repaint());
-        Self { model: Model::default(), actions, events, ui: ui::UiState::default() }
+        let (actions, events, player) = backend::start(move || ctx.request_repaint());
+        let mut ui = ui::UiState::default();
+        ui.player = player;
+        Self { model: Model::default(), actions, events, ui }
+    }
+}
+
+impl Drop for App {
+    /// Closing the action channel stops the backend, which first reports the current play;
+    /// give that a moment (best effort) before the process exits.
+    fn drop(&mut self) {
+        self.actions = tokio::sync::mpsc::unbounded_channel().0;
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            if let Err(RecvTimeoutError::Disconnected) = self.events.recv_timeout(left) {
+                break; // backend finished
+            }
+        }
     }
 }
 
