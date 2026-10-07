@@ -11,7 +11,7 @@ use rtrb::Producer;
 
 use crate::render::{NewRing, Renderer, Shared};
 use crate::stream::is_interrupt;
-use crate::{DecodeError, Decoder, Interrupt, ProgressiveFile, Resampler};
+use crate::{DecodeError, Decoder, Interrupt, Pcm, ProgressiveFile, Resampler};
 
 /// How long the thread sleeps on the command channel when there is nothing to decode.
 const IDLE_WAIT: Duration = Duration::from_millis(50);
@@ -195,6 +195,9 @@ struct Track {
     decoder: Decoder,
     /// Source frames the decoder has gone through: where its next packet starts.
     decoded: u64,
+    /// A decoder call failed (e.g. a read was interrupted): symphonia may be left mid-atom
+    /// (its `next_header` drops `skip_atom`'s error), so it is rebuilt before any further use.
+    stale: bool,
     resampler: Resampler,
     channels: usize,
     /// Source frames still to drop after a seek (it lands at or before the target).
@@ -206,17 +209,34 @@ struct Track {
 }
 
 impl Track {
-    /// The decoder only reads forward: going back starts a new one at byte 0 (downloaded
-    /// already, so local) and seeks forward from there. Returns where it landed.
+    /// The decoder only reads forward: going back (or on from a stale decoder) starts a new
+    /// one at byte 0 (downloaded already, so local) and seeks forward. Returns where it landed.
     fn seek(&mut self, to: Duration) -> Result<Duration, DecodeError> {
         let rate = f64::from(self.decoder.rate());
-        if to.as_secs_f64() * rate < self.decoded as f64 {
+        if self.stale || to.as_secs_f64() * rate < self.decoded as f64 {
             self.decoder = Decoder::new(Box::new(self.file.forward()?))?;
-            self.decoded = 0;
+            (self.decoded, self.stale) = (0, false);
         }
-        let at = self.decoder.seek(to)?;
+        let at = self.decoder.seek(to).inspect_err(|_| self.stale = true)?;
         self.decoded = (at.as_secs_f64() * rate).round() as u64;
         Ok(at)
+    }
+
+    /// The next packet. A stale decoder is first rebuilt back at `decoded`; the frames it
+    /// decodes again up to there are skipped.
+    fn next(&mut self) -> Result<Option<Pcm>, DecodeError> {
+        if self.stale {
+            let was = self.decoded;
+            self.seek(Duration::from_secs_f64(
+                was as f64 / f64::from(self.decoder.rate()),
+            ))?;
+            self.skip += usize::try_from(was.saturating_sub(self.decoded)).unwrap_or(usize::MAX);
+        }
+        let pcm = self.decoder.next().inspect_err(|_| self.stale = true)?;
+        if let Some(p) = &pcm {
+            self.decoded += (p.samples.len() / self.channels) as u64;
+        }
+        Ok(pcm)
     }
 }
 
@@ -354,9 +374,12 @@ impl Engine {
             .and_then(|file| Ok((file.forward()?, file)))
             .map_err(DecodeError::Io)
             .and_then(|(view, file)| Ok((Decoder::new(Box::new(view))?, file)));
-        // This Load's probe is over: Seeks may interrupt reads again.
+        // This Load's probe is over: Seeks may interrupt reads again. Decide whether a failure
+        // was superseded while still holding the lock, so a Seek sent after it cannot have
+        // raised the interrupt (and so hide a real probe error).
         let mut loads = lock(&self.loads);
         *loads = loads.saturating_sub(1);
+        let opened = opened.map_err(|e| (superseded(&e, &self.interrupt), e));
         drop(loads);
         match opened {
             Ok((decoder, file)) => {
@@ -367,6 +390,7 @@ impl Engine {
                     file,
                     decoder,
                     decoded: 0,
+                    stale: false,
                     skip: 0,
                     pending: Vec::new(),
                     eof: false,
@@ -374,8 +398,8 @@ impl Engine {
                 });
                 self.flush(Duration::ZERO); // again, now with the track's channels
             }
-            Err(e) if superseded(&e, &self.interrupt) => {}
-            Err(e) => self.fail(src.id, e.to_string()),
+            Err((true, _)) => {}
+            Err((false, e)) => self.fail(src.id, e.to_string()),
         }
     }
 
@@ -497,11 +521,10 @@ impl Engine {
             self.stop(self.shared.position()); // the clock stays at the end
             return true;
         }
-        match t.decoder.next() {
+        match t.next() {
             Ok(Some(pcm)) => {
                 let ch = t.channels;
                 let frames = pcm.samples.len() / ch;
-                t.decoded += frames as u64;
                 let drop = t.skip.min(frames);
                 t.skip -= drop;
                 self.scratch.clear();
@@ -606,6 +629,30 @@ mod tests {
         assert_eq!(e.output_action(), None);
         std::thread::sleep(STOP_GRACE + Duration::from_millis(10));
         assert_eq!(e.output_action(), Some(false), "no callback: paused anyway");
+    }
+
+    /// After a failed call the decoder is rebuilt and resumes exactly where it was.
+    #[test]
+    fn stale_decoder_resumes_seamlessly() {
+        let decode_all = |stale_at: Option<usize>| {
+            let (_player, _events, _r, mut e) = parts();
+            e.command(PlayerCmd::Load(fixture(1)));
+            let t = e.track.as_mut().unwrap();
+            let mut out = Vec::new();
+            for i in 0.. {
+                if Some(i) == stale_at {
+                    t.stale = true;
+                }
+                let Some(p) = t.next().unwrap() else { break };
+                let drop = t.skip.min(p.samples.len() / t.channels);
+                t.skip -= drop;
+                out.extend_from_slice(&p.samples[drop * t.channels..]);
+            }
+            out
+        };
+        let straight = decode_all(None);
+        assert_eq!(straight.len(), 22_050 * 2);
+        assert!(decode_all(Some(5)) == straight, "resumed decode differs");
     }
 
     #[test]
