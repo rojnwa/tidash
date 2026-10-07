@@ -92,24 +92,33 @@ impl ProgressiveFile {
         let read_handle = writer.try_clone()?;
         let shared: Shared = Arc::default();
         let thread_shared = Arc::clone(&shared);
-        std::thread::Builder::new().name("progressive-file".into()).spawn(move || {
-            let res = copy_loop(reader, &writer, &thread_shared);
-            let mut st = lock(&thread_shared);
-            match res {
-                Ok(()) => st.done = true,
-                Err(e) => st.error = Some((e.kind(), e.to_string())),
-            }
-            drop(st);
-            thread_shared.1.notify_all();
-        })?;
-        Ok(Self { reader: read_handle, pos: 0, len, shared })
+        std::thread::Builder::new()
+            .name("progressive-file".into())
+            .spawn(move || {
+                let res = copy_loop(reader, &writer, &thread_shared);
+                let mut st = lock(&thread_shared);
+                match res {
+                    Ok(()) => st.done = true,
+                    Err(e) => st.error = Some((e.kind(), e.to_string())),
+                }
+                drop(st);
+                thread_shared.1.notify_all();
+            })?;
+        Ok(Self {
+            reader: read_handle,
+            pos: 0,
+            len,
+            shared,
+        })
     }
 
     /// Wait until `ready(state)`, or the download ended / failed.
     fn wait(&self, ready: impl Fn(&State) -> bool) -> MutexGuard<'_, State> {
         self.shared
             .1
-            .wait_while(lock(&self.shared), |s| !ready(s) && !s.done && s.error.is_none())
+            .wait_while(lock(&self.shared), |s| {
+                !ready(s) && !s.done && s.error.is_none()
+            })
             .unwrap_or_else(|e| e.into_inner())
     }
 }
@@ -228,7 +237,12 @@ mod tests {
     }
 
     fn slow(data: Vec<u8>, chunk: usize, fail_at: Option<usize>) -> Box<SlowReader> {
-        Box::new(SlowReader { data, pos: 0, chunk, fail_at })
+        Box::new(SlowReader {
+            data,
+            pos: 0,
+            chunk,
+            fail_at,
+        })
     }
 
     #[test]
@@ -246,8 +260,8 @@ mod tests {
     #[test]
     fn seek_ahead_waits_then_reads() {
         let src = pseudo_random(1 << 20);
-        let mut f =
-            ProgressiveFile::spawn(slow(src.clone(), 65_536, None), Some(src.len() as u64)).unwrap();
+        let mut f = ProgressiveFile::spawn(slow(src.clone(), 65_536, None), Some(src.len() as u64))
+            .unwrap();
         assert_eq!(f.seek(SeekFrom::Start(900_000)).unwrap(), 900_000);
         let mut buf = [0u8; 1000];
         f.read_exact(&mut buf).unwrap();

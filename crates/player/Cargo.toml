@@ -11,4 +11,5 @@ workspace = true
 
 [dependencies]
 symphonia = { version = "0.6.1", default-features = false, features = ["flac", "isomp4"] }
+thiserror.workspace = true
 tempfile = "3"
