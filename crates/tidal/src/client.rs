@@ -42,6 +42,10 @@ impl Client {
             .clone()
     }
 
+    pub(crate) fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
+
     pub fn config(&self) -> &ClientConfig {
         &self.cfg
     }
