@@ -144,8 +144,12 @@ pub fn dash_segments(manifest_b64: &str) -> Result<(String, Vec<String>)> {
         .ok_or_else(|| bad("bad startNumber"))?;
     let codec = rep
         .attribute("codecs")
-        .or_else(|| rep.parent().and_then(|p| p.attribute("codecs")))
         .filter(|c| !c.is_empty())
+        .or_else(|| {
+            rep.parent()
+                .and_then(|p| p.attribute("codecs"))
+                .filter(|c| !c.is_empty())
+        })
         .ok_or_else(|| bad("missing codecs"))?;
     let urls = std::iter::once(init.to_owned())
         .chain((start..end).map(|n| media.replace("$Number$", &n.to_string())))
