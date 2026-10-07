@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::chunks_exact_to_as_chunks)]
+
 use std::time::Duration;
 
 use player::Decoder;
