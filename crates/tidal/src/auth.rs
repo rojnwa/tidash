@@ -90,6 +90,8 @@ pub fn code_from_redirect(redirect: &str, expected_state: &str) -> Result<String
 }
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use crate::{ClientConfig, Error, Pkce, authorize_url, code_from_redirect};
     use std::collections::HashMap;
 
