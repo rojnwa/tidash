@@ -14,3 +14,6 @@ symphonia = { version = "0.6.1", default-features = false, features = ["flac", "
 thiserror.workspace = true
 tempfile = "3"
 rubato = "5.0.1"
+rtrb = "0.4"
+fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+log = "0.4"
