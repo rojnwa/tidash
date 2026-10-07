@@ -8,3 +8,13 @@ license.workspace = true
 [lints]
 workspace = true
 
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+url = "2.5"
+rand = "0.10"
+sha2 = "0.11"
+base64 = "0.23"
