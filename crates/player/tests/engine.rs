@@ -13,11 +13,15 @@ use player::{Player, PlayerCmd, PlayerEvent, Renderer, Source};
 const BLOCK: usize = 960;
 const DEADLINE: Duration = Duration::from_secs(5);
 
-fn source(id: u64, name: &str) -> Source {
+fn fixture(name: &str) -> std::fs::File {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(format!("{name}.mp4"));
-    let file = std::fs::File::open(path).unwrap();
+    std::fs::File::open(path).unwrap()
+}
+
+fn source(id: u64, name: &str) -> Source {
+    let file = fixture(name);
     let len = file.metadata().unwrap().len();
     Source {
         id,
@@ -222,34 +226,139 @@ fn device_rate_change_mid_track() {
     assert!(diff <= Duration::from_millis(10), "ended at {last:?}");
 }
 
-/// Serves a file, then fails once 4 KiB were read.
-struct FailAfter(std::fs::File, usize);
+#[test]
+fn back_to_back_seeks_keep_the_last() {
+    let (player, events, mut r) = start("s16_44100");
+    render_until(&mut r, &events, &State(Playing));
+    // Two flush requests before the renderer runs again.
+    player.send(PlayerCmd::Seek(Duration::from_millis(100)));
+    player.send(PlayerCmd::Seek(Duration::from_millis(300)));
+    let deadline = Instant::now() + DEADLINE;
+    while player.position() < Duration::from_millis(300) {
+        assert!(Instant::now() < deadline, "at {:?}", player.position());
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    render_ms(&mut r, 10);
+    assert!(
+        player.position() >= Duration::from_millis(300),
+        "at {:?}",
+        player.position()
+    );
+    let (out, _) = render_until(&mut r, &events, &TrackEnded(1));
+    let frames = nonsilent_frames(&out);
+    assert!((9_504..=9_696).contains(&frames), "frames = {frames}"); // 200 ms ± 1%
+}
 
-impl Read for FailAfter {
+/// Serves a fixture until `left` bytes were read, then fails (`stall: false`) or never returns.
+struct Cut {
+    file: std::fs::File,
+    left: usize,
+    stall: bool,
+}
+
+impl Cut {
+    fn source(id: u64, name: &str, left: usize, stall: bool) -> Source {
+        let file = fixture(name);
+        Source {
+            id,
+            reader: Box::new(Cut { file, left, stall }),
+            len: None,
+        }
+    }
+}
+
+impl Read for Cut {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.1 == 0 {
+        if self.left == 0 {
+            if self.stall {
+                loop {
+                    std::thread::park(); // a dead connection without a timeout
+                }
+            }
             return Err(io::Error::new(io::ErrorKind::ConnectionReset, "boom"));
         }
-        let n = buf.len().min(self.1);
-        let n = self.0.read(&mut buf[..n])?;
-        self.1 -= n;
+        let n = buf.len().min(self.left);
+        let n = self.file.read(&mut buf[..n])?;
+        self.left -= n;
         Ok(n)
     }
+}
+
+/// Stop within 500 ms, with no Error, and the next Load plays.
+fn stop_promptly(player: &Player, events: &Receiver<PlayerEvent>) {
+    let t = Instant::now();
+    player.send(PlayerCmd::Stop);
+    let seen = wait_for(events, &State(Stopped));
+    assert!(
+        t.elapsed() < Duration::from_millis(500),
+        "took {:?}",
+        t.elapsed()
+    );
+    assert!(
+        !seen.iter().any(|e| matches!(e, PlayerEvent::Error { .. })),
+        "{seen:?}"
+    );
+}
+
+#[test]
+fn stop_is_not_stuck_behind_a_stalled_stream() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    player.send(PlayerCmd::Load(Cut::source(1, "s16_44100", 4096, true)));
+    player.send(PlayerCmd::Play);
+    render_ms(&mut r, 100); // the player thread now waits for bytes that never come
+    stop_promptly(&player, &events);
+    player.send(PlayerCmd::Load(source(2, "s16_44100")));
+    player.send(PlayerCmd::Play);
+    render_until(&mut r, &events, &TrackStarted(2));
+}
+
+#[test]
+fn seek_and_stop_are_not_stuck_behind_a_stall_mid_track() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    // About half the file, length known (else the probe waits for all of it): playing starts,
+    // then decoding waits for bytes that never come.
+    player.send(PlayerCmd::Load(Source {
+        len: Some(fixture("s24_96000").metadata().unwrap().len()),
+        ..Cut::source(1, "s24_96000", 32 * 1024, true)
+    }));
+    player.send(PlayerCmd::Play);
+    render_until(&mut r, &events, &State(Playing));
+    // Play out what arrived (~270 ms): once the ring runs dry, the player thread is waiting.
+    let t = Instant::now();
+    let mut heard = 0;
+    loop {
+        let n = nonsilent_frames(&render_ms(&mut r, 10));
+        heard += n;
+        if heard >= 9_600 && n == 0 {
+            break;
+        }
+        assert!(t.elapsed() < DEADLINE, "heard {heard} frames");
+    }
+    let target = Duration::from_millis(123);
+    let t = Instant::now();
+    player.send(PlayerCmd::Seek(target));
+    while player.position() != target {
+        assert!(
+            t.elapsed() < Duration::from_millis(500),
+            "seek stuck; at {:?}",
+            player.position()
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    while nonsilent_frames(&render_ms(&mut r, 10)) == 0 {
+        assert!(t.elapsed() < DEADLINE, "no audio after the seek");
+    }
+    stop_promptly(&player, &events);
 }
 
 #[test]
 fn stream_error_emits_error() {
     let (player, events, mut r) = Player::spawn_manual();
     r.configure(48_000, 2);
-    let path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/s16_44100.mp4");
-    let reader = FailAfter(std::fs::File::open(path).unwrap(), 4096);
     let t = Instant::now();
-    player.send(PlayerCmd::Load(Source {
-        id: 1,
-        reader: Box::new(reader),
-        len: None,
-    }));
+    player.send(PlayerCmd::Load(Cut::source(1, "s16_44100", 4096, false)));
     player.send(PlayerCmd::Play);
     let (_, seen) = render_until(&mut r, &events, &State(Stopped));
     assert!(

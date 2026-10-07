@@ -1,5 +1,6 @@
 //! Forward-only byte stream -> seekable, temp-file-backed `MediaSource`.
 
+use std::fmt;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -13,9 +14,50 @@ struct State {
     done: bool,
     stop: bool,
     error: Option<(io::ErrorKind, String)>,
+    /// Raised [`Interrupt`]s not yet `handled`; while any are, waiting reads fail.
+    interrupts: u32,
 }
 
 type Shared = Arc<(Mutex<State>, Condvar)>;
+
+/// Payload of the error a waiting read returns while an [`Interrupt`] is raised. Not
+/// `ErrorKind::Interrupted`: std's and symphonia's `read_exact` retry that kind, so the read
+/// would block again inside the decoder.
+#[derive(Debug)]
+struct Interrupted;
+
+impl fmt::Display for Interrupted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("read interrupted")
+    }
+}
+
+impl std::error::Error for Interrupted {}
+
+/// Whether `e` is a read given up because of an [`Interrupt`].
+pub(crate) fn is_interrupt(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|e| e.is::<Interrupted>())
+}
+
+/// Makes reads of a [`ProgressiveFile`] that wait for the network give up, so the reading
+/// thread can see to something else. Cheap to clone; usable from any thread.
+#[derive(Clone)]
+pub struct Interrupt(Shared);
+
+impl Interrupt {
+    /// From now until the matching [`handled`](Self::handled), a read that has to wait for
+    /// bytes (including one waiting already) fails with an interrupt error instead.
+    pub fn interrupt(&self) {
+        lock(&self.0).interrupts += 1;
+        self.0.1.notify_all();
+    }
+
+    /// The reason for one `interrupt` has been dealt with; once all are, reads wait again.
+    pub fn handled(&self) {
+        let mut st = lock(&self.0);
+        st.interrupts = st.interrupts.saturating_sub(1);
+    }
+}
 
 fn lock(s: &Shared) -> MutexGuard<'_, State> {
     s.0.lock().unwrap_or_else(|e| e.into_inner())
@@ -112,14 +154,26 @@ impl ProgressiveFile {
         })
     }
 
-    /// Wait until `ready(state)`, or the download ended / failed.
+    pub fn interrupt_handle(&self) -> Interrupt {
+        Interrupt(Arc::clone(&self.shared))
+    }
+
+    /// Wait until `ready(state)`, the download ended / failed, or an interrupt is raised.
     fn wait(&self, ready: impl Fn(&State) -> bool) -> MutexGuard<'_, State> {
         self.shared
             .1
             .wait_while(lock(&self.shared), |s| {
-                !ready(s) && !s.done && s.error.is_none()
+                !ready(s) && !s.done && s.error.is_none() && s.interrupts == 0
             })
             .unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// Why a wait that did not get its bytes ended: the download's error, or an interrupt.
+fn not_ready(st: &State) -> io::Error {
+    match &st.error {
+        Some((kind, msg)) => io::Error::new(*kind, msg.clone()),
+        None => io::Error::other(Interrupted),
     }
 }
 
@@ -132,9 +186,10 @@ impl Read for ProgressiveFile {
         let avail = {
             let st = self.wait(|s| s.downloaded > pos);
             if st.downloaded <= pos {
-                return match &st.error {
-                    Some((kind, msg)) => Err(io::Error::new(*kind, msg.clone())),
-                    None => Ok(0),
+                return if st.done && st.error.is_none() {
+                    Ok(0)
+                } else {
+                    Err(not_ready(&st))
                 };
             }
             st.downloaded - pos
@@ -156,8 +211,8 @@ impl Seek for ProgressiveFile {
                     Some(l) => l,
                     None => {
                         let st = self.wait(|_| false);
-                        if let Some((kind, msg)) = &st.error {
-                            return Err(io::Error::new(*kind, msg.clone()));
+                        if !st.done || st.error.is_some() {
+                            return Err(not_ready(&st));
                         }
                         st.downloaded
                     }
@@ -290,6 +345,49 @@ mod tests {
         let e = f.read(&mut [0u8; 16]).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::ConnectionReset);
         assert!(e.to_string().contains("boom"));
+    }
+
+    /// Blocks until the test lets it serve 4 bytes; ends when the test drops the sender.
+    struct Gate(std::sync::mpsc::Receiver<()>);
+
+    impl Read for Gate {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.0.recv().is_err() {
+                return Ok(0);
+            }
+            buf[..4].fill(9);
+            Ok(4)
+        }
+    }
+
+    fn read_on_thread(
+        mut f: ProgressiveFile,
+    ) -> std::thread::JoinHandle<(ProgressiveFile, io::Result<usize>, Instant)> {
+        std::thread::spawn(move || {
+            let r = f.read(&mut [0u8; 16]);
+            (f, r, Instant::now())
+        })
+    }
+
+    #[test]
+    fn interrupt_unblocks_a_waiting_read_until_handled() {
+        let (go, gate) = std::sync::mpsc::channel();
+        let f = ProgressiveFile::spawn(Box::new(Gate(gate)), None).unwrap();
+        let interrupt = f.interrupt_handle();
+        let waiting = read_on_thread(f);
+        std::thread::sleep(Duration::from_millis(50)); // let it block
+        let at = Instant::now();
+        interrupt.interrupt();
+        let (f, r, done) = waiting.join().unwrap();
+        assert!(is_interrupt(&r.unwrap_err()));
+        assert!(done - at < Duration::from_millis(100), "{:?}", done - at);
+        // Handled: reads wait for bytes again rather than failing.
+        interrupt.handled();
+        let waiting = read_on_thread(f);
+        std::thread::sleep(Duration::from_millis(50));
+        go.send(()).unwrap();
+        let (_, r, _) = waiting.join().unwrap();
+        assert_eq!(r.unwrap(), 4);
     }
 
     struct Endless(Arc<AtomicBool>);
