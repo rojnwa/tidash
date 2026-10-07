@@ -36,9 +36,10 @@ impl Resampler {
         if from == to {
             return Resampler { inner: None };
         }
-        // Only fails on zero rates/chunk size; treat zero rates as passthrough.
         let Ok(fft) = Fft::<f32>::new(from as usize, to as usize, CHUNK_HINT, ch, FixedSync::Both)
         else {
+            // ponytail: only a zero rate can fail here; release falls back to passthrough.
+            debug_assert!(false, "invalid sample rates {from} -> {to}");
             return Resampler { inner: None };
         };
         let in_buf = vec![0.0; fft.input_frames_max() * ch];
@@ -70,6 +71,7 @@ impl Resampler {
             out.extend_from_slice(input);
             return;
         };
+        debug_assert!(input.len().is_multiple_of(s.ch), "input not a whole number of frames");
         s.pending.extend_from_slice(input);
         s.in_frames += (input.len() / s.ch) as u64;
         loop {
@@ -79,7 +81,9 @@ impl Resampler {
             }
             s.in_buf[..need].copy_from_slice(&s.pending[..need]);
             s.pending.drain(..need);
-            s.run(None, out);
+            if !s.run(None, out) {
+                break;
+            }
         }
     }
 
@@ -97,7 +101,9 @@ impl Resampler {
             s.in_buf[..n * ch].copy_from_slice(&s.pending[..n * ch]);
             s.pending.drain(..n * ch);
             left -= n;
-            s.run(Some(n), out);
+            if !s.run(Some(n), out) {
+                break; // rubato error: stop rather than spin
+            }
         }
         let extra = s.out_frames - target;
         out.truncate(out.len().saturating_sub(extra as usize * ch).max(base));
@@ -107,7 +113,7 @@ impl Resampler {
 
 impl Inner {
     /// Resample one chunk from `in_buf`, dropping startup delay, appending to `out`.
-    fn run(&mut self, partial: Option<usize>, out: &mut Vec<f32>) {
+    fn run(&mut self, partial: Option<usize>, out: &mut Vec<f32>) -> bool {
         let ch = self.ch;
         let in_frames = self.in_buf.len() / ch;
         let out_frames = self.out_buf.len() / ch;
@@ -115,7 +121,7 @@ impl Inner {
             InterleavedSlice::new(&self.in_buf, ch, in_frames),
             InterleavedSlice::new_mut(&mut self.out_buf, ch, out_frames),
         ) else {
-            return;
+            return false;
         };
         let idx = partial.map(|n| Indexing {
             input_offset: 0,
@@ -124,12 +130,13 @@ impl Inner {
             active_channels_mask: None,
         });
         let Ok((_, produced)) = self.fft.process_into_buffer(&inp, &mut outp, idx.as_ref()) else {
-            return;
+            return false;
         };
-        let drop = self.skip.min(produced);
-        self.skip -= drop;
-        out.extend_from_slice(&self.out_buf[drop * ch..produced * ch]);
-        self.out_frames += (produced - drop) as u64;
+        let skipped = self.skip.min(produced);
+        self.skip -= skipped;
+        out.extend_from_slice(&self.out_buf[skipped * ch..produced * ch]);
+        self.out_frames += (produced - skipped) as u64;
+        true
     }
 }
 
@@ -205,5 +212,33 @@ mod tests {
         r.flush(&mut chunked);
         let diff = (whole.len() as i64 - chunked.len() as i64).abs() / 2;
         assert!(diff <= 1024, "whole {} vs chunked {}", whole.len() / 2, chunked.len() / 2);
+    }
+
+    #[test]
+    fn channels_stay_separate() {
+        let input: Vec<f32> = sine(44_100, 44_100.0)
+            .chunks(2)
+            .flat_map(|f| [f[0], 0.0])
+            .collect();
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        let mut out = Vec::new();
+        r.process(&input, &mut out);
+        r.flush(&mut out);
+        let ch = |x: &[f32], c: usize| -> Vec<f32> { x.iter().skip(c).step_by(2).copied().collect() };
+        let (l_in, l_out, r_out) = (ch(&input, 0), ch(&out, 0), ch(&out, 1));
+        assert!(rms(&r_out) < 1e-4, "R rms = {}", rms(&r_out));
+        assert!((rms(&l_out) / rms(&l_in) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn flush_terminates_when_empty_or_tiny() {
+        let mut out = Vec::new();
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        r.flush(&mut out);
+        assert!(out.is_empty());
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        r.process(&[0.1; 20], &mut out); // 10 frames
+        r.flush(&mut out);
+        assert_eq!(out.len() / 2, 11); // round(10 * 48000/44100)
     }
 }
