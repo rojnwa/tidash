@@ -2,6 +2,7 @@
 
 mod album;
 mod login;
+mod player_bar;
 mod search;
 mod sidebar;
 mod tracks;
@@ -14,12 +15,21 @@ use tokio::sync::mpsc::UnboundedSender;
 pub struct UiState {
     login: login::State,
     search: search::State,
+    bar: player_bar::State,
     pub images: TextureCache,
+    /// Read only for the position; `None` without an audio device.
+    pub player: Option<player::Player>,
 }
 
 impl Default for UiState {
     fn default() -> Self {
-        Self { login: Default::default(), search: Default::default(), images: TextureCache::new(512) }
+        Self {
+            login: Default::default(),
+            search: Default::default(),
+            bar: Default::default(),
+            images: TextureCache::new(512),
+            player: None,
+        }
     }
 }
 
@@ -64,6 +74,8 @@ pub fn draw(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, stat
         let _ = tx.send(Action::Logout);
     }
     if model.route != Route::Login {
+        // Before the sidebar, so the bar spans the full width.
+        player_bar::show(ui, model, tx, state.player.as_ref(), &mut state.bar, &mut state.images);
         sidebar::show(ui, model, &mut events);
     }
 

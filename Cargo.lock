@@ -3674,7 +3674,9 @@ checksum = "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029"
 dependencies = [
  "base64 0.23.1",
  "bytes",
+ "futures-channel",
  "futures-core",
+ "futures-util",
  "http",
  "http-body",
  "http-body-util",
@@ -4445,6 +4447,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "fastframe-audio",
  "fastframe-fonts",
  "fastframe-i18n",
  "fastframe-log",

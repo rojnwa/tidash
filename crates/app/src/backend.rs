@@ -2,17 +2,42 @@
 
 use crate::i18n::tr;
 use crate::model::{Action, Event};
+use crate::playback::{Msg, Playback};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::time::Duration;
 use tidal::{Client, ClientConfig, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-/// Spawns the backend. Every event sent is followed by `waker()`.
+/// Opens the audio output, then spawns the backend. Every event sent is followed by `waker()`.
+/// Without an audio device (`None`) the app runs, and play actions report the missing output.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
-) -> (UnboundedSender<Action>, Receiver<Event>) {
+) -> (UnboundedSender<Action>, Receiver<Event>, Option<player::Player>) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
+    let (msg_tx, msg_rx) = unbounded_channel();
+    let player = match player::Player::spawn(fastframe_audio::OutputOptions::default()) {
+        Ok((player, events)) => {
+            let tx = msg_tx.clone();
+            let forward = move || {
+                for ev in events {
+                    if tx.send(Msg::Player(ev)).is_err() {
+                        return; // backend gone
+                    }
+                }
+            };
+            if let Err(e) = std::thread::Builder::new().name("player-events".into()).spawn(forward) {
+                log::error!("player event thread failed: {e}");
+            }
+            Some(player)
+        }
+        Err(e) => {
+            log::warn!("no audio output: {e}");
+            None
+        }
+    };
+    let backend_player = player.clone();
     let spawned = std::thread::Builder::new().name("backend".into()).spawn(move || {
         let rt = match tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -26,21 +51,24 @@ pub fn start(
             }
         };
         let emit = Arc::new(Emitter { tx: event_tx, waker: Box::new(waker) });
-        rt.block_on(Backend::new(emit).run(action_rx));
+        rt.block_on(async move {
+            let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
+            Backend::new(emit, playback).run(action_rx, msg_rx).await;
+        });
     });
     if let Err(e) = spawned {
         log::error!("backend thread failed: {e}");
     }
-    (action_tx, event_rx)
+    (action_tx, event_rx, player)
 }
 
-struct Emitter {
+pub(crate) struct Emitter {
     tx: Sender<Event>,
     waker: Box<dyn Fn() + Send + Sync>,
 }
 
 impl Emitter {
-    fn send(&self, ev: Event) {
+    pub(crate) fn send(&self, ev: Event) {
         let _ = self.tx.send(ev); // receiver gone = app closing
         (self.waker)();
     }
@@ -65,12 +93,13 @@ struct Backend {
     persistent: bool,
     pkce: Option<Pkce>,
     search_task: Option<tokio::task::JoinHandle<()>>,
-    // Shared with spawned tasks by later tasks.
     client: Option<Arc<Client>>,
+    /// `None` without an audio device.
+    playback: Option<Playback>,
 }
 
 impl Backend {
-    fn new(emit: Arc<Emitter>) -> Self {
+    fn new(emit: Arc<Emitter>, playback: Option<Playback>) -> Self {
         let (mut store, mut persistent) = tidal::default_store();
         if !persistent {
             // A corrupt stored session makes the probe fail and drops us to memory-only,
@@ -88,16 +117,41 @@ impl Backend {
             pkce: None,
             search_task: None,
             client: None,
+            playback,
         }
     }
 
-    async fn run(mut self, mut rx: UnboundedReceiver<Action>) {
+    /// Until the UI drops its sender (app closing); then the current play is reported.
+    async fn run(mut self, mut rx: UnboundedReceiver<Action>, mut msgs: UnboundedReceiver<Msg>) {
         if !self.persistent {
             self.emit.send(Event::CredentialsNotPersistent);
         }
         self.resume();
-        while let Some(action) = rx.recv().await {
-            self.handle(action).await;
+        // Samples the position for a resume after a player error; only ticks while playing.
+        let mut tick = tokio::time::interval(Duration::from_secs(1));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            let playing = self.playback.as_ref().is_some_and(Playback::is_playing);
+            tokio::select! {
+                biased; // a pending player error goes before a sample of its reset clock
+                Some(msg) = msgs.recv() => {
+                    if let Some(p) = &mut self.playback {
+                        p.on_msg(self.client.as_ref(), msg);
+                    }
+                }
+                action = rx.recv() => match action {
+                    Some(action) => self.handle(action).await,
+                    None => break,
+                },
+                _ = tick.tick(), if playing => {
+                    if let Some(p) = &mut self.playback {
+                        p.tick();
+                    }
+                }
+            }
+        }
+        if let Some(p) = &mut self.playback {
+            p.shutdown(self.client.as_ref()).await;
         }
     }
 
@@ -136,13 +190,17 @@ impl Backend {
             }
             Action::FinishLogin(redirect) => self.finish_login(&redirect).await,
             Action::Logout => {
-                self.client = None;
+                let client = self.client.take();
                 self.pkce = None;
                 // The user asked to log out: do so even if the stored copy could not be removed.
                 if let Err(e) = self.store.clear() {
                     self.emit.send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
                 }
                 self.emit.send(Event::LoggedOut);
+                // After LoggedOut, whose model reset the playback snapshots then refill.
+                if let Some(p) = &mut self.playback {
+                    p.reset(client.as_ref());
+                }
             }
             Action::Search(q) => {
                 let Some(c) = self.client.clone() else { return };
@@ -183,11 +241,19 @@ impl Backend {
                     }
                 });
             }
-            Action::PlayTracks { tracks, start } => {
-                log::debug!("play requested: {} tracks from {start}", tracks.len());
-            }
-            // ponytail: playback transport arrives in tasks 19-20.
-            _ => {}
+            Action::PlayTracks { .. }
+            | Action::Play
+            | Action::Pause
+            | Action::Next
+            | Action::Previous
+            | Action::Seek(_)
+            | Action::SetVolume(_) => match &mut self.playback {
+                Some(p) => p.handle(self.client.as_ref(), action),
+                None if matches!(action, Action::PlayTracks { .. } | Action::Play) => {
+                    self.emit.send(Event::Error(tr("No audio output device").into_owned()));
+                }
+                None => {}
+            },
         }
     }
 
