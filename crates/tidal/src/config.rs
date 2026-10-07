@@ -13,6 +13,8 @@ pub struct ClientConfig {
     pub auth_base: Url,
     pub login_base: Url,
     pub image_base: Url,
+    /// Play-event (SQS batch) endpoint.
+    pub events_url: Url,
 }
 
 impl Default for ClientConfig {
@@ -28,6 +30,7 @@ impl Default for ClientConfig {
             auth_base: url("https://auth.tidal.com/v1/"),
             login_base: url("https://login.tidal.com/"),
             image_base: url("https://resources.tidal.com/images/"),
+            events_url: url("https://ec.tidal.com/api/event-batch"),
         }
     }
 }
