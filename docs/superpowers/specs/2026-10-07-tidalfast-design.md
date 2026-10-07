@@ -98,9 +98,9 @@ tidalfast/
 through a `Read + Seek` adapter that blocks until the requested bytes are present.
 `ponytail: sequential fetch, seek-ahead waits for the download; add HTTP Range requests if slow links complain.`
 
-**Decode.** symphonia 0.6 FLAC. If S1 shows Hi-Res arrives as DASH, the fragmented-MP4 demuxer reads init + segments
-as one continuous byte stream (one adapter, same `Read + Seek` contract). In bit-perfect mode samples stay integers
-end to end; 24-bit is placed in a 32-bit container by a lossless shift.
+**Decode.** Streams are FLAC in fragmented MP4 delivered as DASH segments (S1), decoded by symphonia 0.6 `flac` +
+`isomp4` from one continuous byte stream (init + segments, one adapter, same `Read + Seek` contract). In bit-perfect
+mode samples stay integers end to end; 24-bit is placed in a 32-bit container by a lossless shift.
 
 **Output.** `trait Output` with one implementation per backend (multiple real implementations):
 
@@ -113,9 +113,11 @@ end to end; 24-bit is placed in a 32-bit container by a lossless shift.
 
 Exclusive = device opened at the track's rate and bit depth; no resampling, no software volume, no normalization;
 volume via hardware endpoint control if available, else fixed 100%. If the device refuses (busy, format unsupported),
-fall back to shared and emit a notice.
+fall back to shared and emit a notice. Devices may not support the source rate (e.g. 88.2 kHz on a 24/96 DAC); policy
+decided in M3 (current rule: fall back to shared with a notice).
 
-**Gapless.** ~20 s before the end the next track is preloaded; the decoder appends it to the same ring buffer. Same
+**Gapless.** The next track is pre-opened well before EOF (playbackinfo + init + first segment + decoder; queue sized
+for network latency, not ~170 ms); the decoder appends it to the same ring buffer. Same
 format: no gap. Shared mode with a format change: the resampler absorbs it, no gap. Exclusive with a format change:
 drain, reopen device at the new format (short gap, inherent to bit-perfect).
 
@@ -128,9 +130,9 @@ preload request), `Format { rate, bits, channels, mode }`, `Error(kind)`, `Devic
 ## 6. `tidal` — service layer
 
 **Auth.** OAuth 2.1 Authorization Code + PKCE (S256) at `login.tidal.com/authorize`, token at
-`auth.tidal.com/v1/oauth2/token`, with an official client ID (default baked in, overridable in settings). Redirect
-strategy is decided by spike S1, in preference order: loopback listener → custom scheme handed to the running
-instance via fastframe-instance → user pastes the redirect URL.
+`auth.tidal.com/v1/oauth2/token`, with an official client ID (default baked in, overridable in settings): `android`
+`6BDSRdpK9hqEBTgU`, redirect `https://tidal.com/android/login/auth` (S1). No client secret for exchange or refresh.
+The user pastes the redirect URL back (M1 flow).
 
 **Tokens.** Stored only in the OS credential store (keyring-core with the native store per OS, as Spotifast does). If
 none is available, tokens stay in memory with a visible warning — no plaintext fallback. Refresh is single-flight on
@@ -145,12 +147,12 @@ event batch.
 **Models.** Hand-written serde structs with only the fields we use; unknown fields ignored; enums carry
 `#[serde(other)] Unknown` so new values never break parsing.
 
-**Playback info.** Quality preference HI_RES_LOSSLESS → LOSSLESS. Decode BTS (`application/vnd.tidal.bts`) and, only if
-S1 requires it, DASH MPD. Classify playback errors (sub-status) as terminal (skip track) or retryable (back off and
+**Playback info.** Quality preference HI_RES_LOSSLESS → LOSSLESS. Manifest is a DASH MPD (`application/dash+xml`):
+`SegmentTemplate` + `SegmentTimeline` → init + media URLs; segment URLs are pre-signed, no auth header. Classify playback errors (sub-status) as terminal (skip track) or retryable (back off and
 retry), following SONE's mapping.
 
 **Caching.** GET JSON responses go to a disk cache served stale-while-revalidate (key = hash of path + query, size-capped
-LRU directory). Artwork fetched from `images.tidal.com` at the exact size needed (160/320/640/1280), disk-cached, decoded
+LRU directory). Artwork fetched from `resources.tidal.com/images/<uuid with slashes>/<w>x<h>.jpg` (`images.tidal.com` returned 400) at the exact size needed (160/320/640/1280), disk-cached, decoded
 off the UI thread, held as textures in an in-memory LRU.
 
 **Play reporting.** Playback-session events sent to TIDAL's event endpoint with a streaming session id, matching the
@@ -238,7 +240,7 @@ Release profile: thin LTO, `codegen-units = 1`, `strip`.
 |---|---|---|
 | M0 Spikes (throwaway code) | S1 auth + manifests, S2 exclusive + gapless, S3 egui grid performance | Findings written into §14; spec updated |
 | M1 Walking skeleton | Login, search, album page, lossless shared-mode playback, player bar, media keys | Log in and play an album end to end on all three OSes |
-| M2 Library | Home/Explore, artist/playlist/mix pages, collection, favorites, queue panel, caching | Daily-driver browsing |
+| M2 Library | Home/Explore, artist/playlist/mix pages, collection, favorites, queue panel, caching; frame-pacing check (PresentMon; glow vs wgpu renderer), no idle repaint, display-size textures | Daily-driver browsing |
 | M3 Audiophile | Exclusive per OS, device picker, gapless, ReplayGain, Hi-Res, format badge | Bit-perfect 24/192 verified on each OS |
 | M4 Extras | Playlist editing/folders/reorder, radio, lyrics, credits, scrobbling, Discord, tray, settings | v1 scope complete |
 | M5 Ship | Packaging, updater, signing, performance budget, docs | v1.0.0 released |
@@ -253,7 +255,18 @@ Implementation plans are written one milestone at a time; the first plan covers 
 | S2 Audio | symphonia decode from a progressive temp file; WASAPI exclusive at 24/96 and 24/192 via `wasapi`; gapless append between two FLACs | Bit-identical capture and audible gapless on Windows; notes for macOS/Linux |
 | S3 UI | egui virtualized grid of 10 000 covers at 320 px with async decode | RAM and frame-time numbers recorded |
 
-Findings are appended here at the end of M0; any spec change they force is made in the affected section.
+**Findings (M0, 2026-10-07)**
+
+| Spike | Result |
+|---|---|
+| [S1](../../spikes/s1-auth-manifests.md) | Client `android` `6BDSRdpK9hqEBTgU` via PKCE, redirect `https://tidal.com/android/login/auth`; no client secret for exchange or refresh; refresh returns no new `refresh_token` (keep the old one). Every quality (LOW to HI_RES_LOSSLESS) is unencrypted DASH, FLAC in fMP4 for lossless; lossy tiers are DRM-free too. Images: `resources.tidal.com`. Play events: `POST ec.tidal.com/api/event-batch`. |
+| [S2](../../spikes/s2-audio.md) | WASAPI exclusive works on the test DAC (24/96 USB, accepts 24-bit packed at 44.1/48/96 kHz only). Gapless a→b: 0 underruns, output sample-equal to the source. fMP4 FLAC decodes bit-exact via symphonia, but `num_frames = 0` (duration from the MPD) and `tfdt` is ignored (add segment start to pts). Pre-open the next track before EOF; the probe's 118–154 µs open was a warm local file. Unsupported source rates exist (88.2 kHz on a 24/96 DAC) → M3 decision. |
+| [S3](../../spikes/s3-grid.md) | 10 000-cell grid: working set 90–114 MB, app CPU ~0.3 ms/frame; 144 Hz pacing not demonstrated (stalls 12–59 ms with 0 uploads, look like GL presentation on a mixed 144/60 Hz setup); idle repaints from the egui scrollbar fade while the pointer hovers; 200 px display-size textures save ~60 MB. Verdict: keep egui. |
+
+**Gate decisions (human, 2026-10-07)**
+
+- LOSSLESS/HI_RES_LOSSLESS arrive as unencrypted MPEG-DASH (FLAC in fMP4), not BTS: approved; the plan is amended (DASH segment URLs, fMP4 decoding); continue to M1.
+- 144 Hz frame pacing not demonstrated in S3: keep egui; M2 gets a task to measure the real grid with PresentMon and compare eframe's glow vs wgpu renderer, picking the one that paces; also no repaint while idle and textures uploaded at display size.
 
 ## 15. Dependencies (latest stable, verified on crates.io 2026-10-07)
 
@@ -272,6 +285,7 @@ Findings are appended here at the end of M0; any spec change they force is made 
 | tokio | 1.53 | async runtime |
 | keyring-core + native stores | 1.x | credential storage |
 | serde / serde_json | 1.x | models |
+| roxmltree | 0.21 | DASH MPD parsing |
 | sha2 / base64 / rand | 0.11 / 0.23 / 0.10 | PKCE |
 | discord-rich-presence | 1.1.0 | Discord |
 | image | 0.25.10 | artwork decode (jpeg/png) |
