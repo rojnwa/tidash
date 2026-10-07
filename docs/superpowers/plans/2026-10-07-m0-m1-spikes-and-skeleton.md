@@ -119,7 +119,7 @@ ffmpeg -i full.flac -af "atrim=start_sample=288037,asetpts=N/SR/TB" -c:a flac -s
 
 - [ ] **Step 1: Append findings** to spec §14: chosen client and redirect, manifest per quality, image host, play-event summary, exclusive/gapless results, grid numbers.
 - [ ] **Step 2: Gate.** Stop and consult the human partner if any is true: no client returns full-length LOSSLESS; LOSSLESS is not a BTS manifest with `encryptionType` `NONE` (Tasks 11 and 16 assume it); S3 p99 frame time exceeds the refresh interval or idle RSS exceeds 150 MB.
-- [ ] **Step 3: Commit** — `git rm -r spikes && git add docs && git commit -m "docs: record M0 spike findings"`
+- [ ] **Step 3: Delete** `spikes/` from disk entirely, including untracked `.secrets/` token files, `media/` and `target/` directories, then commit — `git rm -r spikes && git add docs && git commit -m "docs: record M0 spike findings"`
 
 ---
 
@@ -299,18 +299,21 @@ Rules (pinned; not determined by the signature):
 
 **Files:**
 - Create: `crates/tidal/src/playback.rs`
+- Modify: `crates/tidal/Cargo.toml` (`roxmltree = "0.21"`; `base64` already present)
 - Test: `crates/tidal/tests/playback_http.rs` (fixtures `playbackinfo_lossless.json`, `playbackinfo_hires.json`, `playbackinfo_error_4005.json`)
+
+_Amended after M0 (human-approved): S1 found every quality is an unencrypted MPEG-DASH manifest (`application/dash+xml`, FLAC in fragmented MP4), not BTS. BTS support is dropped._
 
 **Interfaces:**
 - Consumes: `Client::get`, `Error`.
 - Produces:
   - `pub enum Quality { Lossless, HiResLossless }` → `"LOSSLESS"`, `"HI_RES_LOSSLESS"`.
-  - `#[derive(Clone, Debug)] pub struct StreamInfo { pub track_id: u64, pub url: String, pub codec: String, pub quality: String, pub bit_depth: Option<u16>, pub sample_rate: Option<u32>, pub track_gain: Option<f32>, pub track_peak: Option<f32>, pub album_gain: Option<f32>, pub album_peak: Option<f32> }`
-  - `pub fn decode_bts(manifest_b64: &str) -> Result<(String /*url*/, String /*codec*/)>` — rejects `encryptionType` other than `NONE` with `Error::Manifest`.
-  - `pub async fn Client::stream_info(&self, track_id: u64, quality: Quality) -> Result<StreamInfo>` — the endpoint the findings doc names, `playbackmode=STREAM&assetpresentation=FULL`; BTS only in M1 (any other `manifestMimeType` → `Error::Manifest`).
+  - `#[derive(Clone, Debug)] pub struct StreamInfo { pub track_id: u64, pub urls: Vec<String> /* init segment first, then media segments in order */, pub codec: String, pub quality: String, pub bit_depth: Option<u16>, pub sample_rate: Option<u32>, pub track_gain: Option<f32>, pub track_peak: Option<f32>, pub album_gain: Option<f32>, pub album_peak: Option<f32> }`
+  - `pub fn dash_segments(manifest_b64: &str) -> Result<(String /*codec*/, Vec<String> /*urls*/)>` — base64-decode, parse with roxmltree; any `ContentProtection` element → `Error::Manifest`; from the first `Representation` take `codecs`; from its `SegmentTemplate` take `initialization`, `media`, `startNumber` (default 1); segment count = Σ over `SegmentTimeline/S` of (1 + `r`, default 0); urls = [initialization] + `media` with `$Number$` replaced by `startNumber ..= startNumber + count - 1`.
+  - `pub async fn Client::stream_info(&self, track_id: u64, quality: Quality) -> Result<StreamInfo>` — `GET tracks/{id}/playbackinfo` with `audioquality`, `playbackmode=STREAM&assetpresentation=FULL`; `manifestMimeType` other than `application/dash+xml` → `Error::Manifest`; gains/peaks from `trackReplayGain`, `trackPeakAmplitude`, `albumReplayGain`, `albumPeakAmplitude`.
   - `pub enum Failure { Terminal, Retryable }` and `pub fn classify(err: &Error) -> Failure` — `Terminal` for sub-status 4005, 4010, 4030, 4031, 4032, 4034, 4035 and for `Error::Manifest`; `Retryable` otherwise (including 4006 and 4033).
 
-- [ ] **Step 1: Write failing tests:** `lossless_fixture_yields_flac_url` (`codec == "flac"`, `url` from fixture, `bit_depth == Some(16)`, `sample_rate == Some(44100)`); `encrypted_bts_is_rejected` (manifest with `encryptionType: "OLD_AES"` → `Error::Manifest`); `classify_terminal_and_retryable` (table over the codes above plus 4006, 4033, and a 500); `error_fixture_is_terminal` (`playbackinfo_error_4005.json` served with 401 → `classify(&err) == Terminal`).
+- [ ] **Step 1: Write failing tests:** `lossless_fixture_yields_segment_urls` (`codec == "flac"`, `bit_depth == Some(16)`, `sample_rate == Some(44100)`, `urls[0]` is the fixture's initialization URL, `urls[1]` and the last url are the media template with the first and last number substituted, `urls.len() == 1 + timeline count`); `hires_fixture_is_24_88200` (`bit_depth == Some(24)`, `sample_rate == Some(88200)`); `timeline_repeat_counts` (inline MPD with `<S d=".." r="67"/><S d=".."/>` → 69 media urls, numbering starts at `startNumber`); `content_protection_is_rejected` (inline MPD with a `ContentProtection` element → `Error::Manifest`); `non_dash_manifest_is_rejected` (`manifestMimeType: "application/vnd.tidal.bts"` → `Error::Manifest`); `classify_terminal_and_retryable` (table over the codes above plus 4006, 4033, and a 500); `error_fixture_is_terminal` (`playbackinfo_error_4005.json` served with 401 → `classify(&err) == Terminal`).
 - [ ] **Step 2: Run** `cargo test -p tidal --test playback_http` → FAIL.
 - [ ] **Step 3: Implement** `playback.rs`.
 - [ ] **Step 4: Run** `cargo test -p tidal --test playback_http` → PASS.
@@ -339,7 +342,7 @@ Rules (pinned; not determined by the signature):
 
 **Files:**
 - Create: `crates/player/src/stream.rs`
-- Modify: `crates/player/Cargo.toml` (`symphonia = { version = "0.6.1", default-features = false, features = ["flac"] }`, `tempfile = "3"`)
+- Modify: `crates/player/Cargo.toml` (`symphonia = { version = "0.6.1", default-features = false, features = ["flac", "isomp4"] }`, `tempfile = "3"`)
 
 **Interfaces:**
 - Produces:
@@ -358,11 +361,13 @@ Rules (pinned; not determined by the signature):
 - [ ] **Step 4: Run** `cargo test -p player stream` → PASS.
 - [ ] **Step 5: Commit** — `git add crates/player && git commit -m "feat(player): progressive stream file"`
 
-### Task 14: `player` — FLAC decoder
+### Task 14: `player` — FLAC-in-fMP4 decoder
 
 **Files:**
 - Create: `crates/player/src/decode.rs`
-- Create: `crates/player/tests/fixtures/{s16_44100.flac, s16_44100.raw, s24_96000.flac, s24_96000.raw}`
+- Create: `crates/player/tests/fixtures/{s16_44100.mp4, s16_44100.raw, s24_96000.mp4, s24_96000.raw}`
+
+_Amended after M0: TIDAL streams are FLAC in fragmented MP4 (init segment + media segments as one byte stream). S2 verified symphonia 0.6.1 (`flac` + `isomp4`) decodes them bit-exactly; it reports `num_frames = 0` and ignores `tfdt`, so duration comes from TIDAL metadata, not the decoder._
 - Test: `crates/player/tests/decode.rs`
 
 **Interfaces:**
@@ -375,17 +380,20 @@ Rules (pinned; not determined by the signature):
 
 ```bash
 cd crates/player/tests/fixtures
-ffmpeg -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=0.5" -ac 2 -c:a flac -sample_fmt s16 s16_44100.flac
-ffmpeg -i s16_44100.flac -f s32le s16_44100.raw
-ffmpeg -f lavfi -i "sine=frequency=1000:sample_rate=96000:duration=0.5" -ac 2 -c:a flac -sample_fmt s32 -bits_per_raw_sample 24 s24_96000.flac
-ffmpeg -i s24_96000.flac -f s32le s24_96000.raw
+F="-f mp4 -movflags frag_keyframe+empty_moov+default_base_moof -frag_duration 100000"
+ffmpeg -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=0.5" -ac 2 -c:a flac -sample_fmt s16 $F s16_44100.mp4
+ffmpeg -i s16_44100.mp4 -f s32le s16_44100.raw
+ffmpeg -f lavfi -i "sine=frequency=1000:sample_rate=96000:duration=0.5" -ac 2 -c:a flac -sample_fmt s32 -bits_per_raw_sample 24 $F s24_96000.mp4
+ffmpeg -i s24_96000.mp4 -f s32le s24_96000.raw
 ```
+
+Verify each `.mp4` contains several `moof` boxes (e.g. a byte search for `moof`) before using it.
 
 - [ ] **Step 2: Write failing tests:** `decodes_16bit_bit_exact` and `decodes_24bit_bit_exact` (concatenate all `Pcm.samples`; equal to the `.raw` file read as little-endian i32; `rate`, `channels`, `bits` match); `seek_lands_near_target` (seek to 250 ms on the 96 kHz file → returned position within 10 ms; next samples equal the `.raw` slice at that position).
 - [ ] **Step 3: Run** `cargo test -p player --test decode` → FAIL.
-- [ ] **Step 4: Implement** `decode.rs` with symphonia 0.6 (probe, default track, FLAC decoder; convert each decoded buffer to left-justified interleaved i32).
+- [ ] **Step 4: Implement** `decode.rs` with symphonia 0.6 (probe the stream — fragmented MP4 container, FLAC codec — default track, decoder; convert each decoded buffer to left-justified interleaved i32).
 - [ ] **Step 5: Run** `cargo test -p player --test decode` → PASS.
-- [ ] **Step 6: Commit** — `git add crates/player && git commit -m "feat(player): bit-exact FLAC decoder"`
+- [ ] **Step 6: Commit** — `git add crates/player && git commit -m "feat(player): bit-exact FLAC-in-fMP4 decoder"`
 
 ### Task 15: `player` — resampler
 
@@ -434,7 +442,7 @@ Engine algorithm (pinned):
 - `Play`/`Pause` set `paused`, call `output.resume()`/`pause()` in device mode and emit `State`. `Load` emits `State(Buffering)`, then `TrackStarted(id)` and `State(Playing)` once the first samples are in the ring.
 
 - [ ] **Step 1: Write failing tests** (all with `spawn_manual`, `renderer.configure(48_000, 2)`, a helper `render_ms(&mut renderer, ms)` that calls `render` in 10 ms blocks and returns the samples, and `Source` built from the fixture files):
-  - `plays_track_to_end`: Load s16_44100 + Play → events `Buffering, TrackStarted(1), Playing`; render until `TrackEnded(1)` (deadline 5 s); total non-silent frames within ±1% of 24 000.
+  - `plays_track_to_end`: Load s16_44100.mp4 + Play → events `Buffering, TrackStarted(1), Playing`; render until `TrackEnded(1)` (deadline 5 s); total non-silent frames within ±1% of 24 000.
   - `volume_scales_output`: SetVolume(0.5) → peak of rendered audio ≈ half of the full-volume run (±2%).
   - `pause_stops_and_play_resumes`: Pause → `State(Paused)`; rendering 100 ms yields only silence and `position()` is unchanged; Play → `State(Playing)` and the next 50 ms contain audio.
   - `seek_while_paused_has_no_stale_audio`: Load, Play, render 50 ms, Pause, Seek(400 ms), Play, render until `TrackEnded` → the non-silent frames rendered after the seek total 4 800 ± 10% (the remaining 100 ms at 48 kHz), proving pre-seek ring audio was discarded; `position()` ≥ 400 ms right after the seek. (Review Focus 3)
@@ -444,7 +452,7 @@ Engine algorithm (pinned):
 - [ ] **Step 2: Run** `cargo test -p player --test engine` → FAIL.
 - [ ] **Step 3: Implement** `render.rs` and `engine.rs`; `Player::spawn` opens the output on the player thread with the given options (channels 2).
 - [ ] **Step 4: Run** `cargo test -p player` → PASS.
-- [ ] **Step 5: Manual check:** add `crates/player/examples/play_file.rs` (`cargo run -p player --example play_file -- <path.flac>`) and play `s24_96000.flac` on the real device → audible, ends cleanly.
+- [ ] **Step 5: Manual check:** add `crates/player/examples/play_file.rs` (`cargo run -p player --example play_file -- <path.mp4>`) and play `s24_96000.mp4` on the real device → audible, ends cleanly.
 - [ ] **Step 6: Commit** — `git add crates/player && git commit -m "feat(player): engine, renderer, device output"`
 
 ### Task 17: `app` — shell, model, backend, login
@@ -500,8 +508,9 @@ Engine algorithm (pinned):
 - Consumes: `player::{Player, PlayerCmd, PlayerEvent, Source}`, `Client::{stream_info, report_playback}`, `tidal::{classify, Failure, Quality, new_session_id, PlaybackReport}`.
 - Produces:
   - `pub struct Queue` with `pub fn replace(&mut self, tracks: Vec<tidal::Track>, start: usize) -> Option<&tidal::Track>` (first `stream_ready` track at or after `start`), `pub fn current(&self) -> Option<&tidal::Track>`, `pub fn next(&mut self) -> Option<&tidal::Track>` (skips `!stream_ready`; `None` at the end), `pub fn previous(&mut self) -> Option<&tidal::Track>` (skips `!stream_ready`; `None` at the start), `pub fn snapshot(&self) -> QueueSnapshot`.
+  - `pub struct SegmentReader` in `playback.rs`: `pub fn new(urls: Vec<String>, open: impl FnMut(&str) -> std::io::Result<Box<dyn std::io::Read + Send>> + Send + 'static) -> SegmentReader`, implementing `Read` by reading each URL's body in order, opening the next lazily when the current one ends; an `open` or read error is returned from `read`. In production `open` is a `reqwest::blocking` GET with no Authorization header (S1: segment URLs are pre-signed); `Source { reader: Box::new(SegmentReader), len: None }`.
   - `backend::start` now creates the player first and returns `(tokio::sync::mpsc::UnboundedSender<Action>, std::sync::mpsc::Receiver<Event>, player::Player)`; the UI keeps the `Player` clone only to read `position()`.
-  - `playback.rs`: backend-side glue. Owns `Queue`, the `Player`, and the current play report. `start_current()`: `stream_info(id, Quality::Lossless)` → in `spawn_blocking` open `reqwest::blocking` GET (content length as `len`) → `PlayerCmd::Load` + `Play`. Results for a track that is no longer current are dropped.
+  - `playback.rs`: backend-side glue. Owns `Queue`, the `Player`, and the current play report. `start_current()`: `stream_info(id, Quality::Lossless)` → build a `SegmentReader` over `StreamInfo.urls` (created inside `spawn_blocking`, since the blocking client must not run on a runtime thread) → `PlayerCmd::Load` + `Play`. Results for a track that is no longer current are dropped.
 
 Rules (pinned):
 - `PlayerEvent::TrackEnded` → send the play report, `queue.next()` → `start_current()`, or stop at the end.
@@ -511,8 +520,8 @@ Rules (pinned):
 - Player events reach the backend through a std thread that forwards the player's `Receiver` into the backend's tokio channel.
 - Player bar: cover 56 px, title, artists; previous / play-pause / next; seek slider (drag → `Seek` on release) showing `player.position()` against the track duration; volume slider → `SetVolume`. While playing and the window is visible, `ctx.request_repaint_after(250 ms)`; otherwise no periodic repaint.
 
-- [ ] **Step 1: Write failing tests** in `queue.rs`: `replace_skips_unavailable_start` (start index on an unavailable track → next available); `next_skips_unavailable_and_ends` (Review Focus 5); `previous_stops_at_start`; `snapshot_reflects_current`.
-- [ ] **Step 2: Run** `cargo test -p tidash queue` → FAIL.
+- [ ] **Step 1: Write failing tests** in `playback.rs`: `segment_reader_concatenates_in_order` (3 in-memory segments via a fake `open` → `read_to_end` equals their concatenation; `open` called in URL order, lazily); `segment_reader_surfaces_open_error` (second `open` fails → `read` returns `Err` after the first segment's bytes). And in `queue.rs`: `replace_skips_unavailable_start` (start index on an unavailable track → next available); `next_skips_unavailable_and_ends` (Review Focus 5); `previous_stops_at_start`; `snapshot_reflects_current`.
+- [ ] **Step 2: Run** `cargo test -p tidash queue playback` → FAIL.
 - [ ] **Step 3: Implement** `queue.rs`, then `playback.rs`, backend wiring (`Player::spawn(OutputOptions::default())` at startup) and `ui/player_bar.rs`.
 - [ ] **Step 4: Run** `cargo test --workspace` → PASS; `cargo run -p tidash --release` → play an album: tracks advance, pause/seek/volume/previous/next work, Task Manager shows ~0% CPU while paused with the window minimized.
 - [ ] **Step 5: Commit** — `git add crates/app && git commit -m "feat(app): queue, playback, player bar"`
