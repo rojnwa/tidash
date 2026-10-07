@@ -33,10 +33,6 @@ msgstr ""
 msgid "Log out"
 msgstr ""
 
-#: src/ui/mod.rs
-msgid "Logged in. Search and playback arrive in the next tasks."
-msgstr ""
-
 #: src/backend.rs
 msgid "Login failed"
 msgstr ""
@@ -55,4 +51,44 @@ msgstr ""
 
 #: src/model.rs
 msgid "Login will not be remembered: no system credential store available"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Back"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Search"
+msgstr ""
+
+#: src/ui/search.rs
+msgid "Search TIDAL"
+msgstr ""
+
+#: src/ui/search.rs
+msgid "Albums"
+msgstr ""
+
+#: src/ui/search.rs
+msgid "Tracks"
+msgstr ""
+
+#: src/ui/album.rs
+msgid "tracks"
+msgstr ""
+
+#: src/ui/album.rs
+msgid "Play"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Disc"
+msgstr ""
+
+#: src/backend.rs
+msgid "Search failed"
+msgstr ""
+
+#: src/backend.rs
+msgid "Could not open album"
 msgstr ""

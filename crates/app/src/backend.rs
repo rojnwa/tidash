@@ -25,7 +25,7 @@ pub fn start(
                 return;
             }
         };
-        let emit = Emitter { tx: event_tx, waker: Box::new(waker) };
+        let emit = Arc::new(Emitter { tx: event_tx, waker: Box::new(waker) });
         rt.block_on(Backend::new(emit).run(action_rx));
     });
     if let Err(e) = spawned {
@@ -46,8 +46,19 @@ impl Emitter {
     }
 }
 
+/// Downloads a JPEG and decodes it off the async workers.
+async fn fetch_image(http: &reqwest::Client, url: &str) -> Result<egui::ColorImage, Box<dyn std::error::Error + Send + Sync>> {
+    let bytes = http.get(url).send().await?.error_for_status()?.bytes().await?;
+    tokio::task::spawn_blocking(move || {
+        let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)?.to_rgba8();
+        let size = [img.width() as usize, img.height() as usize];
+        Ok(egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()))
+    })
+    .await?
+}
+
 struct Backend {
-    emit: Emitter,
+    emit: Arc<Emitter>,
     cfg: ClientConfig,
     http: reqwest::Client,
     store: Arc<dyn TokenStore>,
@@ -58,7 +69,7 @@ struct Backend {
 }
 
 impl Backend {
-    fn new(emit: Emitter) -> Self {
+    fn new(emit: Arc<Emitter>) -> Self {
         let (mut store, mut persistent) = tidal::default_store();
         if !persistent {
             // A corrupt stored session makes the probe fail and drops us to memory-only,
@@ -131,7 +142,40 @@ impl Backend {
                 }
                 self.emit.send(Event::LoggedOut);
             }
-            // ponytail: search, albums, playback and images arrive in tasks 18-20.
+            Action::Search(q) => {
+                let Some(c) = self.client.clone() else { return };
+                let emit = self.emit.clone();
+                tokio::spawn(async move {
+                    match c.search(&q, 30).await {
+                        Ok(results) => emit.send(Event::SearchResults { query: q, results }),
+                        Err(e) => emit.send(Event::Error(format!("{}: {e}", tr("Search failed")))),
+                    }
+                });
+            }
+            Action::OpenAlbum(id) => {
+                let Some(c) = self.client.clone() else { return };
+                let emit = self.emit.clone();
+                tokio::spawn(async move {
+                    match tokio::try_join!(c.album(id), c.album_tracks(id)) {
+                        Ok((album, tracks)) => emit.send(Event::Album { album, tracks }),
+                        Err(e) => emit.send(Event::Error(format!("{}: {e}", tr("Could not open album")))),
+                    }
+                });
+            }
+            Action::LoadImage { cover, size } => {
+                let url = tidal::image_url(&self.cfg, &cover, size);
+                let (http, emit) = (self.http.clone(), self.emit.clone());
+                tokio::spawn(async move {
+                    match fetch_image(&http, &url).await {
+                        Ok(image) => emit.send(Event::Image { cover, size, image }),
+                        Err(e) => log::debug!("image {url}: {e}"), // placeholder stays
+                    }
+                });
+            }
+            Action::PlayTracks { tracks, start } => {
+                log::debug!("play requested: {} tracks from {start}", tracks.len());
+            }
+            // ponytail: playback transport arrives in tasks 19-20.
             _ => {}
         }
     }

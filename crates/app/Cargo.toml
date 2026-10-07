@@ -16,6 +16,7 @@ player = { path = "../player" }
 tokio = { workspace = true, features = ["sync", "time"] }
 reqwest.workspace = true
 open = "5"
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 log = "0.4"
 fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }

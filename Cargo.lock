@@ -2171,6 +2171,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -4447,6 +4449,7 @@ dependencies = [
  "fastframe-i18n",
  "fastframe-log",
  "fastframe-text",
+ "image",
  "log",
  "open",
  "player",

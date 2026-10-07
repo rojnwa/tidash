@@ -1,19 +1,49 @@
 //! Drawing: dismissible errors on top, then the current route.
 
+mod album;
 mod login;
+mod search;
+mod sidebar;
+mod tracks;
 
 use crate::i18n::tr;
+use crate::images::TextureCache;
 use crate::model::{Action, Event, Model, Route};
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Default)]
 pub struct UiState {
     login: login::State,
+    search: search::State,
+    pub images: TextureCache,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self { login: Default::default(), search: Default::default(), images: TextureCache::new(512) }
+    }
+}
+
+/// Paints a square cover at `size` points (requested at `size` pixels), or a flat placeholder.
+fn cover(ui: &egui::Ui, images: &mut TextureCache, tx: &UnboundedSender<Action>, cover: Option<&str>, size: u32, rect: egui::Rect) {
+    let tex = cover.and_then(|c| {
+        images.get(ui.ctx(), c, size, || {
+            let _ = tx.send(Action::LoadImage { cover: c.to_string(), size });
+        })
+    });
+    match tex {
+        Some(t) => {
+            let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+            ui.painter().image(t.id(), rect, uv, egui::Color32::WHITE);
+        }
+        None => {
+            ui.painter().rect_filled(rect, 4.0, ui.visuals().faint_bg_color);
+        }
+    }
 }
 
 /// Draws the model; returns events for the caller to apply (the UI never mutates `Model`).
 pub fn draw(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, state: &mut UiState) -> Vec<Event> {
-    let mut dismiss = None;
+    let mut events = Vec::new();
     let mut logout = false;
     if !model.errors.is_empty() || model.logged_in {
         egui::Panel::top("top").show(ui, |ui| {
@@ -21,7 +51,7 @@ pub fn draw(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, stat
                 ui.horizontal(|ui| {
                     ui.colored_label(ui.visuals().warn_fg_color, e);
                     if ui.small_button(tr("Dismiss")).clicked() {
-                        dismiss = Some(i);
+                        events.push(Event::DismissError(i));
                     }
                 });
             }
@@ -33,13 +63,14 @@ pub fn draw(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, stat
     if logout {
         let _ = tx.send(Action::Logout);
     }
+    if model.route != Route::Login {
+        sidebar::show(ui, model, &mut events);
+    }
 
     egui::CentralPanel::default().show(ui, |ui| match model.route {
         Route::Login => login::show(ui, model, tx, &mut state.login),
-        // ponytail: real views arrive in tasks 18-20.
-        Route::Search | Route::Album(_) => {
-            ui.label(tr("Logged in. Search and playback arrive in the next tasks."));
-        }
+        Route::Search => search::show(ui, model, tx, &mut state.search, &mut state.images, &mut events),
+        Route::Album(id) => album::show(ui, model, id, tx, &mut state.images),
     });
-    dismiss.map(Event::DismissError).into_iter().collect()
+    events
 }
