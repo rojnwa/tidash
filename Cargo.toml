@@ -20,6 +20,10 @@ print_stdout = "warn"
 print_stderr = "warn"
 
 [workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "form"] }
 egui = { version = "0.36", default-features = false }
 eframe = { version = "0.36", default-features = false, features = ["glow", "accesskit", "wayland", "x11", "default_fonts"] }
 
