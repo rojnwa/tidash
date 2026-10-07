@@ -12,7 +12,7 @@ publish = false
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts"] }
 egui = "0.36"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
 [patch.crates-io]
 ecolor = { git = "https://github.com/crmne/egui", rev = "ba6790fe7cf46e58e8d27ce1524cbfdee745e938" }
