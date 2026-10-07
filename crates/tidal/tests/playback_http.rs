@@ -191,8 +191,7 @@ async fn error_fixture_is_terminal() {
 
 fn timeline(attrs: &str, s: &str) -> String {
     mpd(&format!(
-        r#"<Representation codecs="flac"><SegmentTemplate initialization="i" media="m-$Number{attrs}$"{}><SegmentTimeline>{s}</SegmentTimeline></SegmentTemplate></Representation>"#,
-        ""
+        r#"<Representation codecs="flac"><SegmentTemplate initialization="i" media="m-$Number{attrs}$"><SegmentTimeline>{s}</SegmentTimeline></SegmentTemplate></Representation>"#
     ))
 }
 
@@ -213,4 +212,13 @@ fn malformed_timelines_are_rejected() {
     for b64 in cases {
         assert!(matches!(dash_segments(&b64), Err(Error::Manifest(_))));
     }
+}
+
+#[test]
+fn empty_representation_codecs_falls_back_to_adaptation_set() {
+    let rep = r#"<Representation codecs=""><SegmentTemplate initialization="i" media="m-$Number$"><SegmentTimeline><S d="1"/></SegmentTimeline></SegmentTemplate></Representation>"#;
+    let xml = format!(
+        r#"<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period><AdaptationSet codecs="flac">{rep}</AdaptationSet></Period></MPD>"#
+    );
+    assert_eq!(dash_segments(&STANDARD.encode(xml)).unwrap().0, "flac");
 }
