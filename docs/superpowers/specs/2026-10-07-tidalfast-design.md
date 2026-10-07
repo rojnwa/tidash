@@ -58,7 +58,7 @@ Spotifast uses Spotify's; rename if challenged.
 | Dolby Atmos | Not offered on any desktop client by TIDAL. |
 | Offline downloads | Mobile-only officially; legal risk. |
 | Uploads, marketplace, payouts | Not listening features. |
-| Lossy tiers (LOW/HIGH AAC) | On desktop they are Widevine-protected. Revisit only if spike S1 shows them DRM-free. |
+| Lossy tiers (LOW/HIGH AAC) | DRM-free per S1, but not needed in v1: every TIDAL plan includes lossless. Add a data-saver tier only if users ask. |
 | Music videos | Would require bundling a video stack (libmpv); deferred. |
 | Mini player, crossfade, EQ | Deferred past v1 (crossfade breaks bit-perfect anyway). |
 | Translations | Strings are wrapped from day one; only English ships in v1. |
@@ -148,15 +148,16 @@ event batch.
 `#[serde(other)] Unknown` so new values never break parsing.
 
 **Playback info.** Quality preference HI_RES_LOSSLESS → LOSSLESS. Manifest is a DASH MPD (`application/dash+xml`):
-`SegmentTemplate` + `SegmentTimeline` → init + media URLs; segment URLs are pre-signed, no auth header. Classify playback errors (sub-status) as terminal (skip track) or retryable (back off and
-retry), following SONE's mapping.
+`SegmentTemplate` + `SegmentTimeline` → init + media URLs; segment URLs are pre-signed, no auth header. Classify
+playback errors (sub-status) as terminal (skip track) or retryable (back off and retry), following SONE's mapping.
 
 **Caching.** GET JSON responses go to a disk cache served stale-while-revalidate (key = hash of path + query, size-capped
-LRU directory). Artwork fetched from `resources.tidal.com/images/<uuid with slashes>/<w>x<h>.jpg` (`images.tidal.com` returned 400) at the exact size needed (160/320/640/1280), disk-cached, decoded
-off the UI thread, held as textures in an in-memory LRU.
+LRU directory). Artwork fetched from `resources.tidal.com/images/<uuid with slashes>/<w>x<h>.jpg` (`images.tidal.com`
+returned 400) at the exact size needed (160/320/640/1280), disk-cached, decoded off the UI thread, held as textures in
+an in-memory LRU.
 
 **Play reporting.** Playback-session events sent to TIDAL's event endpoint with a streaming session id, matching the
-official desktop client's payloads (derived from the official web bundle during M1).
+official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Play events).
 
 ## 7. `app` — UI
 
@@ -261,7 +262,7 @@ Implementation plans are written one milestone at a time; the first plan covers 
 |---|---|
 | [S1](../../spikes/s1-auth-manifests.md) | Client `android` `6BDSRdpK9hqEBTgU` via PKCE, redirect `https://tidal.com/android/login/auth`; no client secret for exchange or refresh; refresh returns no new `refresh_token` (keep the old one). Every quality (LOW to HI_RES_LOSSLESS) is unencrypted DASH, FLAC in fMP4 for lossless; lossy tiers are DRM-free too. Images: `resources.tidal.com`. Play events: `POST ec.tidal.com/api/event-batch`. |
 | [S2](../../spikes/s2-audio.md) | WASAPI exclusive works on the test DAC (24/96 USB, accepts 24-bit packed at 44.1/48/96 kHz only). Gapless a→b: 0 underruns, output sample-equal to the source. fMP4 FLAC decodes bit-exact via symphonia, but `num_frames = 0` (duration from the MPD) and `tfdt` is ignored (add segment start to pts). Pre-open the next track before EOF; the probe's 118–154 µs open was a warm local file. Unsupported source rates exist (88.2 kHz on a 24/96 DAC) → M3 decision. |
-| [S3](../../spikes/s3-grid.md) | 10 000-cell grid: working set 90–114 MB, app CPU ~0.3 ms/frame; 144 Hz pacing not demonstrated (stalls 12–59 ms with 0 uploads, look like GL presentation on a mixed 144/60 Hz setup); idle repaints from the egui scrollbar fade while the pointer hovers; 200 px display-size textures save ~60 MB. Verdict: keep egui. |
+| [S3](../../spikes/s3-grid.md) | 10 000-cell grid: working set 90–114 MB, app CPU ~0.3 ms/frame; 144 Hz pacing not demonstrated (stalls up to 59 ms, mostly in frames with 0 uploads; cause not isolated, driver/DWM suspected); idle repaints from the egui scrollbar fade while the pointer hovers; 200 px display-size textures save ~60 MB. Verdict: keep egui. |
 
 **Gate decisions (human, 2026-10-07)**
 
@@ -300,7 +301,8 @@ Rust edition 2024, rust-version 1.98 (fastframe's minimum).
 | Client ID revoked / ToS enforcement | Overridable client ID; mirror official endpoints; streaming-only scope |
 | TIDAL API changes | `tidal` crate isolated; tolerant models; fixtures make breakage visible |
 | fastframe young, egui/winit forks | Pin tag; crates are MIT and small — vendor the ones we use if abandoned |
-| Hi-Res arrives Widevine-encrypted for our client ID | S1 answers first; fall back to LOSSLESS 16/44.1 |
+| TIDAL starts encrypting streams or revokes the android client | Overridable client ID; the `tidal` crate isolates playback-info parsing; fixtures make a format change visible |
+| Device cannot play the source rate (e.g. 88.2 kHz on a 24/96 DAC) | Shared-mode fallback with a notice; policy refined in M3 |
 | Bit-perfect quirks per DAC/OS | Fallback to shared mode; format badge makes the real path visible |
 | Single maintainer burnout (Psst, SONE pattern) | Small files, clear crate boundaries, CI, contributor docs |
 
@@ -311,5 +313,5 @@ Rust edition 2024, rust-version 1.98 (fastframe's minimum).
   mapping, ALSA hw-params negotiation, ReplayGain selection, play-event format. Reference only, not a fork base
   (Linux-only, GStreamer, WebKitGTK, state in React, global API mutex, plaintext key file).
 - Official desktop app 2.43.2 analysis: Electron shell + hosted web client; native player IPC over stdin/stdout JSON;
-  lossless via BTS FLAC to a native WASAPI player; lossy and video via Widevine in Chromium.
+  lossless via BTS FLAC to a native WASAPI player (official app; our client receives DASH, see §6); lossy and video via Widevine in Chromium.
 - TIDAL developer platform: openapi.tidal.com/v2 (JSON:API); third-party tier = 30 s previews only.
