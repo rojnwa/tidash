@@ -93,17 +93,17 @@ msgstr ""
 msgid "Could not refresh this page"
 msgstr ""
 
-#: src/ui/album.rs
+#: src/ui/tracks.rs
 msgid "{n} track"
 msgid_plural "{n} tracks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/ui/album.rs
-msgid "Couldn't load this album"
+#: src/ui/mod.rs
+msgid "Couldn't load this page"
 msgstr ""
 
-#: src/ui/album.rs
+#: src/ui/mod.rs
 msgid "Retry"
 msgstr ""
 
@@ -148,6 +148,7 @@ msgid "Forward"
 msgstr ""
 
 #: src/ui/sidebar.rs
+#: src/ui/browse.rs
 msgid "Home"
 msgstr ""
 

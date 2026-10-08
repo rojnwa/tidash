@@ -1,10 +1,14 @@
 //! Drawing: dismissible errors on top, then the current route.
 
 mod album;
+mod artist;
+mod browse;
 mod card;
 mod header;
 mod login;
+mod mix;
 mod player_bar;
+mod playlist;
 mod rows;
 mod search;
 mod shelf;
@@ -13,7 +17,7 @@ mod tracks;
 
 use crate::i18n::tr;
 use crate::images::TextureCache;
-use crate::model::{Action, Event, Model, Route};
+use crate::model::{Action, Event, Model, PageData, Route};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct UiState {
@@ -65,6 +69,24 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
         .auto_shrink([false, false])
         .show(ui, |ui| ui.push_id(route, f).inner)
         .inner
+}
+
+/// `route`'s page; without one, a spinner while it loads, or a message and Retry after it
+/// failed.
+fn page_data<'m>(ui: &mut egui::Ui, ctx: &mut Ctx<'m>, route: &Route) -> Option<&'m PageData> {
+    let model = ctx.model;
+    let slot = model.pages.get(route)?;
+    if slot.data.is_none() {
+        if slot.failed {
+            ui.label(tr("Couldn't load this page"));
+            if ui.button(tr("Retry")).clicked() {
+                ctx.go(route.clone()); // asks for it again
+            }
+        } else if slot.loading {
+            ui.spinner();
+        }
+    }
+    slot.data.as_ref()
 }
 
 /// Paints `image` over `rect` with corners of `radius`, requested as many pixels wide as it
@@ -230,17 +252,181 @@ pub fn draw(
             images: &mut state.images,
             events: &mut events,
         };
-        match model.route() {
+        let route = model.route();
+        match route {
             Route::Login => login::show(ui, model, tx, &mut state.login),
             Route::Search => search::show(ui, &mut ctx, &mut state.search),
-            Route::Album(_) => album::show(ui, &mut ctx),
-            // ponytail: the views of Tasks 10–11 replace this
-            _ => {
+            Route::Home | Route::Page(_) | Route::ViewAll(_) => browse::show(ui, &mut ctx, route),
+            Route::Album(_) => album::show(ui, &mut ctx, route),
+            Route::Artist(_) => artist::show(ui, &mut ctx, route),
+            Route::Playlist(_) => playlist::show(ui, &mut ctx, route),
+            Route::Mix(_) => mix::show(ui, &mut ctx, route),
+            // ponytail: Task 11's collection view replaces this
+            Route::Collection(_) => {
                 ui.label(tr("Coming soon"));
             }
         }
     });
     events
+}
+
+/// Fixtures and a headless pass of one view, for the views' tests.
+#[cfg(test)]
+mod testing {
+    use super::Ctx;
+    use crate::images::TextureCache;
+    use crate::model::{Action, Event, Model, PageData, Route};
+    use egui::{Pos2, Rect, vec2};
+    use tokio::sync::mpsc::UnboundedSender;
+
+    pub type View = fn(&mut egui::Ui, &mut Ctx<'_>, &Route);
+
+    pub fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }
+    }
+
+    /// Logged in, at `route`.
+    pub fn at(route: Route) -> Model {
+        let mut m = Model::default();
+        m.apply(Event::LoggedIn);
+        m.navigate(route);
+        m
+    }
+
+    /// One pass of `view` drawing `model`'s route, fed `input`: the events it gave, and its
+    /// output.
+    pub fn pass(
+        egui: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        view: View,
+        input: Vec<egui::Event>,
+    ) -> (Vec<Event>, egui::FullOutput) {
+        let mut images = TextureCache::new(1 << 20);
+        let mut events = Vec::new();
+        let input = egui::RawInput {
+            events: input,
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+            ..Default::default()
+        };
+        let mut out = egui.run_ui(input, |ui| {
+            let mut c = Ctx {
+                model,
+                tx,
+                images: &mut images,
+                events: &mut events,
+            };
+            view(ui, &mut c, model.route());
+        });
+        out.textures_delta.clear(); // nothing renders them
+        (events, out)
+    }
+
+    /// `view` draws `route` loading, failed (with Retry), and loaded with `data`, then showing
+    /// each of `texts`.
+    pub fn every_state(view: View, route: Route, data: PageData, texts: &[&str]) {
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let shown = |model: &Model| -> Vec<String> {
+            let (_, out) = pass(&egui, &tx, model, view, vec![]);
+            let tree = out
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit is on");
+            let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
+            tree.nodes.iter().filter_map(|(_, n)| text(n)).collect()
+        };
+        let mut model = at(route.clone());
+        model.apply(Event::Loading(route.clone()));
+        assert!(
+            !shown(&model).contains(&"Retry".into()),
+            "{route:?} loading"
+        );
+        model.apply(Event::PageFailed(route.clone()));
+        assert!(shown(&model).contains(&"Retry".into()), "{route:?} failed");
+        let r = route.clone();
+        model.apply(Event::Page { route: r, data });
+        let shown = shown(&model);
+        for t in texts {
+            assert!(
+                shown.iter().any(|s| s == t),
+                "{route:?}: no {t:?} in {shown:?}"
+            );
+        }
+    }
+
+    pub fn artist(id: u64) -> tidal::Artist {
+        tidal::Artist {
+            id,
+            name: format!("Artist {id}"),
+            picture: Some("12-34".into()),
+            selected_album_cover_fallback: None,
+        }
+    }
+
+    pub fn album(id: u64) -> tidal::Album {
+        tidal::Album {
+            id,
+            title: format!("Album {id}"),
+            cover: Some("ab-cd".into()),
+            artists: vec![artist(1), artist(2)],
+            number_of_tracks: 2,
+            duration: 400,
+            release_date: Some("2020-01-02".into()),
+        }
+    }
+
+    /// 200 s long, on disc 1.
+    pub fn track(id: u64) -> tidal::Track {
+        tidal::Track {
+            id,
+            title: format!("Track {id}"),
+            duration: 200,
+            track_number: id as u32,
+            volume_number: 1,
+            artists: vec![artist(1)],
+            album: tidal::AlbumRef {
+                id: 1,
+                title: "Album 1".into(),
+                cover: None,
+            },
+            stream_ready: true,
+        }
+    }
+
+    pub fn tracks(n: u64) -> Vec<tidal::Track> {
+        (1..=n).map(track).collect()
+    }
+
+    /// TIDAL's own (no creator).
+    pub fn playlist() -> tidal::Playlist {
+        tidal::Playlist {
+            uuid: "p-1".into(),
+            title: "Playlist".into(),
+            description: None,
+            creator: None,
+            number_of_tracks: 3,
+            duration: 600,
+            square_image: None,
+            image: Some("wi-de".into()),
+        }
+    }
+
+    pub fn mix() -> tidal::Mix {
+        tidal::Mix {
+            id: "m1".into(),
+            title: "Mix".into(),
+            subtitle: "Daily".into(),
+            images: None,
+        }
+    }
 }
 
 #[cfg(test)]

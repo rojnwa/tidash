@@ -11,7 +11,6 @@ const PAGES: usize = 24;
 /// After this a shown page is fetched again.
 const STALE: Duration = Duration::from_secs(5 * 60);
 
-#[allow(dead_code, reason = "the views of Tasks 9–11 open the other routes")]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
     Login,
@@ -37,7 +36,7 @@ pub enum CollectionTab {
     Mixes,
 }
 
-#[allow(dead_code, reason = "the views of Tasks 9–11 read the other kinds")]
+#[allow(dead_code, reason = "Task 11's collection view reads Tracks and Items")]
 #[derive(Clone, Debug)]
 pub enum PageData {
     Shelves(tidal::Page),

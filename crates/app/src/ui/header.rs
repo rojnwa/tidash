@@ -7,13 +7,14 @@ use egui::{Sense, vec2};
 
 const COVER: f32 = 200.0;
 
-/// With `play`, a Play button sends all of it from the start (disabled when empty).
+/// `details` draws the lines under the title. With `play`, a Play button sends all of it from
+/// the start (disabled when empty).
 pub fn header(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
     image: Option<&tidal::Image>,
     title: &str,
-    lines: &[String],
+    details: impl FnOnce(&mut egui::Ui, &mut Ctx),
     play: Option<&[tidal::Track]>,
 ) {
     ui.horizontal(|ui| {
@@ -21,9 +22,7 @@ pub fn header(
         super::cover(ui, ctx.images, ctx.tx, image, rect, 6.0);
         ui.vertical(|ui| {
             ui.heading(title);
-            for line in lines {
-                ui.label(line);
-            }
+            details(ui, ctx);
             if let Some(list) = play {
                 ui.add_space(8.0);
                 let button = egui::Button::new(tr("Play"));

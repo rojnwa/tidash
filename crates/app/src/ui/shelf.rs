@@ -17,17 +17,22 @@ pub fn shelves(ui: &mut egui::Ui, shelves: &[Shelf], ctx: &mut Ctx) {
 
 fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
     ui.add_space(16.0);
-    ui.horizontal(|ui| {
-        ui.heading(&s.title);
-        if let Some(more) = &s.more
-            && ui.link(tr("View all")).clicked()
-        {
-            ctx.go(match more {
-                More::Page(path) => Route::Page(path.clone()),
-                More::ViewAll(path) => Route::ViewAll(path.clone()),
-            });
-        }
-    });
+    // An untitled shelf without "View all" has no heading row.
+    if !s.title.is_empty() || s.more.is_some() {
+        ui.horizontal(|ui| {
+            if !s.title.is_empty() {
+                ui.heading(&s.title);
+            }
+            if let Some(more) = &s.more
+                && ui.link(tr("View all")).clicked()
+            {
+                ctx.go(match more {
+                    More::Page(path) => Route::Page(path.clone()),
+                    More::ViewAll(path) => Route::ViewAll(path.clone()),
+                });
+            }
+        });
+    }
     match s.layout {
         // Not virtualized: a rail holds tens of cards, and `cover` skips those out of view.
         Layout::Cards => {
@@ -42,15 +47,7 @@ fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
                 });
         }
         Layout::Tracks => {
-            let list: Vec<_> = s
-                .items
-                .iter()
-                .filter_map(|i| match i {
-                    Item::Track(t) => Some(t.clone()),
-                    _ => None,
-                })
-                .take(SHELF_TRACKS)
-                .collect();
+            let list: Vec<_> = tracks_of(&s.items).take(SHELF_TRACKS).cloned().collect();
             tracks::show(ui, ctx, "tracks", &list, false);
         }
         Layout::Links => {
@@ -67,11 +64,15 @@ fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
     }
 }
 
+/// The tracks among `items`.
+pub fn tracks_of(items: &[Item]) -> impl Iterator<Item = &tidal::Track> {
+    items.iter().filter_map(|i| match i {
+        Item::Track(t) => Some(t),
+        _ => None,
+    })
+}
+
 /// Items as rows of cards, as many to a row as fit; only the rows in view are built.
-#[allow(
-    dead_code,
-    reason = "the view-all (Task 10) and collection (Task 11) views use it"
-)]
 pub fn grid(ui: &mut egui::Ui, items: &[Item], ctx: &mut Ctx) {
     let gap = ui.spacing().item_spacing.x;
     let cols = (((ui.available_width() + gap) / (card::WIDTH + gap)) as usize).max(1);
@@ -102,7 +103,7 @@ fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item) {
         Item::Album(a) => (a.image(), &a.title, tracks::names(&a.artists), false),
         Item::Artist(a) => (a.image(), &a.name, tr("Artist").into_owned(), true),
         Item::Playlist(p) => {
-            let by = p.creator.clone().unwrap_or_else(|| "TIDAL".into());
+            let by = p.creator.clone().unwrap_or_else(|| "TIDAL".into()); // a brand: not translated
             (p.image(), &p.title, by, false)
         }
         Item::Mix(m) => (m.image(), &m.title, m.subtitle.clone(), false),

@@ -1,7 +1,7 @@
 //! Track list, virtualized inside the caller's page scroll; shared by every view with tracks.
 
 use super::{Ctx, rows};
-use crate::i18n::tr;
+use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Route};
 use egui::{Align2, FontId, PointerButton, Sense, WidgetInfo, WidgetType, vec2};
 
@@ -13,8 +13,23 @@ enum Row {
     Track(usize),
 }
 
+/// `m:ss`, or `h:mm:ss` from an hour.
 pub fn duration(secs: u32) -> String {
-    format!("{}:{:02}", secs / 60, secs % 60)
+    let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+/// "{n} tracks · {duration}" of `tracks`.
+pub fn summary(tracks: &[tidal::Track]) -> String {
+    let n = tr_n("{n} track", "{n} tracks", tracks.len() as u32);
+    format!(
+        "{n} · {}",
+        duration(tracks.iter().map(|t| t.duration).sum())
+    )
 }
 
 pub fn names(artists: &[tidal::Artist]) -> String {
@@ -292,9 +307,10 @@ mod tests {
     }
 
     #[test]
-    fn duration_is_m_ss() {
+    fn duration_is_m_ss_or_h_mm_ss() {
         assert_eq!(super::duration(0), "0:00");
         assert_eq!(super::duration(65), "1:05");
-        assert_eq!(super::duration(3600), "60:00");
+        assert_eq!(super::duration(3600), "1:00:00");
+        assert_eq!(super::duration(36_125), "10:02:05");
     }
 }
