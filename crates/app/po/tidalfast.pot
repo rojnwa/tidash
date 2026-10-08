@@ -130,3 +130,7 @@ msgstr ""
 #: src/playback.rs
 msgid "Playback stopped after repeated errors"
 msgstr ""
+
+#: src/playback.rs
+msgid "Audio output lost; playback resumes when it is back"
+msgstr ""

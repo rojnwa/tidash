@@ -388,6 +388,9 @@ impl Playback {
                     self.start_current(c, Some(self.last_pos));
                 }
             }
+            Msg::Player(PlayerEvent::OutputLost) => self.emit.send(Event::Error(
+                tr("Audio output lost; playback resumes when it is back").into_owned(),
+            )),
             Msg::Player(_) => {} // an earlier load's
         }
     }
@@ -737,6 +740,16 @@ mod tests {
         p.fail_track(None);
         p.reset(None);
         assert_eq!(p.failures, 0, "logout starts over");
+    }
+
+    #[test]
+    fn a_lost_output_is_shown() {
+        let (mut p, rx) = playback();
+        p.on_msg(None, Msg::Player(PlayerEvent::OutputLost));
+        assert_eq!(
+            errors(&rx),
+            ["Audio output lost; playback resumes when it is back"]
+        );
     }
 
     #[test]
