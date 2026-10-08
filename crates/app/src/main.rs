@@ -100,7 +100,9 @@ impl eframe::App for App {
 
 fn main() -> eframe::Result {
     let _ = fastframe_log::Logging::new("tidalfast", env!("CARGO_PKG_VERSION"))
-        .filter("warn,tidalfast=info")
+        // symphonia's MP4 probe matches `ftyp` and reports every file's leading box size as
+        // "4 bytes of junk".
+        .filter("warn,tidalfast=info,symphonia_core::formats::probe=error")
         .init();
     eframe::run_native(
         "tidalfast",
