@@ -379,6 +379,7 @@ impl Playback {
     /// While a stream resolves, the seek waits for its load instead of hitting the old track.
     fn seek(&mut self, to: Duration) {
         self.last_pos = to;
+        self.emit.send(Event::Seeked(to));
         if self.loading {
             self.resume_at = Some(to);
         } else {
