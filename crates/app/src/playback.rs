@@ -193,13 +193,14 @@ fn now_ms() -> u64 {
 /// What reaches the backend besides actions.
 pub enum Msg {
     Player(PlayerEvent),
-    /// A `start_current` resolved its stream (source and quality) or failed.
+    /// A `start_current` resolved its stream (source and quality) with `client`, or failed.
     Loaded {
         seq: u64,
+        client: Arc<Client>,
         result: Result<(Source, String), Box<dyn std::error::Error + Send + Sync>>,
     },
-    /// The session is dead (`backend::session_expired`).
-    SessionExpired,
+    /// This client's session is dead (`backend::session_expired`).
+    SessionExpired(Arc<Client>),
 }
 
 /// `stream_info`, retried once after 2 s unless the failure is terminal.
@@ -333,11 +334,17 @@ impl Playback {
                 self.player.position(),
                 self.seq
             ),
-            Msg::Loaded { seq, result } => log::debug!("stream {seq} resolved: {}", result.is_ok()),
-            Msg::SessionExpired => {}
+            Msg::Loaded { seq, result, .. } => {
+                log::debug!("stream {seq} resolved: {}", result.is_ok());
+            }
+            Msg::SessionExpired(_) => {}
         }
         match msg {
-            Msg::Loaded { seq, result } if seq == self.seq => {
+            Msg::Loaded {
+                seq,
+                client,
+                result,
+            } if seq == self.seq => {
                 self.loading = false;
                 match result {
                     Ok((source, quality)) => {
@@ -352,15 +359,15 @@ impl Playback {
                         }
                     }
                     // Not the track's fault: it waits, with the queue, for the next login.
-                    Err(e) if session_expired(&*e, &self.msgs) => self.stop(),
+                    Err(e) if session_expired(&*e, &client, &self.msgs) => self.stop(),
                     Err(e) => {
                         log::warn!("stream for track {}: {e}", self.track_id());
                         self.fail_track(c);
                     }
                 }
             }
-            Msg::Loaded { .. } => {}  // superseded
-            Msg::SessionExpired => {} // the backend's
+            Msg::Loaded { .. } => {}     // superseded
+            Msg::SessionExpired(_) => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
                 if let Some(p) = &mut self.play {
@@ -474,7 +481,12 @@ impl Playback {
                 Ok::<_, Box<dyn std::error::Error + Send + Sync>>((source, quality))
             }
             .await;
-            let _ = msgs.send(Msg::Loaded { seq, result }); // backend gone = app closing
+            let loaded = Msg::Loaded {
+                seq,
+                client: c,
+                result,
+            };
+            let _ = msgs.send(loaded); // backend gone = app closing
         });
         self.publish();
     }
@@ -695,6 +707,19 @@ mod tests {
         (Playback::new(player, emit, msgs), rx)
     }
 
+    /// Only for tests that never let it reach TIDAL.
+    fn client() -> Arc<Client> {
+        let session = tidal::Session {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: 0,
+            user_id: 1,
+            country_code: "US".into(),
+        };
+        let store = Arc::new(tidal::MemoryStore::default());
+        Arc::new(Client::new(Default::default(), session, store).expect("a client"))
+    }
+
     fn tracks(n: u64) -> Vec<tidal::Track> {
         (0..n)
             .map(|id| tidal::Track {
@@ -766,15 +791,7 @@ mod tests {
             .build()
             .expect("a runtime");
         let _rt = rt.enter();
-        let session = tidal::Session {
-            access_token: "a".into(),
-            refresh_token: "r".into(),
-            expires_at: 0,
-            user_id: 1,
-            country_code: "US".into(),
-        };
-        let store = Arc::new(tidal::MemoryStore::default());
-        let c = Arc::new(Client::new(Default::default(), session, store).expect("a client"));
+        let c = client();
         let c = Some(&c);
         let (mut p, rx) = playback();
         p.handle(
@@ -804,13 +821,24 @@ mod tests {
         let (msgs, mut sent) = tokio::sync::mpsc::unbounded_channel();
         p.msgs = msgs;
         p.queue.replace(tracks(3), 0);
+        let c = client();
         let fail_load = |p: &mut Playback, e: tidal::Error| {
             p.loading = true;
-            let result = Err(e.into());
-            p.on_msg(None, Msg::Loaded { seq: p.seq, result });
+            let (seq, client, result) = (p.seq, c.clone(), Err(e.into()));
+            p.on_msg(
+                None,
+                Msg::Loaded {
+                    seq,
+                    client,
+                    result,
+                },
+            );
         };
         fail_load(&mut p, tidal::Error::Auth("invalid_grant".into()));
-        assert!(matches!(sent.try_recv(), Ok(Msg::SessionExpired)));
+        assert!(
+            matches!(sent.try_recv(), Ok(Msg::SessionExpired(dead)) if Arc::ptr_eq(&dead, &c)),
+            "the load's client is the dead one"
+        );
         assert!(errors(&rx).is_empty(), "no track reported unavailable");
         assert_eq!(p.queue.current().map(|t| t.id), Some(0), "the queue stays");
         assert!(!p.loading);

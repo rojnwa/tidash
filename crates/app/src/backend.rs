@@ -86,17 +86,18 @@ impl Emitter {
     }
 }
 
-/// For a failed request: `Error::Auth` means its one token refresh failed as well, so the
-/// session is dead and the backend logs out to the login screen. True if so; else the caller
-/// reports the error itself.
+/// For a request on `client` that failed: `Error::Auth` means its one token refresh failed as
+/// well, so that session is dead and the backend logs out to the login screen. True if so;
+/// else the caller reports the error itself.
 pub(crate) fn session_expired(
     e: &(dyn std::error::Error + 'static),
+    client: &Arc<Client>,
     msgs: &UnboundedSender<Msg>,
 ) -> bool {
     let dead = matches!(e.downcast_ref(), Some(tidal::Error::Auth(_)));
     if dead {
         log::warn!("session expired: {e}");
-        let _ = msgs.send(Msg::SessionExpired); // backend gone = app closing
+        let _ = msgs.send(Msg::SessionExpired(Arc::clone(client))); // backend gone = app closing
     }
     dead
 }
@@ -177,7 +178,7 @@ impl Backend {
             tokio::select! {
                 biased; // a pending player error goes before a sample of its reset clock
                 Some(msg) = msgs.recv() => match msg {
-                    Msg::SessionExpired => self.expire().await,
+                    Msg::SessionExpired(dead) => self.expire(dead).await,
                     msg => {
                         if let Some(p) = &mut self.playback {
                             p.on_msg(self.client.as_ref(), msg);
@@ -225,13 +226,15 @@ impl Backend {
         }
     }
 
-    /// The session is dead (see `session_expired`): back to the login screen, the stored copy
-    /// removed if it can be. The queue stays for the next login.
-    async fn expire(&mut self) {
-        let Some(client) = self.client.take() else {
-            return; // already logged out
-        };
-        client.detach_store().await; // as on logout
+    /// `dead`'s session is gone (see `session_expired`): back to the login screen, the stored
+    /// copy removed if it can be. The queue stays for the next login.
+    async fn expire(&mut self, dead: Arc<Client>) {
+        // Already out, or a request from before a newer login: that session is not dead.
+        if !self.client.as_ref().is_some_and(|c| Arc::ptr_eq(c, &dead)) {
+            return;
+        }
+        self.client = None;
+        dead.detach_store().await; // as on logout
         if let Err(e) = self.with_store(|s| s.clear()).await {
             log::warn!("could not remove the expired session: {e}");
         }
@@ -284,7 +287,7 @@ impl Backend {
                 self.search_task = Some(tokio::spawn(async move {
                     match c.search(&q, 30).await {
                         Ok(results) => emit.send(Event::SearchResults { query: q, results }),
-                        Err(e) if session_expired(&e, &msgs) => {}
+                        Err(e) if session_expired(&e, &c, &msgs) => {}
                         Err(e) => emit.send(Event::Error(format!("{}: {e}", tr("Search failed")))),
                     }
                 }));
@@ -298,7 +301,7 @@ impl Backend {
                         Ok((album, tracks)) => emit.send(Event::Album { album, tracks }),
                         Err(e) => {
                             emit.send(Event::AlbumFailed(id));
-                            if !session_expired(&e, &msgs) {
+                            if !session_expired(&e, &c, &msgs) {
                                 emit.send(Event::Error(format!(
                                     "{}: {e}",
                                     tr("Could not open album")
@@ -468,24 +471,28 @@ mod tests {
         }
     }
 
-    /// The events of a run with `store`, whose startup probe read `stored`, that handles
-    /// `msgs`, then `actions`, and ends.
-    fn run(
+    /// A backend on `store`, whose startup probe read `stored`; its events and messages.
+    fn new_backend(
         store: Arc<dyn TokenStore>,
         stored: tidal::Result<Option<tidal::Session>>,
-        msgs: Vec<Msg>,
-        actions: Vec<Action>,
-    ) -> Vec<Event> {
+    ) -> (Backend, Receiver<Event>, UnboundedReceiver<Msg>) {
         let (tx, events) = channel();
         let emit = Arc::new(Emitter {
             tx,
             waker: Box::new(|| {}),
         });
-        let (msg_tx, msg_rx) = unbounded_channel();
-        for m in msgs {
-            let _ = msg_tx.send(m);
-        }
-        let backend = Backend::new(emit, msg_tx, (store, stored));
+        let (msg_tx, msgs) = unbounded_channel();
+        (Backend::new(emit, msg_tx, (store, stored)), events, msgs)
+    }
+
+    /// The events of a run with `store`, whose startup probe read `stored`, that handles
+    /// `actions` and ends.
+    fn run(
+        store: Arc<dyn TokenStore>,
+        stored: tidal::Result<Option<tidal::Session>>,
+        actions: Vec<Action>,
+    ) -> Vec<Event> {
+        let (backend, events, msgs) = new_backend(store, stored);
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -496,35 +503,80 @@ mod tests {
         }
         // Sender dropped: `run` handles what was sent and returns.
         drop(action_tx);
-        rt.block_on(backend.run(action_rx, msg_rx));
+        rt.block_on(backend.run(action_rx, msgs));
         events.try_iter().collect()
     }
 
     fn startup(stored: tidal::Result<Option<tidal::Session>>) -> Vec<Event> {
-        run(Arc::new(NoReads), stored, vec![], vec![])
+        run(Arc::new(NoReads), stored, vec![])
+    }
+
+    /// Hands `b` the expiries in `msgs`, as its loop does.
+    fn deliver(b: &mut Backend, msgs: &mut UnboundedReceiver<Msg>) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        while let Ok(Msg::SessionExpired(dead)) = msgs.try_recv() {
+            rt.block_on(b.expire(dead));
+        }
+    }
+
+    fn revoked() -> tidal::Error {
+        tidal::Error::Auth("invalid_grant: revoked".into())
     }
 
     #[test]
     fn logout_clears_the_store_off_the_runtime() {
-        let events = run(Arc::new(OwnRuntime), Ok(None), vec![], vec![Action::Logout]);
+        let events = run(Arc::new(OwnRuntime), Ok(None), vec![Action::Logout]);
         assert!(matches!(events[..], [Event::LoggedOut]), "{events:?}");
     }
 
-    /// Once, however many requests found it dead; a later search finds no session to use.
+    /// Once, however many requests found it dead.
     #[test]
     fn an_expired_session_is_removed_and_shown_once() {
         let store = Arc::new(Calls::default());
-        let events = run(
-            store.clone(),
-            Ok(Some(session("a"))),
-            vec![Msg::SessionExpired, Msg::SessionExpired],
-            vec![Action::Search("q".into())],
-        );
+        let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(Some(session("a"))));
+        let dead = b.client.clone().expect("logged in");
+        for _ in 0..2 {
+            assert!(session_expired(&revoked(), &dead, &b.msgs));
+        }
+        deliver(&mut b, &mut msgs);
+        assert!(b.client.is_none());
+        let events: Vec<_> = events.try_iter().collect();
         assert!(
             matches!(events[..], [Event::LoggedIn, Event::SessionExpired]),
             "{events:?}"
         );
         assert_eq!(store.get(), ["clear"]);
+    }
+
+    /// A request issued on the old session that fails only after a new login says nothing
+    /// about the new session.
+    #[test]
+    fn an_old_sessions_late_expiry_leaves_a_new_login_alone() {
+        let store = Arc::new(Calls::default());
+        let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(Some(session("old"))));
+        let old = b.client.clone().expect("logged in");
+        assert!(session_expired(&revoked(), &old, &b.msgs)); // the first to find it dead
+        deliver(&mut b, &mut msgs);
+        b.log_in(session("new"));
+        let new = b.client.clone().expect("logged in again");
+        assert!(session_expired(&revoked(), &old, &b.msgs)); // a straggler
+        deliver(&mut b, &mut msgs);
+        assert!(
+            b.client.as_ref().is_some_and(|c| Arc::ptr_eq(c, &new)),
+            "still logged in"
+        );
+        let events: Vec<_> = events.try_iter().collect();
+        assert!(
+            matches!(
+                events[..],
+                [Event::LoggedIn, Event::SessionExpired, Event::LoggedIn]
+            ),
+            "{events:?}"
+        );
+        assert_eq!(store.get(), ["clear"], "the new session is not cleared");
     }
 
     /// A play report that goes out after Logout (from a task still holding the old client)
