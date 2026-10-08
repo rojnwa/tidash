@@ -6,8 +6,8 @@ use crate::model::{Action, PlaybackSnapshot};
 use fastframe_now_playing::{App, Command, NowPlaying, Playback, State, Track};
 use player::PlayState;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 const COVER_PX: u32 = 640;
@@ -109,11 +109,24 @@ fn cover_file(dir: Option<&Path>, cover: &str) -> Option<PathBuf> {
     dir.filter(|_| safe).map(|d| d.join(format!("{cover}.jpg")))
 }
 
+/// Cover downloads, shared by the cover threads. Blocking, so used only there; a static is
+/// never dropped, so never on a runtime thread either.
+static COVERS: OnceLock<reqwest::blocking::Client> = OnceLock::new();
+
 /// Downloads `url` to `path` on a thread of its own; `done` and `wake` once it is there.
 fn fetch(url: String, path: PathBuf, done: Sender<()>, wake: Wake) {
     let run = move || {
         let save = || -> Result<(), Box<dyn std::error::Error>> {
-            let bytes = reqwest::blocking::get(&url)?.error_for_status()?.bytes()?;
+            let http = match COVERS.get() {
+                Some(http) => http,
+                None => {
+                    let http = reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(10)) // a cover is ~50 KB
+                        .build()?;
+                    COVERS.get_or_init(|| http)
+                }
+            };
+            let bytes = http.get(&url).send()?.error_for_status()?.bytes()?;
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
