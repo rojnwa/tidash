@@ -1,6 +1,6 @@
 //! Home, Explore and the other pages (a title, then shelves). A page of one shelf (a v2 "View
 //! all", or a v1 `single-module-page`) shows it in full: every track, or a grid of cards
-//! (ruling R17).
+//! (ruling R17); but not a shelf of links, nor one with a View all of its own (R18).
 
 use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
@@ -12,7 +12,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         return;
     };
     let one = match &page.shelves[..] {
-        [s] => Some(s),
+        [s] if s.layout != Layout::Links && s.more.is_none() => Some(s),
         _ => None,
     };
     super::page(ui, route, |ui| {
@@ -116,6 +116,37 @@ mod tests {
         assert!(
             first.zip(fifth).is_some_and(|(a, b)| b > a),
             "card 5 starts a row below card 1: {nodes:?}"
+        );
+    }
+
+    /// Ruling R18: a one-shelf page of links stays a row of buttons, not a grid of cards.
+    #[test]
+    fn a_one_shelf_page_of_links_stays_buttons() {
+        let link = |i| Item::Link {
+            title: format!("Genre {i}"),
+            api_path: format!("pages/genre_{i}"),
+        };
+        let (route, page) = single_module("Genres", Layout::Links, (1..=5).map(link).collect());
+        let nodes = nodes(route, page);
+        let top = |t: &str| nodes.iter().find(|(s, _)| s == t).map(|n| n.1);
+        assert!(top("Genre 1").is_some(), "{nodes:?}");
+        assert_eq!(top("Genre 1"), top("Genre 5"), "one row: {nodes:?}");
+    }
+
+    /// Ruling R18: a one-shelf page whose shelf has its own View all keeps the link and the
+    /// sideways rail: the shelf is not the full list.
+    #[test]
+    fn a_one_shelf_page_with_view_all_keeps_its_rail() {
+        let items = (1..=8).map(|i| Item::Album(album(i))).collect();
+        let (route, mut page) = single_module("New Albums", Layout::Cards, items);
+        page.shelves[0].more = Some(More::ViewAll("home/pages/x/view-all".into()));
+        let nodes = nodes(route, page);
+        let top = |t: &str| nodes.iter().find(|(s, _)| s == t).map(|n| n.1);
+        assert!(top("View all").is_some(), "{nodes:?}");
+        let card = |i| top(&format!("Album {i}, Artist 1, Artist 2"));
+        assert!(
+            card(1).is_some() && card(1) == card(5),
+            "one row: {nodes:?}"
         );
     }
 

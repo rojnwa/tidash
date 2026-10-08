@@ -76,8 +76,9 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
 }
 
 /// While a row is dragged over the list (scrolled so its top is at `top`): a line where it
-/// would land, and scrolling near an edge. On release there: the move to make, if any.
-/// Released elsewhere, egui drops the payload and nothing moves.
+/// would land, and scrolling near an edge, or past it. On release over the visible list: the
+/// move to make, if any. Released elsewhere (over the heading or the player bar, say), egui
+/// drops the payload and nothing moves.
 fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, usize)> {
     DragAndDrop::payload::<QueueDrag>(ui.ctx())?;
     let p = ui.input(|i| i.pointer.interact_pos())?;
@@ -85,11 +86,6 @@ fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, 
     if !view.x_range().contains(p.x) {
         return None;
     }
-    let slot = drop_slot(p.y, top, ROW_H, tracks.len());
-    // The accent's stroke, which shows on the current row's highlight too.
-    let line = Stroke::new(2.0, ui.visuals().selection.stroke.color);
-    ui.painter()
-        .hline(view.x_range(), top + slot as f32 * ROW_H, line);
     // Positive moves the content down, showing what is above.
     let dir = if p.y < view.top() + EDGE {
         1.0
@@ -103,6 +99,14 @@ fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, 
         ui.scroll_with_delta_animation(vec2(0.0, step), ScrollAnimation::none());
         ui.ctx().request_repaint(); // the pointer may rest while the list scrolls
     }
+    if !view.y_range().contains(p.y) {
+        return None; // the slot under it is out of view
+    }
+    let slot = drop_slot(p.y, top, ROW_H, tracks.len());
+    // The accent's stroke, which shows on the current row's highlight too.
+    let line = Stroke::new(2.0, ui.visuals().selection.stroke.color);
+    ui.painter()
+        .hline(view.x_range(), top + slot as f32 * ROW_H, line);
     if !ui.input(|i| i.pointer.any_released()) {
         return None;
     }
@@ -169,7 +173,8 @@ mod tests {
     }
 
     /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`.
-    /// Released off the panel, a drag moves nothing. A screen reader's click on a row plays it.
+    /// Released off the list (beside the panel, or below it over the player bar), a drag moves
+    /// nothing. A screen reader's click on a row plays it.
     #[test]
     fn dragging_a_row_moves_it() {
         let ctx = egui::Context::default();
@@ -239,6 +244,10 @@ mod tests {
             pass(input);
         }
         assert_eq!(sent(), Vec::<String>::new(), "released off the panel");
+        for input in drag(pos2(row4.x, 595.0), 0.0) {
+            pass(input);
+        }
+        assert_eq!(sent(), Vec::<String>::new(), "released over the player bar");
         let out = pass(vec![]);
         pass(vec![testing::click(&out, &label(2))]);
         assert_eq!(sent(), ["PlayQueueIndex(1)"]);
