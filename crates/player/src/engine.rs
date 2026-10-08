@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use fastframe_audio::{Maintained, Output, OutputOptions};
+use fastframe_audio::{Maintained, OpenError, Output, OutputOptions};
 use rtrb::Producer;
 
 use crate::render::{NewRing, Renderer, Shared};
@@ -57,6 +57,9 @@ pub enum PlayerEvent {
         id: u64,
         message: String,
     },
+    /// The output could not be opened again; sent once per outage. The output keeps trying,
+    /// and a loaded track plays on once it is back.
+    OutputLost,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -164,6 +167,7 @@ fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
         state: PlayState::Stopped,
         scratch: Vec::new(),
         output: None,
+        output_lost: false,
         pause_by: None,
         callbacks_seen: 0,
         callback_at: Instant::now(),
@@ -262,6 +266,7 @@ struct Engine {
     state: PlayState,
     scratch: Vec<f32>,
     output: Option<Output<Renderer>>,
+    output_lost: bool,
     /// Set by a stop: the latest moment to pause the device (see `output_action`).
     pause_by: Option<Instant>,
     callbacks_seen: u64,
@@ -477,10 +482,12 @@ impl Engine {
     fn maintain(&mut self) {
         let Some(out) = &mut self.output else { return };
         // A reopen at another rate calls `configure`, which `adopt_ring` picks up.
-        if let Maintained::Failed(e) = out.maintain() {
-            log::warn!("audio output: {e}");
-        }
+        let failed = match out.maintain() {
+            Maintained::Failed(e) => Some(e),
+            _ => None,
+        };
         let errors = out.take_errors();
+        self.output_failed(failed);
         for e in &errors {
             log::warn!("audio output: {e}");
         }
@@ -489,6 +496,17 @@ impl Engine {
         {
             let id = t.id;
             self.fail(id, e.to_string());
+        }
+    }
+
+    /// A failed reopen comes back every `maintain` until one works: tell it once.
+    fn output_failed(&mut self, failed: Option<OpenError>) {
+        let was = std::mem::replace(&mut self.output_lost, failed.is_some());
+        if let Some(e) = failed
+            && !was
+        {
+            log::warn!("audio output: {e}");
+            self.emit(PlayerEvent::OutputLost);
         }
     }
 
@@ -661,6 +679,19 @@ mod tests {
         let straight = decode_all(None);
         assert_eq!(straight.len(), 22_050 * 2);
         assert!(decode_all(Some(5)) == straight, "resumed decode differs");
+    }
+
+    #[test]
+    fn a_lost_output_is_reported_once_per_outage() {
+        let (_player, events, _r, mut e) = parts();
+        for failed in [true, true, false, true] {
+            e.output_failed(failed.then_some(OpenError::NoDevice));
+        }
+        let lost = events
+            .try_iter()
+            .filter(|ev| *ev == PlayerEvent::OutputLost)
+            .count();
+        assert_eq!(lost, 2);
     }
 
     #[test]
