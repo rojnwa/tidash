@@ -44,3 +44,5 @@ jobs:
       # Per OS: the keychain and stream code differ by platform.
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
+      # The release profile (thin LTO, one codegen unit, strip) is otherwise only built by hand.
+      - run: cargo build --release --locked -p tidash
