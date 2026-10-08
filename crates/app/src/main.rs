@@ -2,8 +2,9 @@
 //!
 //! Debug switches for measuring frame pacing (spec §14), read once at start:
 //! - `TIDASH_RENDERER=wgpu|glow`: eframe's renderer; anything but `wgpu` (or unset) is glow.
-//! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page down this many points a second,
-//!   every pass, repainting without pause (negative scrolls up); unset, 0 or not a number is off.
+//! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page this many points a second, every
+//!   pass, repainting without pause; it starts down (up if negative) and bounces at either end.
+//!   Unset, 0 or not a number is off.
 //! - `TIDASH_REPAINT_LOG=1`: logs each pass's repaint causes at info.
 //!
 //! The renderer in use is logged at start either way.
@@ -63,7 +64,7 @@ struct App {
 }
 
 /// Which renderer eframe started, and on what adapter.
-#[allow(unsafe_code)]
+#[expect(unsafe_code)]
 fn log_renderer(cc: &eframe::CreationContext<'_>) {
     if let Some(wgpu) = &cc.wgpu_render_state {
         log::info!("renderer: wgpu, {:?}", wgpu.adapter.get_info());
@@ -92,13 +93,14 @@ impl App {
         let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
         let ctx = cc.egui_ctx.clone();
         let media = now_playing::MediaControls::start(move || ctx.request_repaint(), artwork);
-        let mut ui = ui::UiState::default();
-        ui.autoscroll = switches.autoscroll;
+        if let Some(speed) = switches.autoscroll {
+            ui::autoscroll(&cc.egui_ctx, speed);
+        }
         Self {
             model: Model::default(),
             actions,
             events,
-            ui,
+            ui: ui::UiState::default(),
             media,
             started: Some(started),
             repaint_log: switches.repaint_log,

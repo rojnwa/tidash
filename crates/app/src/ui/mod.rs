@@ -33,8 +33,6 @@ pub struct UiState {
     scrolling: fastframe_scroll::Scrolling,
     /// The queue panel shows; the player bar toggles it.
     pub queue_open: bool,
-    /// `TIDASH_AUTOSCROLL`: points a second the page scrolls down on its own.
-    pub autoscroll: Option<f32>,
 }
 
 impl Default for UiState {
@@ -47,7 +45,6 @@ impl Default for UiState {
             player: None,
             scrolling: Default::default(),
             queue_open: false,
-            autoscroll: None,
         }
     }
 }
@@ -103,11 +100,39 @@ impl Ctx<'_> {
 /// A route's one vertical scroll; each route keeps its own offset, and the ids inside (a
 /// shelf's sideways offset, say) are the route's own: egui does not salt them by the scroll's.
 pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    egui::ScrollArea::vertical()
+    let speed = ui.ctx().data(|d| d.get_temp::<f32>(autoscroll_id()));
+    let step = speed.map(|v| v * ui.input(|i| i.stable_dt));
+    let out = egui::ScrollArea::vertical()
         .id_salt(("page", route))
         .auto_shrink([false, false])
-        .show(ui, |ui| ui.push_id(route, f).inner)
-        .inner
+        .show(ui, |ui| {
+            if let Some(step) = step {
+                let animation = egui::style::ScrollAnimation::none();
+                ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
+                ui.ctx().request_repaint();
+            }
+            ui.push_id(route, f).inner
+        });
+    if let (Some(v), Some(step)) = (speed, step) {
+        // This step lands next pass; turn round now if it reaches an end (give or take float
+        // error), so no pass stands still there.
+        let to = out.state.offset.y + step;
+        let max = out.content_size.y - out.inner_rect.height();
+        if (v > 0.0 && to >= max - 0.5) || (v < 0.0 && to <= 0.5) {
+            ui.ctx().data_mut(|d| d.insert_temp(autoscroll_id(), -v));
+        }
+    }
+    out.inner
+}
+
+fn autoscroll_id() -> egui::Id {
+    egui::Id::new("autoscroll")
+}
+
+/// `TIDASH_AUTOSCROLL`: the current page scrolls `speed` points a second down (up if
+/// negative) every pass, turning round at either end.
+pub fn autoscroll(ctx: &egui::Context, speed: f32) {
+    ctx.data_mut(|d| d.insert_temp(autoscroll_id(), speed));
 }
 
 /// `route`'s page; without one, a spinner while it loads, or a message and Retry after it
@@ -284,13 +309,6 @@ pub fn draw(
     }
 
     egui::CentralPanel::default().show(ui, |ui| {
-        if let Some(speed) = state.autoscroll {
-            // The next vertical scroll to end takes it: the route's page (the queue's has ended).
-            let dt = ui.input(|i| i.stable_dt);
-            let animation = egui::style::ScrollAnimation::none();
-            ui.scroll_with_delta_animation(egui::vec2(0.0, -speed * dt), animation);
-            ui.ctx().request_repaint();
-        }
         let mut ctx = Ctx {
             model,
             tx,
@@ -627,19 +645,18 @@ mod tests {
         assert!(model.errors.is_empty(), "{:?}", model.errors);
     }
 
-    /// `TIDASH_AUTOSCROLL` moves the page's content up each pass and asks for the next one.
+    /// `TIDASH_AUTOSCROLL` scrolls the page down first and turns round at either end without
+    /// a pass standing still there; each pass asks for the next.
     #[test]
-    fn autoscroll_scrolls_the_page_down() {
+    fn autoscroll_bounces_between_the_ends_of_the_page() {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
+        autoscroll(&ctx, 3000.0); // 50 pt a pass at egui's default 1/60 s
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut state = UiState {
-            autoscroll: Some(600.0),
-            ..Default::default()
-        };
+        let mut state = UiState::default();
         let route = Route::Collection(crate::model::CollectionTab::Tracks);
         let mut model = testing::at(route.clone());
-        let data = PageData::Tracks(testing::tracks(100));
+        let data = PageData::Tracks(testing::tracks(30));
         model.apply(Event::Page { route, data });
         let mut pass = || {
             let input = egui::RawInput {
@@ -659,22 +676,28 @@ mod tests {
                 .accesskit_update
                 .expect("AccessKit is on");
             let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
-            let summary =
-                |n: &egui::accesskit::Node| text(n).is_some_and(|t| t.starts_with("100 "));
+            let summary = |n: &egui::accesskit::Node| text(n).is_some_and(|t| t.starts_with("30 "));
             let (_, summary) = tree
                 .nodes
                 .iter()
                 .find(|(_, n)| summary(n))
                 .expect("summary");
-            (summary.bounds().expect("placed").y0, repaint)
+            assert_eq!(repaint, std::time::Duration::ZERO);
+            summary.bounds().expect("placed").y0
         };
-        // The new scroll moves from the third pass on.
-        let (before, _) = pass();
-        pass();
-        pass();
-        let (after, repaint) = pass();
-        assert!(after < before, "{before} → {after}");
-        assert_eq!(repaint, std::time::Duration::ZERO);
+        // The page is about 360 pt longer than its view: 60 passes go to the bottom and back
+        // more than once.
+        let ys: Vec<f64> = (0..60).map(|_| pass()).collect();
+        let moves: Vec<f64> = ys.windows(2).map(|w| w[1] - w[0]).collect();
+        // Past a new scroll's first pass, every pass moves.
+        assert!(moves[1..].iter().all(|m| *m != 0.0), "{ys:?}");
+        // The content moves up (the page scrolls down) first, then down, then up again.
+        let up: Vec<bool> = moves[1..].iter().map(|m| *m < 0.0).collect();
+        assert!(up[0], "{ys:?}");
+        assert!(
+            up.windows(2).filter(|w| w[0] != w[1]).count() >= 2,
+            "{ys:?}"
+        );
     }
 
     /// A 3:2 image in a square keeps its middle two thirds; a square one is shown whole.
