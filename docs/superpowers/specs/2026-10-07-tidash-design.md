@@ -231,6 +231,11 @@ start screen, a 16.8 MB binary, a 146 MB working set (262 MB private) at the sta
 162 MB (257 MB private) on an album page after playing a dozen tracks, 0% CPU there while paused.
 RAM is over budget on both OSes for the same font reason. Linux: build and tests in CI only.
 
+M2 on Windows (same machine, release build, Home loaded 15 s after launch, three launches each):
+before mapping the fallback fonts, a 150 MB working set (256–262 MB private); with `fastframe-fonts`
+pinned to crmne/fastframe#17 (fallback faces memory-mapped), 93 MB (202–204 MB private). First frame
+121–136 ms and 0–0.3% idle CPU in both.
+
 ## 11. Shipping
 
 - **CI (GitHub Actions):** matrix Windows / macOS / Linux: `cargo fmt --check`, `cargo clippy -- -D warnings`,
