@@ -214,6 +214,9 @@ async fn stream_info(c: &Client, id: u64) -> tidal::Result<StreamInfo> {
     }
 }
 
+/// A player error this far from where the track was last restarted is a new hiccup.
+const RECOVERED: Duration = Duration::from_secs(10);
+
 /// Backend-side playback: the queue, the player, and the current play's report.
 pub struct Playback {
     player: Player,
@@ -227,8 +230,8 @@ pub struct Playback {
     loading: bool,
     /// Play, not pause, once the current track is loaded.
     want_play: bool,
-    /// The current track was restarted after a player error already.
-    retried: bool,
+    /// Where the current track was last restarted after a player error, if it was.
+    restarted_at: Option<Duration>,
     resume_at: Option<Duration>,
     quality: String,
     state: PlayState,
@@ -250,7 +253,7 @@ impl Playback {
             seq: 0,
             loading: false,
             want_play: false,
-            retried: false,
+            restarted_at: None,
             resume_at: None,
             quality: String::new(),
             state: PlayState::Stopped,
@@ -388,10 +391,11 @@ impl Playback {
             }
             Msg::Player(PlayerEvent::Error { id, message }) if id == self.seq => {
                 log::warn!("playback of track {}: {message}", self.track_id());
-                if self.retried {
-                    self.fail_track(c);
-                } else {
-                    self.start_current(c, Some(self.last_pos));
+                // One restart per hiccup. Failing again near where the last restart resumed
+                // (a corrupt frame, say) would restart forever: the track is skipped instead.
+                match self.restarted_at {
+                    Some(at) if self.last_pos.abs_diff(at) < RECOVERED => self.fail_track(c),
+                    _ => self.start_current(c, Some(self.last_pos)),
                 }
             }
             Msg::Player(PlayerEvent::OutputLost) => self.emit.send(Event::Error(
@@ -457,7 +461,7 @@ impl Playback {
         let (seq, id, c, msgs) = (self.seq, track.id, c.clone(), self.msgs.clone());
         self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
         self.loading = true;
-        self.retried = resume_at.is_some();
+        self.restarted_at = resume_at;
         self.resume_at = resume_at;
         self.last_pos = resume_at.unwrap_or_default();
         tokio::spawn(async move {
@@ -753,6 +757,45 @@ mod tests {
             errors(&rx),
             ["Audio output lost; playback resumes when it is back"]
         );
+    }
+
+    #[test]
+    fn each_hiccup_in_a_track_gets_one_restart() {
+        // Loads are spawned on this runtime, which never runs them: nothing reaches TIDAL.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+        let _rt = rt.enter();
+        let session = tidal::Session {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: 0,
+            user_id: 1,
+            country_code: "US".into(),
+        };
+        let store = Arc::new(tidal::MemoryStore::default());
+        let c = Arc::new(Client::new(Default::default(), session, store).expect("a client"));
+        let c = Some(&c);
+        let (mut p, rx) = playback();
+        p.handle(
+            c,
+            Action::PlayTracks {
+                tracks: tracks(3),
+                start: 0,
+            },
+        );
+        let hiccup = |p: &mut Playback, at_secs: u32| {
+            p.last_pos = S * at_secs; // as sampled while it played
+            let id = p.seq;
+            let message = "connection reset".into();
+            p.on_msg(c, Msg::Player(PlayerEvent::Error { id, message }));
+        };
+        hiccup(&mut p, 120);
+        hiccup(&mut p, 900);
+        assert_eq!(p.restarted_at, Some(S * 900));
+        assert!(errors(&rx).is_empty(), "both restarted");
+        hiccup(&mut p, 901); // again right where it resumed
+        assert_eq!(errors(&rx), ["t0 is unavailable"]);
     }
 
     #[test]
