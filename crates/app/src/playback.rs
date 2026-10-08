@@ -421,6 +421,14 @@ impl Playback {
         self.publish_queue();
     }
 
+    /// Session expired: stop, keeping the queue for the next login. The play ends without a
+    /// report: there is no session left to send it with.
+    pub fn session_lost(&mut self) {
+        self.end_here(None);
+        self.state = PlayState::Stopped; // shown at once, not when the player confirms
+        self.stop();
+    }
+
     /// App shutdown: report the current play, waiting briefly for the send.
     pub async fn shutdown(&mut self, c: Option<&Arc<Client>>) {
         if let Some(sent) = self.end_here(c) {

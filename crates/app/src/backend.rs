@@ -226,8 +226,8 @@ impl Backend {
         }
     }
 
-    /// `dead`'s session is gone (see `session_expired`): back to the login screen, the stored
-    /// copy removed if it can be. The queue stays for the next login.
+    /// `dead`'s session is gone (see `session_expired`): back to the login screen, playback
+    /// stopped, the stored copy removed if it can be. The queue stays for the next login.
     async fn expire(&mut self, dead: Arc<Client>) {
         // Already out, or a request from before a newer login: that session is not dead.
         if !self.client.as_ref().is_some_and(|c| Arc::ptr_eq(c, &dead)) {
@@ -235,6 +235,9 @@ impl Backend {
         }
         self.client = None;
         dead.detach_store().await; // as on logout
+        if let Some(p) = &mut self.playback {
+            p.session_lost();
+        }
         if let Err(e) = self.with_store(|s| s.clear()).await {
             log::warn!("could not remove the expired session: {e}");
         }
@@ -532,23 +535,50 @@ mod tests {
         assert!(matches!(events[..], [Event::LoggedOut]), "{events:?}");
     }
 
-    /// Once, however many requests found it dead.
+    /// Once, however many requests found it dead; what was playing stops, the queue stays.
     #[test]
     fn an_expired_session_is_removed_and_shown_once() {
         let store = Arc::new(Calls::default());
         let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(Some(session("a"))));
+        let (output, _, _renderer) = player::Player::spawn_manual();
+        let mut p = Playback::new(output, b.emit.clone(), b.msgs.clone());
+        let track = tidal::Track {
+            id: 7,
+            title: "t".into(),
+            duration: 200,
+            track_number: 1,
+            volume_number: 1,
+            artists: vec![],
+            album: tidal::AlbumRef {
+                id: 1,
+                title: "a".into(),
+                cover: None,
+            },
+            stream_ready: true,
+        };
+        let tracks = vec![track];
+        p.handle(None, Action::PlayTracks { tracks, start: 0 });
+        let playing = player::PlayerEvent::State(player::PlayState::Playing);
+        p.on_msg(None, Msg::Player(playing));
+        b.playback = Some(p);
         let dead = b.client.clone().expect("logged in");
         for _ in 0..2 {
             assert!(session_expired(&revoked(), &dead, &b.msgs));
         }
         deliver(&mut b, &mut msgs);
         assert!(b.client.is_none());
-        let events: Vec<_> = events.try_iter().collect();
-        assert!(
-            matches!(events[..], [Event::LoggedIn, Event::SessionExpired]),
-            "{events:?}"
-        );
         assert_eq!(store.get(), ["clear"]);
+        let mut model = crate::model::Model::default();
+        let mut expired = 0;
+        for ev in events.try_iter() {
+            expired += usize::from(matches!(ev, Event::SessionExpired));
+            model.apply(ev);
+        }
+        assert_eq!(expired, 1);
+        assert!(!model.logged_in);
+        assert_eq!(model.playback.state, Some(player::PlayState::Stopped));
+        assert_eq!(model.playback.track.map(|t| t.id), Some(7));
+        assert_eq!(model.queue.tracks.len(), 1, "the queue stays");
     }
 
     /// A request issued on the old session that fails only after a new login says nothing
