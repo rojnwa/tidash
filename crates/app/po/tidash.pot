@@ -230,5 +230,22 @@ msgid "Repeat one"
 msgstr ""
 
 #: src/ui/player_bar.rs
+#: src/ui/queue_panel.rs
 msgid "Queue"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Play next"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Add to queue"
+msgstr ""
+
+#: src/ui/queue_panel.rs
+msgid "The queue is empty"
+msgstr ""
+
+#: src/ui/queue_panel.rs
+msgid "Remove"
 msgstr ""

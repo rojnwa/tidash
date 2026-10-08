@@ -72,81 +72,27 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, id: &str, tracks: &[tidal::Track],
                 Row::Track(_) => Sense::click(),
             };
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
-            let p = ui.painter_at(rect);
-            let font = FontId::proportional(14.0);
             match row {
                 Row::Disc(n) => {
                     let label = format!("{} {n}", tr("Disc"));
                     resp.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &label));
-                    p.text(
+                    ui.painter_at(rect).text(
                         rect.left_center(),
                         Align2::LEFT_CENTER,
                         label,
-                        font,
+                        FontId::proportional(14.0),
                         ui.visuals().strong_text_color(),
                     );
                 }
                 Row::Track(i) => {
                     let t = &tracks[i];
-                    let ready = t.stream_ready;
-                    if resp.gained_focus() {
-                        resp.scroll_to_me(None); // Tab onto the row built just out of view
-                    }
-                    if resp.hovered() || resp.has_focus() {
-                        p.rect_filled(rect, 3.0, ui.visuals().widgets.hovered.bg_fill);
-                    }
-                    let color = if ready {
-                        ui.visuals().text_color()
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-                    let w = rect.width();
-                    // Text in [x0, x1) from the left edge, clipped so columns never overlap.
-                    let cell = |x0: f32, x1: f32, text: String, align: Align2| {
-                        let clip = egui::Rect::from_x_y_ranges(
-                            (rect.left() + x0)..=(rect.left() + x1 - 6.0),
-                            rect.y_range(),
-                        );
-                        let x = if align == Align2::RIGHT_CENTER {
-                            clip.right()
-                        } else {
-                            clip.left()
-                        };
-                        ui.painter_at(clip).text(
-                            egui::pos2(x, rect.center().y),
-                            align,
-                            text,
-                            font.clone(),
-                            color,
-                        );
-                    };
                     let num = if discs {
                         t.track_number.to_string()
                     } else {
                         (i + 1).to_string()
                     };
-                    resp.widget_info(|| {
-                        let label = format!(
-                            "{num}. {}, {}, {}",
-                            t.title,
-                            artists(t),
-                            duration(t.duration)
-                        );
-                        WidgetInfo::labeled(WidgetType::Button, ready, label)
-                    });
-                    let (c_art, c_alb) = (w * 0.5, w * 0.75);
-                    cell(8.0, 44.0, num, Align2::LEFT_CENTER);
-                    cell(44.0, c_art, t.title.clone(), Align2::LEFT_CENTER);
-                    if discs {
-                        cell(c_art, w - 56.0, artists(t), Align2::LEFT_CENTER);
-                    } else {
-                        cell(c_art, c_alb, artists(t), Align2::LEFT_CENTER);
-                        cell(c_alb, w - 56.0, t.album.title.clone(), Align2::LEFT_CENTER);
-                    }
-                    cell(w - 56.0, w, duration(t.duration), Align2::RIGHT_CENTER);
-                    // Enter, Space or a screen reader "click" without the mouse.
-                    let activated = resp.clicked() && !resp.clicked_by(PointerButton::Primary);
-                    if ready && (resp.double_clicked() || activated) {
+                    paint_row(ui, &resp, num, t, !discs, false);
+                    if t.stream_ready && (resp.double_clicked() || activated(&resp)) {
                         ctx.send(Action::PlayTracks {
                             tracks: tracks.to_vec(),
                             start: i,
@@ -159,10 +105,88 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, id: &str, tracks: &[tidal::Track],
     });
 }
 
+/// Enter, Space or a screen reader "click" on `row`, without the mouse.
+pub fn activated(row: &egui::Response) -> bool {
+    row.clicked() && !row.clicked_by(PointerButton::Primary)
+}
+
+/// Paints track `t`'s row (`row` its response): `num`, title, artists, the album with `album`,
+/// and duration, each column clipped. Unavailable tracks are dimmed, `current` highlighted.
+pub fn paint_row(
+    ui: &egui::Ui,
+    row: &egui::Response,
+    num: String,
+    t: &tidal::Track,
+    album: bool,
+    current: bool,
+) {
+    if row.gained_focus() {
+        row.scroll_to_me(None); // Tab onto the row built just out of view
+    }
+    let (rect, v) = (row.rect, ui.visuals());
+    if current {
+        ui.painter_at(rect)
+            .rect_filled(rect, 3.0, v.selection.bg_fill);
+    } else if row.hovered() || row.has_focus() {
+        ui.painter_at(rect)
+            .rect_filled(rect, 3.0, v.widgets.hovered.bg_fill);
+    }
+    let color = if !t.stream_ready {
+        v.weak_text_color()
+    } else if current {
+        v.selection.stroke.color
+    } else {
+        v.text_color()
+    };
+    row.widget_info(|| {
+        let label = format!(
+            "{num}. {}, {}, {}",
+            t.title,
+            artists(t),
+            duration(t.duration)
+        );
+        WidgetInfo::labeled(WidgetType::Button, t.stream_ready, label)
+    });
+    let w = rect.width();
+    // Text in [x0, x1) from the left edge, clipped so columns never overlap.
+    let cell = |x0: f32, x1: f32, text: String, align: Align2| {
+        let clip = egui::Rect::from_x_y_ranges(
+            (rect.left() + x0)..=(rect.left() + x1 - 6.0),
+            rect.y_range(),
+        );
+        let x = if align == Align2::RIGHT_CENTER {
+            clip.right()
+        } else {
+            clip.left()
+        };
+        let font = FontId::proportional(14.0);
+        let at = egui::pos2(x, rect.center().y);
+        ui.painter_at(clip).text(at, align, text, font, color);
+    };
+    let (c_art, c_alb) = (w * 0.5, w * 0.75);
+    cell(8.0, 44.0, num, Align2::LEFT_CENTER);
+    cell(44.0, c_art, t.title.clone(), Align2::LEFT_CENTER);
+    if album {
+        cell(c_art, c_alb, artists(t), Align2::LEFT_CENTER);
+        cell(c_alb, w - 56.0, t.album.title.clone(), Align2::LEFT_CENTER);
+    } else {
+        cell(c_art, w - 56.0, artists(t), Align2::LEFT_CENTER);
+    }
+    cell(w - 56.0, w, duration(t.duration), Align2::RIGHT_CENTER);
+}
+
 /// A track row's context menu. `ui.close()` also closes it when an entry is picked from the
 /// keyboard or a screen reader, which no pointer click does.
 fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
     row.context_menu(|ui| {
+        if ui.button(tr("Play next")).clicked() {
+            ctx.send(Action::PlayNext(vec![t.clone()]));
+            ui.close();
+        }
+        if ui.button(tr("Add to queue")).clicked() {
+            ctx.send(Action::AddToQueue(vec![t.clone()]));
+            ui.close();
+        }
         if ui.button(tr("Go to album")).clicked() {
             ctx.go(Route::Album(t.album.id));
             ui.close();
@@ -264,13 +288,12 @@ mod tests {
         ));
     }
 
-    /// Right-click a row, then pick "Go to album" (as a screen reader would): its album opens.
-    #[test]
-    fn context_menu_go_to_album_navigates() {
-        let ctx = egui::Context::default();
-        ctx.enable_accesskit();
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let list = vec![track()];
+    /// Right-clicks the first row of `list`: the output with its menu open.
+    fn open_menu(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        list: &[tidal::Track],
+    ) -> egui::FullOutput {
         let at = Pos2::new(100.0, 13.0); // the first row
         let right = |pressed| egui::Event::PointerButton {
             pos: at,
@@ -278,22 +301,49 @@ mod tests {
             pressed,
             modifiers: Default::default(),
         };
-        pass(&ctx, &tx, &list, vec![]);
+        pass(ctx, tx, list, vec![]);
         pass(
-            &ctx,
-            &tx,
-            &list,
+            ctx,
+            tx,
+            list,
             vec![egui::Event::PointerMoved(at), right(true)],
         );
-        pass(&ctx, &tx, &list, vec![right(false)]);
-        pass(&ctx, &tx, &list, vec![]); // the menu lays itself out
-        let (_, out) = pass(&ctx, &tx, &list, vec![]);
+        pass(ctx, tx, list, vec![right(false)]);
+        pass(ctx, tx, list, vec![]); // the menu lays itself out
+        pass(ctx, tx, list, vec![]).1
+    }
+
+    /// Right-click a row, then pick "Go to album" (as a screen reader would): its album opens.
+    #[test]
+    fn context_menu_go_to_album_navigates() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let list = vec![track()];
+        let out = open_menu(&ctx, &tx, &list);
         click(&out, "Add to favorites"); // panics unless the menu offers it too
         let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Go to album")]);
         assert!(
             matches!(events[..], [Event::Navigate(Route::Album(2))]),
             "{events:?}"
         );
+    }
+
+    /// "Play next" and "Add to queue" in a row's menu send that track to the queue.
+    #[test]
+    fn track_menu_play_next_sends_action() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let list = vec![track()];
+        let mut pick = |entry| {
+            let out = open_menu(&ctx, &tx, &list);
+            pass(&ctx, &tx, &list, vec![click(&out, entry)]);
+            rx.try_recv().expect("an action")
+        };
+        let ids = |t: &[tidal::Track]| t.iter().map(|t| t.id).collect::<Vec<_>>();
+        assert!(matches!(pick("Play next"), Action::PlayNext(t) if ids(&t) == [1]));
+        assert!(matches!(pick("Add to queue"), Action::AddToQueue(t) if ids(&t) == [1]));
     }
 
     #[test]

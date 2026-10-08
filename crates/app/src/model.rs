@@ -110,20 +110,15 @@ pub enum Action {
     Seek(Duration),
     SetVolume(f32),
     /// Right after the current track.
-    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
     PlayNext(Vec<tidal::Track>),
-    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
     AddToQueue(Vec<tidal::Track>),
     /// `to` is a slot, `0..=len`, counted before the move.
-    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
     MoveInQueue {
         from: usize,
         to: usize,
     },
     /// Removing the current track: the next one takes its place, playing or paused as it was.
-    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
     RemoveFromQueue(usize),
-    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
     PlayQueueIndex(usize),
     SetShuffle(bool),
     SetRepeat(Repeat),
@@ -203,7 +198,6 @@ pub enum Event {
 }
 
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code, reason = "read by the queue panel (Task 13)")]
 pub struct QueueSnapshot {
     pub tracks: Vec<tidal::Track>,
     pub current: Option<usize>,

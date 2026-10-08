@@ -10,6 +10,7 @@ mod login;
 mod mix;
 mod player_bar;
 mod playlist;
+mod queue_panel;
 mod rows;
 mod search;
 mod shelf;
@@ -274,6 +275,9 @@ pub fn draw(
             &mut state.queue_open,
         );
         sidebar::show(ui, model, &mut events);
+        if state.queue_open {
+            queue_panel::show(ui, model, tx);
+        }
     }
 
     egui::CentralPanel::default().show(ui, |ui| {
