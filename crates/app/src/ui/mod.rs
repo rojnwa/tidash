@@ -33,6 +33,8 @@ pub struct UiState {
     scrolling: fastframe_scroll::Scrolling,
     /// The queue panel shows; the player bar toggles it.
     pub queue_open: bool,
+    /// `TIDASH_AUTOSCROLL`: points a second the page scrolls down on its own.
+    pub autoscroll: Option<f32>,
 }
 
 impl Default for UiState {
@@ -45,6 +47,7 @@ impl Default for UiState {
             player: None,
             scrolling: Default::default(),
             queue_open: false,
+            autoscroll: None,
         }
     }
 }
@@ -281,6 +284,13 @@ pub fn draw(
     }
 
     egui::CentralPanel::default().show(ui, |ui| {
+        if let Some(speed) = state.autoscroll {
+            // The next vertical scroll to end takes it: the route's page (the queue's has ended).
+            let dt = ui.input(|i| i.stable_dt);
+            let animation = egui::style::ScrollAnimation::none();
+            ui.scroll_with_delta_animation(egui::vec2(0.0, -speed * dt), animation);
+            ui.ctx().request_repaint();
+        }
         let mut ctx = Ctx {
             model,
             tx,
@@ -615,6 +625,56 @@ mod tests {
             model.apply(ev);
         }
         assert!(model.errors.is_empty(), "{:?}", model.errors);
+    }
+
+    /// `TIDASH_AUTOSCROLL` moves the page's content up each pass and asks for the next one.
+    #[test]
+    fn autoscroll_scrolls_the_page_down() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState {
+            autoscroll: Some(600.0),
+            ..Default::default()
+        };
+        let route = Route::Collection(crate::model::CollectionTab::Tracks);
+        let mut model = testing::at(route.clone());
+        let data = PageData::Tracks(testing::tracks(100));
+        model.apply(Event::Page { route, data });
+        let mut pass = || {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                draw(ui, &model, &tx, &mut state);
+            });
+            out.textures_delta.clear(); // nothing renders them
+            let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+            let tree = out
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit is on");
+            let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
+            let summary =
+                |n: &egui::accesskit::Node| text(n).is_some_and(|t| t.starts_with("100 "));
+            let (_, summary) = tree
+                .nodes
+                .iter()
+                .find(|(_, n)| summary(n))
+                .expect("summary");
+            (summary.bounds().expect("placed").y0, repaint)
+        };
+        // The new scroll moves from the third pass on.
+        let (before, _) = pass();
+        pass();
+        pass();
+        let (after, repaint) = pass();
+        assert!(after < before, "{before} → {after}");
+        assert_eq!(repaint, std::time::Duration::ZERO);
     }
 
     /// A 3:2 image in a square keeps its middle two thirds; a square one is shown whole.

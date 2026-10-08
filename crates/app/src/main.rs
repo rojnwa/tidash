@@ -1,4 +1,12 @@
 //! Tidash desktop app.
+//!
+//! Debug switches for measuring frame pacing (spec §14), read once at start:
+//! - `TIDASH_RENDERER=wgpu|glow`: eframe's renderer; anything but `wgpu` (or unset) is glow.
+//! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page down this many points a second,
+//!   every pass, repainting without pause (negative scrolls up); unset, 0 or not a number is off.
+//! - `TIDASH_REPAINT_LOG=1`: logs each pass's repaint causes at info.
+//!
+//! The renderer in use is logged at start either way.
 
 mod backend;
 mod i18n;
@@ -17,6 +25,32 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
+/// The debug switches the crate docs list.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Switches {
+    renderer: eframe::Renderer,
+    autoscroll: Option<f32>,
+    repaint_log: bool,
+}
+
+impl Switches {
+    /// From `var`, which reads an environment variable.
+    fn parse(var: impl Fn(&str) -> Option<String>) -> Self {
+        let wgpu = var("TIDASH_RENDERER").is_some_and(|v| v.trim() == "wgpu");
+        Self {
+            renderer: if wgpu {
+                eframe::Renderer::Wgpu
+            } else {
+                eframe::Renderer::Glow
+            },
+            autoscroll: var("TIDASH_AUTOSCROLL")
+                .and_then(|v| v.trim().parse().ok())
+                .filter(|v: &f32| v.is_normal()),
+            repaint_log: var("TIDASH_REPAINT_LOG").is_some_and(|v| v.trim() == "1"),
+        }
+    }
+}
+
 struct App {
     model: Model,
     actions: UnboundedSender<Action>,
@@ -25,10 +59,32 @@ struct App {
     media: now_playing::MediaControls,
     /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
+    repaint_log: bool,
+}
+
+/// Which renderer eframe started, and on what adapter.
+#[allow(unsafe_code)]
+fn log_renderer(cc: &eframe::CreationContext<'_>) {
+    if let Some(wgpu) = &cc.wgpu_render_state {
+        log::info!("renderer: wgpu, {:?}", wgpu.adapter.get_info());
+    } else if let Some(gl) = &cc.gl {
+        use eframe::glow::{self, HasContext as _};
+        // SAFETY: eframe creates the app on this thread with this context current (its painter
+        // has just used it); these are read-only queries of strings every OpenGL version has.
+        let (renderer, vendor, version) = unsafe {
+            (
+                gl.get_parameter_string(glow::RENDERER),
+                gl.get_parameter_string(glow::VENDOR),
+                gl.get_parameter_string(glow::VERSION),
+            )
+        };
+        log::info!("renderer: glow, {renderer} ({vendor}), OpenGL {version}");
+    }
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>, started: Instant) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, started: Instant, switches: Switches) -> Self {
+        log_renderer(cc);
         setup_look(&cc.egui_ctx);
         // The images cache: the backend opens it off this thread, for both.
         let artwork = Arc::new(OnceLock::new());
@@ -36,13 +92,16 @@ impl App {
         let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
         let ctx = cc.egui_ctx.clone();
         let media = now_playing::MediaControls::start(move || ctx.request_repaint(), artwork);
+        let mut ui = ui::UiState::default();
+        ui.autoscroll = switches.autoscroll;
         Self {
             model: Model::default(),
             actions,
             events,
-            ui: ui::UiState::default(),
+            ui,
             media,
             started: Some(started),
+            repaint_log: switches.repaint_log,
         }
     }
 
@@ -113,6 +172,11 @@ impl eframe::App for App {
         if let Some(t) = self.started.take() {
             log::info!("first frame {} ms after start", t.elapsed().as_millis());
         }
+        if self.repaint_log {
+            let ctx = ui.ctx();
+            let (pass, causes) = (ctx.cumulative_pass_nr(), ctx.repaint_causes());
+            log::info!("pass {pass}: repaint causes {causes:?}");
+        }
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.model.apply(ev);
         }
@@ -127,9 +191,58 @@ fn main() -> eframe::Result {
         // "4 bytes of junk".
         .filter("warn,tidash=info,symphonia_core::formats::probe=error")
         .init();
+    let switches = Switches::parse(|k| std::env::var(k).ok());
+    let options = eframe::NativeOptions {
+        renderer: switches.renderer,
+        ..Default::default()
+    };
     eframe::run_native(
         "tidash",
-        eframe::NativeOptions::default(),
-        Box::new(move |cc| Ok(Box::new(App::new(cc, started)))),
+        options,
+        Box::new(move |cc| Ok(Box::new(App::new(cc, started, switches)))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Switches;
+    use eframe::Renderer;
+
+    #[test]
+    fn switches_parse_and_default_off() {
+        let parse = |vars: &[(&str, &str)]| {
+            Switches::parse(|k| {
+                let v = vars.iter().find(|(name, _)| *name == k);
+                v.map(|(_, v)| v.to_string())
+            })
+        };
+        let off = Switches {
+            renderer: Renderer::Glow,
+            autoscroll: None,
+            repaint_log: false,
+        };
+        assert_eq!(parse(&[]), off);
+        let on = [
+            ("TIDASH_RENDERER", "wgpu"),
+            ("TIDASH_AUTOSCROLL", "1500"),
+            ("TIDASH_REPAINT_LOG", "1"),
+        ];
+        let want = Switches {
+            renderer: Renderer::Wgpu,
+            autoscroll: Some(1500.0),
+            repaint_log: true,
+        };
+        assert_eq!(parse(&on), want);
+        assert_eq!(
+            parse(&[("TIDASH_AUTOSCROLL", "-200.5")]).autoscroll,
+            Some(-200.5)
+        );
+        for junk in ["glow", "WGPU2", "vulkan", ""] {
+            assert_eq!(parse(&[("TIDASH_RENDERER", junk)]), off, "{junk:?}");
+        }
+        for junk in ["0", "fast", "", "NaN", "inf"] {
+            assert_eq!(parse(&[("TIDASH_AUTOSCROLL", junk)]), off, "{junk:?}");
+        }
+        assert_eq!(parse(&[("TIDASH_REPAINT_LOG", "0")]), off);
+    }
 }
