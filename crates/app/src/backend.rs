@@ -35,13 +35,14 @@ pub fn start(
                     return;
                 }
             };
+            // The store blocks: read it before the runtime runs on this thread. Logging in
+            // first lets the UI leave the login page before the device is open.
+            let mut backend = Backend::new(Arc::clone(&emit), tidal::default_store());
             let (msg_tx, msg_rx) = unbounded_channel();
-            let playback = open_player(&msg_tx).map(|p| {
+            backend.playback = open_player(&msg_tx).map(|p| {
                 emit.send(Event::Player(p.clone()));
-                Playback::new(p, emit.clone(), msg_tx)
+                Playback::new(p, emit, msg_tx)
             });
-            // The store blocks: read it before the runtime runs on this thread.
-            let backend = Backend::new(emit, playback, tidal::default_store());
             rt.block_on(backend.run(action_rx, msg_rx));
         });
     if let Err(e) = spawned {
@@ -124,7 +125,6 @@ impl Backend {
     /// from that.
     fn new(
         emit: Arc<Emitter>,
-        playback: Option<Playback>,
         (store, stored): (Arc<dyn TokenStore>, tidal::Result<Option<tidal::Session>>),
     ) -> Self {
         let mut backend = Self {
@@ -141,7 +141,7 @@ impl Backend {
             pkce: None,
             search_task: None,
             client: None,
-            playback,
+            playback: None,
         };
         backend.resume(stored);
         backend
@@ -391,7 +391,7 @@ mod tests {
             tx,
             waker: Box::new(|| {}),
         });
-        let backend = Backend::new(emit, None, (store, stored));
+        let backend = Backend::new(emit, (store, stored));
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
