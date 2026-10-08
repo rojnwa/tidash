@@ -42,13 +42,10 @@ pub async fn fetch(c: &Client, route: &Route) -> tidal::Result<PageData> {
     })
 }
 
-/// Loads `route` in the background: the saved copy at once, then the fresh one. A failed
-/// refresh after a saved copy only marks the app offline; with nothing shown the page fails.
-pub fn open(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) {
-    tokio::spawn(load(c, route, emit, msgs));
-}
-
-async fn load(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) {
+/// Loads `route`: the saved copy at once, then the fresh one. After a saved copy, a refresh
+/// that cannot reach TIDAL only marks the app offline and one TIDAL refuses keeps the copy;
+/// with nothing shown the page fails. The backend spawns it, to abort it on logout.
+pub async fn open(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) {
     let saved = fetch(&c.cache_only(), &route).await.ok();
     let shown = saved.is_some();
     if let Some(data) = saved {
@@ -61,10 +58,14 @@ async fn load(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: UnboundedS
             emit.send(Event::Offline(false));
         }
         Err(e) if session_expired(&e, &c, &msgs) => {}
-        Err(e) if shown => {
+        Err(tidal::Error::Http(e)) if shown => {
             log::info!("showing the saved {route:?}: {e}");
             emit.send(Event::Offline(true));
         }
+        Err(e) if shown => emit.send(Event::Error(format!(
+            "{}: {e}",
+            tr("Could not refresh this page")
+        ))),
         Err(e) => {
             emit.send(Event::PageFailed(route));
             emit.send(Event::Error(format!(
@@ -144,7 +145,7 @@ mod tests {
             waker: Box::new(|| {}),
         });
         let (msgs, mut msg_rx) = unbounded_channel();
-        load(c, explore(), emit, msgs).await;
+        open(c, explore(), emit, msgs).await;
         let expired = matches!(msg_rx.try_recv(), Ok(Msg::SessionExpired(_)));
         (events.try_iter().collect(), expired)
     }
@@ -195,6 +196,21 @@ mod tests {
         let (events, expired) = load_explore(client(&base, &saved)).await;
         assert!(
             matches!(events[..], [Event::Page { .. }, Event::Offline(true)]),
+            "{events:?}"
+        );
+        assert!(!expired);
+    }
+
+    /// Online, but the refresh is refused (a deleted playlist's 404): not "offline".
+    #[tokio::test]
+    async fn refused_refresh_with_cache_keeps_the_page_and_reports_once() {
+        let server = MockServer::start().await;
+        serve_explore(&server, Some(1)).await; // then 404s
+        let c = client(&server.uri(), &cache("refused"));
+        load_explore(c.clone()).await;
+        let (events, expired) = load_explore(c).await;
+        assert!(
+            matches!(events[..], [Event::Page { .. }, Event::Error(_)]),
             "{events:?}"
         );
         assert!(!expired);

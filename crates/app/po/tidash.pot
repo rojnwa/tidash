@@ -89,6 +89,10 @@ msgstr ""
 msgid "Could not load the page"
 msgstr ""
 
+#: src/pages.rs
+msgid "Could not refresh this page"
+msgstr ""
+
 #: src/ui/album.rs
 msgid "{n} track"
 msgid_plural "{n} tracks"
