@@ -231,13 +231,18 @@ impl Track {
     /// one at byte 0 (downloaded already, so local) and seeks forward. Returns where it landed.
     fn seek(&mut self, to: Duration) -> Result<Duration, DecodeError> {
         let rate = f64::from(self.decoder.rate());
-        if self.stale || to.as_secs_f64() * rate < self.decoded as f64 {
+        if self.stale || self.behind(to) {
             self.decoder = Decoder::new(Box::new(self.file.forward()?))?;
             (self.decoded, self.stale) = (0, false);
         }
         let at = self.decoder.seek(to).inspect_err(|_| self.stale = true)?;
         self.decoded = (at.as_secs_f64() * rate).round() as u64;
         Ok(at)
+    }
+
+    /// `to` lies before what the decoder went through already.
+    fn behind(&self, to: Duration) -> bool {
+        to.as_secs_f64() * f64::from(self.decoder.rate()) < self.decoded as f64
     }
 
     /// The next packet. A stale decoder is first rebuilt back at `decoded`; the frames it
@@ -424,6 +429,7 @@ impl Engine {
 
     fn seek(&mut self, to: Duration) {
         let Some(t) = &mut self.track else { return };
+        let back = t.behind(to);
         match t.seek(to) {
             Ok(at) => {
                 let skip = to.saturating_sub(at).as_secs_f64() * f64::from(t.decoder.rate());
@@ -438,8 +444,14 @@ impl Engine {
                 let id = t.id;
                 self.fail(id, e.to_string());
             }
+            // Going back rebuilds the decoder over data it decoded before: a real failure.
+            Err(e) if back => {
+                let id = t.id;
+                self.fail(id, e.to_string());
+            }
             Err(_) => {
-                // symphonia knows no fMP4 duration up front: a refused seek is past the end.
+                // symphonia knows no fMP4 duration up front: a refused forward seek is past
+                // the end.
                 let id = t.id;
                 self.emit(PlayerEvent::TrackEnded(id));
                 self.stop(Duration::ZERO);
@@ -685,6 +697,28 @@ mod tests {
         let straight = decode_all(None);
         assert_eq!(straight.len(), 22_050 * 2);
         assert!(decode_all(Some(5)) == straight, "resumed decode differs");
+    }
+
+    /// Only a forward seek can be refused for lying past the end. A backward one that fails
+    /// (here the rebuilt decoder finds the data gone bad) is an error, not the track's end.
+    #[test]
+    fn a_failed_backward_seek_is_an_error() {
+        let (_player, events, _r, mut e) = parts();
+        e.command(PlayerCmd::Load(fixture(1)));
+        let t = e.track.as_mut().unwrap();
+        for _ in 0..5 {
+            t.next().unwrap();
+        }
+        let garbage = io::repeat(0x5a).take(64 * 1024);
+        t.file = ProgressiveFile::spawn(Box::new(garbage), None, &e.interrupt).unwrap();
+        e.command(PlayerCmd::Seek(Duration::ZERO));
+        let seen: Vec<_> = events.try_iter().collect();
+        assert!(
+            seen.iter()
+                .any(|ev| matches!(ev, PlayerEvent::Error { id: 1, .. })),
+            "{seen:?}"
+        );
+        assert!(!seen.contains(&PlayerEvent::TrackEnded(1)), "{seen:?}");
     }
 
     #[test]
