@@ -1,0 +1,224 @@
+{
+  "limit": 100,
+  "offset": 0,
+  "totalNumberOfItems": 3,
+  "items": [
+    {
+      "created": "2026-10-07T10:32:10.599+0000",
+      "item": {
+        "id": 547494409,
+        "title": "critic",
+        "duration": 146,
+        "replayGain": -12.1,
+        "peak": 0.999885,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2026-08-14T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 51,
+        "copyright": "Arising Empire",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/547494409",
+        "isrc": "DEYO62600178",
+        "editable": false,
+        "explicit": true,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 28964992,
+          "name": "thrown",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "d9515dde-07f1-4237-bca9-24d1ec2306d7"
+        },
+        "artists": [
+          {
+            "id": 28964992,
+            "name": "thrown",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "d9515dde-07f1-4237-bca9-24d1ec2306d7"
+          }
+        ],
+        "album": {
+          "id": 547494407,
+          "title": "critic",
+          "cover": "47719978-fd9e-4f18-befd-5e0681c9c267",
+          "vibrantColor": null,
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "001fbe0add2aef3e50081b103c1757"
+        }
+      }
+    },
+    {
+      "created": "2026-10-06T16:03:29.621+0000",
+      "item": {
+        "id": 526366074,
+        "title": "Når Solen Går Ned",
+        "duration": 240,
+        "replayGain": -11.37,
+        "peak": 0.988338,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2026-05-19T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 8,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 18,
+        "copyright": "2026 Mirar",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "url": "http://www.tidal.com/track/526366074",
+        "isrc": "QT6642693055",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 18102056,
+          "name": "Mirar",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 18102056,
+            "name": "Mirar",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          }
+        ],
+        "album": {
+          "id": 526366065,
+          "title": "Gradus Ad Parnassum",
+          "cover": "0615924f-8073-47f1-9de6-3c998a6b3a4f",
+          "vibrantColor": null,
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "0016b1f7093f69863209a2b5c5f6bb"
+        }
+      }
+    },
+    {
+      "created": "2026-09-04T11:23:19.505+0000",
+      "item": {
+        "id": 326242566,
+        "title": "Eternal (Sam Sulek Edit)",
+        "duration": 147,
+        "replayGain": -13.06,
+        "peak": 1.0,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2023-11-07T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 12,
+        "copyright": "ANIZYZ",
+        "bpm": 140,
+        "key": "D",
+        "keyScale": "MINOR",
+        "url": "http://www.tidal.com/track/326242566",
+        "isrc": "SE6XX2392597",
+        "editable": false,
+        "explicit": true,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 34177292,
+          "name": "ANIZYZ",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 34177292,
+            "name": "ANIZYZ",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          },
+          {
+            "id": 9643310,
+            "name": "Mqx",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          }
+        ],
+        "album": {
+          "id": 326242564,
+          "title": "Eternal (Sam Sulek Edit)",
+          "cover": "110d81ea-14ff-4323-9c43-427584e54048",
+          "vibrantColor": "#FFFFFF",
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "001745df5f910ea0f3fa7c52fa4528"
+        }
+      }
+    }
+  ]
+}

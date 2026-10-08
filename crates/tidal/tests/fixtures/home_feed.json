@@ -1,0 +1,2334 @@
+{
+  "uuid": "6d9cf0f6-282b-4ea3-b55b-f00f010fe913",
+  "page": {
+    "cursor": "QkFTRURfT05fWU9VUl9JTlRFUkVTVFNfMQ"
+  },
+  "header": {
+    "vibes": {
+      "items": [
+        {
+          "name": "For you",
+          "type": "STATIC"
+        },
+        {
+          "name": "Staff Picks",
+          "type": "EDITORIAL"
+        },
+        {
+          "name": "Uploads",
+          "type": "UPLOADS"
+        }
+      ]
+    }
+  },
+  "items": [
+    {
+      "type": "SHORTCUT_LIST",
+      "moduleId": "SHORTCUT_LIST",
+      "title": "Shortcuts",
+      "icons": [],
+      "items": [
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "TRACK_MIX",
+            "countryCode": "US",
+            "updated": 1791484452285,
+            "id": "0018a8937f3ec5cbb33027d7841f90",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAg?token=92f3597a32c76a79d1d31c1d2d3453c6e7c1efd3",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAg?token=58225b72b40202a6a9f255d868a862a1b129c8dc",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAg?token=09a832477ca7c928cec12a0a7cf810942dd76e33",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAjgB?token=1687edb130ab746cadef19373b3ac9bf3c09d1ee",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAjgB?token=19ae0b53d9b0a0768ed948b729ca19c2323816ed",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokZTE4NmE1YzQvMmYxYy80YTNiLzgwMDYvYjM4ZTYzOGUwMTM5GiRmNDJiOWZkYS9jMzgxLzRiOTYvOGMzYy8wNGRhYWI0YjFmNTgaJDViODhhMGYxL2I0MzAvNDNmNy84M2FiLzRhMjdiOWQ2MGE3YiILVHJhY2sgUmFkaW8iCjQwNSBBbnRoZW0qByM1Q0QzRTUwAjgB?token=c917e873564c5fd273b6f4e91418063d3c470ee9",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "405 Anthem",
+              "color": "#5CD3E5"
+            },
+            "subtitleTextInfo": {
+              "text": "Mqx",
+              "color": "#5CD3E5"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#5CD3E5"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "track": {
+              "trackId": 265022017,
+              "trackGroup": "1eccafaa81fbe4bb2cf49333490e4823",
+              "trackTitle": "405 Anthem",
+              "trackImage": {
+                "imageUuid": "e186a5c4-2f1c-4a3b-8006-b38e638e0139",
+                "vibrantColor": "#5ad3e5"
+              }
+            },
+            "artist": {
+              "artistId": 9643310,
+              "artistName": "Mqx",
+              "artistImage": null
+            },
+            "isAI": false
+          }
+        },
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "DISCOVERY_MIX",
+            "countryCode": "US",
+            "updated": 1791450531210,
+            "id": "016eedb7245003d6f3514d4a943898",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMAC/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=3bf5fee0530423896df4b867bdcd229f3c1f5b9c",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAF/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=54d094131f3180c9f994a3eec9f43055886a4994",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwL/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=8fa5552199dbd4f5450c959a98b0b2d2a317b25e",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMAC/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=856b13462a002405bb2f049ed273e37e316f2dd5",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAF/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=e76c3be2b806c9c17db1d6d2b2ab9af466775b60",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwL/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=96e3ca04475f71a66eaa094fba390f053663a7c3",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "My Daily Discovery",
+              "color": "#FBD293"
+            },
+            "subtitleTextInfo": {
+              "text": "Songs by new and familiar artists inspired by your listening. Updates every morning.",
+              "color": "#FBD293"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#FBD293"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "userId": 12345,
+            "atDate": "content_uploads"
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 22760269,
+            "title": "This Is Exile",
+            "artists": [
+              {
+                "id": 3767580,
+                "name": "Whitechapel",
+                "handle": null,
+                "picture": "4c97c449-c270-4833-ac65-cd91b2ca81c6",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 2578,
+            "cover": "9b38ff56-3f11-40cb-950c-e0fe7d0861f1",
+            "vibrantColor": "#FFFFFF",
+            "videoCover": null,
+            "copyright": "(C) 2008 Metal Blade Records, Inc.",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 11,
+            "numberOfVideos": 0,
+            "popularity": 32,
+            "doublePopularity": 0.32041210663955383,
+            "version": null,
+            "releaseDate": "2008-07-08",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "039841468120",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804f5f459e221b9caf105618f3ee22",
+              "releaseDate": "2008-07-08",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2008-07-08T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 1650,
+            "providerName": "The Orchard",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": null,
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": true,
+            "priceCode": null,
+            "validFrom": "2008-07-08T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "DAILY_MIXES",
+      "title": "Custom mixes",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/DAILY_MIXES/view-all",
+      "items": [
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "DISCOVERY_MIX",
+            "countryCode": "US",
+            "updated": 1791450531210,
+            "id": "016eedb7245003d6f3514d4a943898",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMAC/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=3bf5fee0530423896df4b867bdcd229f3c1f5b9c",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAF/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=54d094131f3180c9f994a3eec9f43055886a4994",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwL/CAEQCCIDMjgxKgcjRkJEMjkzMAQ?token=8fa5552199dbd4f5450c959a98b0b2d2a317b25e",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMAC/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=856b13462a002405bb2f049ed273e37e316f2dd5",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAF/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=e76c3be2b806c9c17db1d6d2b2ab9af466775b60",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwL/CAEQCCIDMjgxKgcjRkJEMjkzMAQ4AQ?token=96e3ca04475f71a66eaa094fba390f053663a7c3",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "My Daily Discovery",
+              "color": "#FBD293"
+            },
+            "subtitleTextInfo": {
+              "text": "Songs by new and familiar artists inspired by your listening. Updates every morning.",
+              "color": "#FBD293"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#FBD293"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "userId": 12345,
+            "atDate": "content_uploads"
+          }
+        },
+        {
+          "type": "MIX",
+          "following": true,
+          "data": {
+            "type": "DAILY_MIX",
+            "countryCode": "US",
+            "updated": 1791448896473,
+            "id": "002c2dd49e6c588d521d134e915284",
+            "isStableId": false,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=f4ecfbac8b5324830c5e82bf4b878ef86a30ad92",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=5cb73447cd925f2e9a605823dd7235cb1672471b",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=f8704edd3a3666b764c9a13bed5a18fc7facfb86",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=3c898ff96732b4599c21fb042d80b8afa1910b1d",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=9942f2a4773930999f72ee015a6c7d66e79257df",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=26a370e230cf793bb1161b483a0bdbf82004a07b",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "My Mix 1",
+              "color": "#D2AC54"
+            },
+            "subtitleTextInfo": {
+              "text": "Yungblud, Polyphia, Chiodos and more",
+              "color": "#D2AC54"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#D2AC54"
+            },
+            "description": {
+              "text": "Alternative Rock, Post-Hardcore & Modern Metalcore",
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "artists": [
+              {
+                "artistId": 5744956,
+                "artistName": "Polyphia",
+                "artistImage": {
+                  "imageUuid": "6b3633e6-6b8f-4296-b42b-e361e6a282df",
+                  "vibrantColor": "#d29814"
+                }
+              },
+              {
+                "artistId": 7658307,
+                "artistName": "LANDMVRKS",
+                "artistImage": {
+                  "imageUuid": "43344ea8-30cb-457a-993e-12d9b2aa5cbd",
+                  "vibrantColor": "#c6ab74"
+                }
+              },
+              {
+                "artistId": 9163057,
+                "artistName": "Spiritbox",
+                "artistImage": {
+                  "imageUuid": "6183546a-7988-4364-9b24-95d0bd8bb4a2",
+                  "vibrantColor": "#FFFFFF"
+                }
+              }
+            ],
+            "mixNumber": 1,
+            "userId": 12345
+          }
+        },
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "DAILY_MIX",
+            "countryCode": "US",
+            "updated": 1791448896473,
+            "id": "002b934724de388c73ec09aba2c2de",
+            "isStableId": false,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAg?token=4fcee3d9e8cf2f760a2ecb35fda7e2808e7681ba",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAg?token=58439593c6053d0c1cdc34ca120fdbc8bb3396f6",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAg?token=ab3291220233b451f0bad18ef5eafd1d372df0d8",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAjgB?token=88a5b413790dbdf55eac04f2e4cce64c91b19cb1",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAjgB?token=19755fa9c868914deeb8b6c62f0b4c6a6016c67a",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDgwMzIxNmVlLzU5YTkvNDM1NC85YjgyLzAyOTEwN2ZiZTM4NhokZGYyMjEwZjAvY2VkNy80YTdmL2JlZWEvNmNhNGU5NDdlYjUxGiQ1NGVjN2Q5Mi84YjZjLzQ0YmEvYmVjMS8xMTQ2ZjJhYWIwM2EiATIqByNENDU1NTcwAjgB?token=e60c6648800c6b9f15837915c14d4d28f97eef40",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "My Mix 2",
+              "color": "#D45557"
+            },
+            "subtitleTextInfo": {
+              "text": "Dxrk ダーク, Sadfriendd, Playaphonk and more",
+              "color": "#D45557"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#D45557"
+            },
+            "description": {
+              "text": "Drift Phonk and Dark Wave",
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "artists": [
+              {
+                "artistId": 23933936,
+                "artistName": "Dxrk ダーク",
+                "artistImage": {
+                  "imageUuid": "803216ee-59a9-4354-9b82-029107fbe386",
+                  "vibrantColor": "#d41014"
+                }
+              },
+              {
+                "artistId": 16003732,
+                "artistName": "Sadfriendd",
+                "artistImage": {
+                  "imageUuid": "df2210f0-ced7-4a7f-beea-6ca4e947eb51",
+                  "vibrantColor": "#f7b584"
+                }
+              },
+              {
+                "artistId": 7915643,
+                "artistName": "Scarlxrd",
+                "artistImage": {
+                  "imageUuid": "54ec7d92-8b6c-44ba-bec1-1146f2aab03a",
+                  "vibrantColor": "#f99e8c"
+                }
+              }
+            ],
+            "mixNumber": 2,
+            "userId": 12345
+          }
+        }
+      ]
+    },
+    {
+      "type": "COMPACT_GRID_CARD",
+      "moduleId": "CONTINUE_LISTEN_TO",
+      "title": "Recently played",
+      "icons": [],
+      "viewAll": "home/pages/CONTINUE_LISTEN_TO/view-all",
+      "subtitle": null,
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 567848259,
+            "title": "LGTM",
+            "artists": [
+              {
+                "id": 87737823,
+                "name": "Degenerative Pixels",
+                "handle": null,
+                "picture": null,
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 305,
+            "cover": "3c45f7cf-d897-4329-9a2c-e2854310145b",
+            "vibrantColor": "#66e07a",
+            "videoCover": null,
+            "copyright": "13888376 Records DK",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 1,
+            "numberOfVideos": 0,
+            "popularity": 0,
+            "doublePopularity": 0.0,
+            "version": null,
+            "releaseDate": "2026-10-07",
+            "type": "SINGLE",
+            "explicit": false,
+            "upc": "700540328809",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1f1c215f7d6629998747d676b5ebdf02",
+              "releaseDate": "2026-10-07",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-07T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 706,
+            "providerName": "Distro Kid",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2026-10-07T06:11:42.085413Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2026-10-07T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": true
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 3306137,
+            "title": "Practice What You Preach",
+            "artists": [
+              {
+                "id": 14813,
+                "name": "Testament",
+                "handle": null,
+                "picture": "8ad9b681-167f-446c-876c-789fc1f30fe0",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 2781,
+            "cover": "083d8cc5-a497-4058-9673-3ac60d86e695",
+            "vibrantColor": null,
+            "videoCover": null,
+            "copyright": "© 1989 Atlantic Recording and Anthem Entertainment for the United States and WEA International  Inc. for the world outside of the United States",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 10,
+            "numberOfVideos": 0,
+            "popularity": 45,
+            "doublePopularity": 0.4468386115553699,
+            "version": null,
+            "releaseDate": "1989-01-01",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "075678200960",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804f11281b61cb9caad10928e183a2",
+              "releaseDate": "1989-01-01",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2012-08-01T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2010-01-16T23:06:25.391Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2012-08-01T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 293301129,
+            "title": "Random Access Memories (10th Anniversary Edition)",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 6611,
+            "cover": "8723c4d1-12b4-402c-8d88-898475087e25",
+            "vibrantColor": "#b9c2e3",
+            "videoCover": "7660a82d-e3da-4ada-8c75-8abb9bacd50c",
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 2,
+            "numberOfTracks": 22,
+            "numberOfVideos": 0,
+            "popularity": 83,
+            "doublePopularity": 0.8274526194143352,
+            "version": "10th Anniversary Edition",
+            "releaseDate": "2013-05-20",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "196589921154",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7dfa23d8b9cac1aef5938ffe2",
+              "releaseDate": "2013-05-20",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-05-12T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-05-05T22:18:52.205661Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-05-12T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "NEW_ALBUM_SUGGESTIONS",
+      "title": "Suggested new albums for you",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/NEW_ALBUM_SUGGESTIONS/view-all",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 566318157,
+            "title": "How To Love",
+            "artists": [
+              {
+                "id": 8913982,
+                "name": "Shiloh Dynasty",
+                "handle": null,
+                "picture": "03466b74-606c-43b6-90c4-84c7b7f79de6",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 76564492,
+                "name": "VNI.",
+                "handle": null,
+                "picture": null,
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 1357,
+            "cover": "bfb4283e-52e5-4c2a-821a-d8205760a16f",
+            "vibrantColor": null,
+            "videoCover": null,
+            "copyright": "VNI / CC",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 10,
+            "numberOfVideos": 0,
+            "popularity": 52,
+            "doublePopularity": 0.5161827602179124,
+            "version": null,
+            "releaseDate": "2026-10-04",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "612891275599",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1f1bdc40bae0683bb54b103018b11d22",
+              "releaseDate": "2026-10-04",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-04T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 848,
+            "providerName": "Label Engine",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2026-10-01T18:15:10.023713Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2026-10-04T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 561107007,
+            "title": "red",
+            "artists": [
+              {
+                "id": 13268796,
+                "name": "Lil Darkie",
+                "handle": null,
+                "picture": "41e69c5f-49ca-4e49-a9a9-e914d6ceee4f",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 1956,
+            "cover": "69b07450-480c-4d64-a50e-3afe3d1b7c0d",
+            "vibrantColor": null,
+            "videoCover": null,
+            "copyright": "2026 Lil Darkie",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 11,
+            "numberOfVideos": 0,
+            "popularity": 51,
+            "doublePopularity": 0.5063927896386546,
+            "version": null,
+            "releaseDate": "2026-10-06",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "712132169820",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1f1b03cfa856b1580fd31a3ff15a3b72",
+              "releaseDate": "2026-10-06",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-06T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 931,
+            "providerName": "Vydia",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2026-09-14T13:05:33.570607Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": true,
+            "priceCode": null,
+            "validFrom": "2026-10-06T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 555130524,
+            "title": "The Last Goodbye",
+            "artists": [
+              {
+                "id": 3500380,
+                "name": "Escape the Fate",
+                "handle": null,
+                "picture": "093b865d-f486-4d34-8d31-478f58fa257d",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 2875,
+            "cover": "946db973-5051-4ce5-9deb-ef380260af4c",
+            "vibrantColor": "#b43c4b",
+            "videoCover": null,
+            "copyright": "© 2026 Big Noise Music Group, LLC",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 13,
+            "numberOfVideos": 0,
+            "popularity": 55,
+            "doublePopularity": 0.5488339620025479,
+            "version": null,
+            "releaseDate": "2026-10-02",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "823375394259",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1f19fd97ef12bb18792832575759f342",
+              "releaseDate": "2026-10-02",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-02T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 53,
+            "providerName": "Virgin Music Group",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2026-08-24T16:33:07.465301Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2026-10-02T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "YOUR_FAVORITE_ARTISTS",
+      "title": "Your favorite artists",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/YOUR_FAVORITE_ARTISTS/view-all",
+      "items": [
+        {
+          "type": "ARTIST",
+          "following": true,
+          "data": {
+            "id": 8847,
+            "name": "Daft Punk",
+            "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+            "popularity": 92,
+            "doublePopularity": 0.92286115380844,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              },
+              {
+                "categoryId": 2,
+                "category": "Songwriter"
+              },
+              {
+                "categoryId": 11,
+                "category": "Performer"
+              }
+            ],
+            "mixes": {
+              "ARTIST_MIX": "0002737adb8d077f4591c4cdb7ba60"
+            },
+            "vibrantColor": "#FFFFFF",
+            "selectedAlbumCoverFallback": null,
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": "LABEL"
+          }
+        },
+        {
+          "type": "ARTIST",
+          "following": false,
+          "data": {
+            "id": 3671189,
+            "name": "TKKG",
+            "picture": "8415f862-1185-4869-8da9-4eac848fc4a4",
+            "popularity": 49,
+            "doublePopularity": 0.48978697131502297,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              },
+              {
+                "categoryId": 11,
+                "category": "Performer"
+              }
+            ],
+            "mixes": {},
+            "vibrantColor": "#eddfa0",
+            "selectedAlbumCoverFallback": null,
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": "LABEL"
+          }
+        },
+        {
+          "type": "ARTIST",
+          "following": false,
+          "data": {
+            "id": 19378318,
+            "name": "Sunday Without You",
+            "picture": null,
+            "popularity": 27,
+            "doublePopularity": 0.2736490443030218,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              },
+              {
+                "categoryId": 2,
+                "category": "Songwriter"
+              },
+              {
+                "categoryId": 11,
+                "category": "Performer"
+              }
+            ],
+            "mixes": {},
+            "vibrantColor": null,
+            "selectedAlbumCoverFallback": "f061de72-0954-43ea-a63f-32ee352a97b0",
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": null
+          }
+        }
+      ]
+    },
+    {
+      "type": "COMPACT_GRID_CARD",
+      "moduleId": "NEW_TRACK_SUGGESTIONS",
+      "title": "Recommended new tracks",
+      "icons": [],
+      "viewAll": "home/pages/NEW_TRACK_SUGGESTIONS/view-all",
+      "subtitle": null,
+      "items": [
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 558285301,
+            "editable": false,
+            "title": "Prey",
+            "album": {
+              "id": 558285297,
+              "title": "HOME (Live at the Sydney Opera House)",
+              "version": null,
+              "cover": "03f60d2b-43c2-4a6c-ae30-80065eaa02bc",
+              "vibrantColor": "#d46b5e",
+              "videoCover": null,
+              "releaseDate": "2026-12-04",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 17808,
+                "name": "Parkway Drive",
+                "handle": null,
+                "picture": "76a5cc94-6fd7-4675-bb18-92a4a76be4c5",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": "Live at the Sydney Opera House",
+            "duration": 372,
+            "popularity": 0,
+            "doublePopularity": 0.0,
+            "trackNumber": 4,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -11.69,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-07T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": null,
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 547,
+            "providerName": "IIP-DDS",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 2,
+                "name": "Rock",
+                "parentId": null
+              },
+              {
+                "id": 16,
+                "name": "Metal",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": null,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2026-09-03T23:28:01.649803Z",
+            "userId": null,
+            "downloadReady": true,
+            "priceCode": "FRONT",
+            "ai": false,
+            "isrc": "USEP42523005",
+            "peak": 0.999946,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "Epitaph",
+            "trackGroup": "1f1a7ef3fc1bdea8b2a919b0a4d166e3",
+            "firstAvailable": "2026-10-06T12:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2026-10-07T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 559820531,
+            "editable": false,
+            "title": "Crown In The Grave",
+            "album": {
+              "id": 559820530,
+              "title": "Crown In The Grave",
+              "version": null,
+              "cover": "6b668bac-b241-4aa9-9a98-e430d3ef3c9b",
+              "vibrantColor": null,
+              "videoCover": null,
+              "releaseDate": "2026-10-08",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 37312,
+                "name": "Trivium",
+                "handle": null,
+                "picture": "2128df3b-1f8c-41a4-8ee1-2da59803c0aa",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": null,
+            "duration": 296,
+            "popularity": 0,
+            "doublePopularity": 0.0,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -9.65,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-08T15",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": null,
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 16,
+                "name": "Metal",
+                "parentId": null
+              },
+              {
+                "id": 2,
+                "name": "Rock",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "keyScale": "MINOR",
+              "bpm": "143.0",
+              "key": "CSharp"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2026-09-09T18:44:44.356661Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "NLA322600380",
+            "peak": 0.89125,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "℗ 2026 Roadrunner Records, Inc.",
+            "trackGroup": "1f1ac7e92e47b1fbba37fd6535fab6c3",
+            "firstAvailable": "2026-10-08T14:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2026-10-08T15:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 559815227,
+            "editable": false,
+            "title": "Bittersweet",
+            "album": {
+              "id": 559815226,
+              "title": "Bittersweet",
+              "version": null,
+              "cover": "e9d10a58-384c-420f-83d1-5cdce770b7b9",
+              "vibrantColor": null,
+              "videoCover": null,
+              "releaseDate": "2026-10-08",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 4173135,
+                "name": "Holy Priest",
+                "handle": null,
+                "picture": null,
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": null,
+            "duration": 167,
+            "popularity": 0,
+            "doublePopularity": 0.0,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -9.3,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2026-10-08T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": null,
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 899,
+            "providerName": "AudioSalad",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              },
+              {
+                "id": 18,
+                "name": "Techno",
+                "parentId": 3
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "keyScale": "MAJOR",
+              "bpm": "165.0",
+              "key": "A"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2026-09-09T18:24:34.684146Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "DE1WF2600001",
+            "peak": 0.977295,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "2026 FXCK / Sick & Sound",
+            "trackGroup": "1f1ac7bbce0ccfa8535b9214652cf713",
+            "firstAvailable": "2026-10-07T11:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2026-10-08T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST_WITH_CONTEXT",
+      "moduleId": "BECAUSE_YOU_LISTENED_TO_ALBUM",
+      "title": "Because you listened to",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/BECAUSE_YOU_LISTENED_TO_ALBUM/view-all?itemId=1e804ef7dfa23d8b9cac1aef5938ffe2",
+      "header": {
+        "type": "ALBUM",
+        "following": false,
+        "latestRelease": false,
+        "data": {
+          "id": 20115556,
+          "title": "Random Access Memories",
+          "artists": [
+            {
+              "id": 8847,
+              "name": "Daft Punk",
+              "handle": null,
+              "picture": "c92cf3f5-066f-4f0a-87d0-c2bebff46d36",
+              "main": true,
+              "userId": null
+            }
+          ],
+          "duration": 4479,
+          "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+          "vibrantColor": "#efdd83",
+          "videoCover": null,
+          "copyright": "(P)  2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+          "numberOfVolumes": 1,
+          "numberOfTracks": 13,
+          "numberOfVideos": 0,
+          "popularity": 89,
+          "doublePopularity": 0.8852600407900277,
+          "version": null,
+          "releaseDate": "2013-05-20",
+          "type": "ALBUM",
+          "explicit": false,
+          "upc": "886443927087",
+          "audioQuality": "LOSSLESS",
+          "masterAlbum": {
+            "id": "1e804ef7dfa23d8b9cac1aef5938ffe2",
+            "releaseDate": "2013-05-20",
+            "categories": [
+              "STUDIO"
+            ]
+          },
+          "allowStreaming": true,
+          "streamStartDate": "2013-05-20T00",
+          "streamReady": true,
+          "payToStream": false,
+          "audioModes": [
+            "STEREO"
+          ],
+          "adSupportedStreamReady": true,
+          "mediaMetadata": {
+            "tags": [
+              "LOSSLESS"
+            ]
+          },
+          "providerId": 50,
+          "providerName": "Sony Music",
+          "djReady": true,
+          "stemReady": false,
+          "upload": false,
+          "accessType": "PUBLIC",
+          "createdAt": "2013-05-09T04:31:31.617Z",
+          "userId": null,
+          "artworkId": null,
+          "downloadReady": false,
+          "priceCode": null,
+          "validFrom": "2013-05-20T00:00:00",
+          "validUntil": "9999-01-01T00:00:00",
+          "ai": false
+        }
+      },
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 1550545,
+            "title": "Discovery",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 3669,
+            "cover": "7d3b9810-5634-400c-ad89-50609e0ce800",
+            "vibrantColor": "#dca60f",
+            "videoCover": null,
+            "copyright": "© 2001 Daft Life Limited",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 14,
+            "numberOfVideos": 0,
+            "popularity": 90,
+            "doublePopularity": 0.8984183174263245,
+            "version": null,
+            "releaseDate": "2001-03-12",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "0724384960650",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7dff05dcb9ca896e3ab61af42",
+              "releaseDate": "2001-03-12",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2005-01-24T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2008-01-09T17:58:47.351Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2005-01-24T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 43419726,
+            "title": "By Your Side",
+            "artists": [
+              {
+                "id": 3932005,
+                "name": "Breakbot",
+                "handle": null,
+                "picture": "7c7d3c1b-6b60-4bd0-af5f-78fc53215220",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 2761,
+            "cover": "6951a0d0-d5c1-42a2-b1f7-ba4e2d57f3b2",
+            "vibrantColor": "#d2462d",
+            "videoCover": null,
+            "copyright": "Ed Banger Records under exclusive licence to Because Music",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 14,
+            "numberOfVideos": 0,
+            "popularity": 46,
+            "doublePopularity": 0.46337405295631845,
+            "version": null,
+            "releaseDate": "2012-09-25",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "5060281612588",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804f6ab3fa1adb9cae9e1914059bd2",
+              "releaseDate": "2012-09-25",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2012-09-17T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 713,
+            "providerName": "Because Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": null,
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": true,
+            "priceCode": "Mini Album - Premium",
+            "validFrom": "2012-09-17T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 67237700,
+            "title": "24K Magic",
+            "artists": [
+              {
+                "id": 3658521,
+                "name": "Bruno Mars",
+                "handle": null,
+                "picture": "00b6904f-7ef7-4f79-8c53-2cb170d23c32",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 2012,
+            "cover": "5ba23dc5-fb5f-411c-a88f-a206ed56d92d",
+            "vibrantColor": "#8d1d1f",
+            "videoCover": null,
+            "copyright": "© 2016 Atlantic Recording Corporation for the United States and WEA International Inc. for the world outside of the United States. A Warner Music Group Company",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 9,
+            "numberOfVideos": 0,
+            "popularity": 77,
+            "doublePopularity": 0.7652269443326685,
+            "version": null,
+            "releaseDate": "2016-11-18",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "075679904126",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804f5450d544cb9ca8715d3211c2f2",
+              "releaseDate": "2016-11-18",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2016-11-18T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2016-11-16T00:55:06.414Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2016-11-18T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "RECOMMENDED_USERS_PLAYLISTS",
+      "title": "User playlists you’ll love",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/RECOMMENDED_USERS_PLAYLISTS/view-all",
+      "items": [
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "00000000-0000-4000-8000-000000000004",
+            "type": "USER",
+            "creator": {
+              "id": 12345,
+              "name": "User",
+              "picture": null,
+              "type": "USER"
+            },
+            "curators": [],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "PLAYLIST_IMPORTER",
+            "title": "Playlist D",
+            "description": "",
+            "image": "f25b17e5-b63b-43ad-b295-764dd18ed420",
+            "squareImage": "1b9b9788-c055-4f51-bed8-91bfd2191bf4",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000004",
+            "created": "2023-10-20T19:54:33.089+0000",
+            "lastUpdated": "2023-10-20T20:10:31.505+0000",
+            "lastItemAddedAt": "2023-10-20T19:54:33.882+0000",
+            "duration": 11783,
+            "numberOfTracks": 47,
+            "numberOfVideos": 0,
+            "promotedArtists": [],
+            "trn": "trn:playlist:00000000-0000-4000-8000-000000000004"
+          }
+        },
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "00000000-0000-4000-8000-000000000005",
+            "type": "USER",
+            "creator": {
+              "id": 12345,
+              "name": "User",
+              "picture": null,
+              "type": "USER"
+            },
+            "curators": [
+              {
+                "id": 12345,
+                "name": "User",
+                "handle": null,
+                "picture": null
+              }
+            ],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "DEFAULT",
+            "title": "Playlist E",
+            "description": "",
+            "image": "572e8886-0189-47e2-8c29-eb79c65798c8",
+            "squareImage": "86dfa468-529a-4497-9474-8385528060ac",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000005",
+            "created": "2026-04-03T12:22:06.291+0000",
+            "lastUpdated": "2026-06-20T15:53:33.080+0000",
+            "lastItemAddedAt": "2026-06-20T15:53:33.080+0000",
+            "duration": 4168,
+            "numberOfTracks": 16,
+            "numberOfVideos": 0,
+            "promotedArtists": [],
+            "trn": "trn:playlist:00000000-0000-4000-8000-000000000005"
+          }
+        },
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "00000000-0000-4000-8000-000000000006",
+            "type": "USER",
+            "creator": {
+              "id": 12345,
+              "name": "User",
+              "picture": null,
+              "type": "USER"
+            },
+            "curators": [],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "PLAYLIST_IMPORTER",
+            "title": "Playlist F",
+            "description": "",
+            "image": "ce685f3e-c86b-4d7b-9148-961a079f103e",
+            "squareImage": "997d60d0-a15f-4b2c-85f6-4a7a7063f7a1",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000006",
+            "created": "2023-01-19T00:56:34.512+0000",
+            "lastUpdated": "2023-01-19T01:11:16.385+0000",
+            "lastItemAddedAt": "2023-01-19T00:56:36.588+0000",
+            "duration": 3868,
+            "numberOfTracks": 19,
+            "numberOfVideos": 0,
+            "promotedArtists": [],
+            "trn": "trn:playlist:00000000-0000-4000-8000-000000000006"
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "SUGGESTED_RADIOS_MIXES",
+      "title": "Personal radio stations",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "home/pages/SUGGESTED_RADIOS_MIXES/view-all",
+      "items": [
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "TRACK_MIX",
+            "countryCode": "US",
+            "updated": 1791484452330,
+            "id": "001d83ed746d8e46cc6d04cc5c7e58",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjAC?token=bbebb1c21d9dde0522c788aff166aa869d710ceb",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjAC?token=d615d20eb1affce9684ef2511f11e269af38ecbf",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjAC?token=05341a10021c4ea19be0b6d758a4568418b1a573",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjACOAE?token=2a17016d0f2cce42860805e56fa65ad1797aa0cd",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjACOAE?token=f9dedf41ad9d627523f422de5ed5345524d5f404",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokMDliNTllNmUvNzE3ZS80M2UzL2IyZTIvZDJhMTUzYzI0Nzc1GiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDJmMDJmODk2LzkxNmEvNGZjOC85MDQxLzg3MDcwMjY1NzE4MCILVHJhY2sgUmFkaW8iEkdpb3JnaW8gYnkgTW9yb2RlcioHI0Y1RTI3RjACOAE?token=2c833bcc08868822c6e63a77b3e184fc225c7be6",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "Giorgio by Moroder",
+              "color": "#F5E27F"
+            },
+            "subtitleTextInfo": {
+              "text": "Daft Punk",
+              "color": "#F5E27F"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#F5E27F"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "track": {
+              "trackId": 211822893,
+              "trackGroup": "1ebd93fff8e12d6b2b957064625409a3",
+              "trackTitle": "Giorgio by Moroder",
+              "trackImage": {
+                "imageUuid": "09b59e6e-717e-43e3-b2e2-d2a153c24775",
+                "vibrantColor": "#f5e27f"
+              }
+            },
+            "artist": {
+              "artistId": 8847,
+              "artistName": "Daft Punk",
+              "artistImage": null
+            },
+            "isAI": false
+          }
+        },
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "ARTIST_MIX",
+            "countryCode": "US",
+            "updated": 1791192399675,
+            "id": "0002e0c31bbd42c7a2af4cdd2836bd",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDAC?token=9100a7ff781e2171bd2e0de054454291f5437110",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDAC?token=859dc21e276a1b8896c0bd965e36d8c84e8490c5",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDAC?token=3b66fc4688da3159971f49712f4f59813a35b703",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDACOAE?token=a38bc79e0d0bc55a69c516c635014df1f3545b45",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDACOAE?token=d8677ec8db5a4b1133a53aefadaa18c95c5ab902",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQAhokNmIzNjMzZTYvNmI4Zi80Mjk2L2I0MmIvZTM2MWU2YTI4MmRmGiQzNWJmMTRjNy84OTcwLzRiNzYvYWU4Mi9mNzExZGM3ZDAyNTQaJGRmMWFjZmJhL2NkNDUvNDFjMS9hODdlLzkwNTgwMDM2NTYyNCIMQXJ0aXN0IFJhZGlvIghQb2x5cGhpYSoHI0QyQUM1NDACOAE?token=5d084b64864f4fd462e5cc3376d3e950ba6639b1",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "Polyphia",
+              "color": "#D2AC54"
+            },
+            "subtitleTextInfo": {
+              "text": "Artist Radio",
+              "color": "#D2AC54"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#D2AC54"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "artist": {
+              "artistId": 5744956,
+              "artistName": "Polyphia",
+              "artistImage": {
+                "imageUuid": "6b3633e6-6b8f-4296-b42b-e361e6a282df",
+                "vibrantColor": "#d29814"
+              }
+            },
+            "isAI": false
+          }
+        },
+        {
+          "type": "MIX",
+          "following": false,
+          "data": {
+            "type": "TRACK_MIX",
+            "countryCode": "US",
+            "updated": 1791484452330,
+            "id": "001ed3dfaa0e28eefb18da1d556979",
+            "isStableId": true,
+            "artifactIdType": "trackGroupId",
+            "mixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjAC?token=603af246b6a1013c867edee3a9f6d19231a5b08d",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjAC?token=bdc02a5d8dd7ee38a4e57b6e9d153e5f9ef4b2f1",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjAC?token=d12b0ad941fc80e0442171ddc9e28cde00ae5ad0",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "sortType": "POPULARITY",
+            "detailMixImages": [
+              {
+                "size": "SMALL",
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjACOAE?token=43619f2d1976c9fd0789723d527d6f4b063b1711",
+                "width": 320,
+                "height": 320
+              },
+              {
+                "size": "MEDIUM",
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjACOAE?token=69b76972c899d15d87a6fe112c19cdac425b4cee",
+                "width": 640,
+                "height": 640
+              },
+              {
+                "size": "LARGE",
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokNzVmMGZkZWMvYjFlMi80ZjZiLzk5ZmEvNzMxMjI1ZWJlZWMyGiQ4OTkyMzczYi9kOWYxLzRiYmMvYTE2My81OWZlMmRjMWRmZWYaJDliOTU5MTcxLzE2MmUvNGUzYS84OGVmLzVjNjQ0NmEzOGY4OCILVHJhY2sgUmFkaW8iBkxURSAjMSoHI0ZGRkZGRjACOAE?token=a0a19126f5e2a034713d988abf0db182d9640021",
+                "width": 1500,
+                "height": 1500
+              }
+            ],
+            "titleTextInfo": {
+              "text": "LTE #1",
+              "color": "#FFFFFF"
+            },
+            "subtitleTextInfo": {
+              "text": "Bakar",
+              "color": "#FFFFFF"
+            },
+            "shortSubtitleTextInfo": {
+              "text": "Created by TIDAL",
+              "color": "#FFFFFF"
+            },
+            "description": {
+              "text": null,
+              "color": null
+            },
+            "contentBehavior": "UNRESTRICTED",
+            "track": {
+              "trackId": 528218055,
+              "trackGroup": "1f15953adea5907a96cc3fe5b66eaf03",
+              "trackTitle": "LTE #1",
+              "trackImage": {
+                "imageUuid": "75f0fdec-b1e2-4f6b-99fa-731225ebeec2",
+                "vibrantColor": "#FFFFFF"
+              }
+            },
+            "artist": {
+              "artistId": 3591454,
+              "artistName": "Bakar",
+              "artistImage": null
+            },
+            "isAI": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "COMPACT_GRID_CARD",
+      "moduleId": "UPLOADS_FOR_YOU",
+      "title": "Uploads for you",
+      "icons": [],
+      "viewAll": "home/pages/UPLOADS_FOR_YOU/view-all",
+      "subtitle": "Independent artists recommended based on what you love to listen to",
+      "items": [
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 483177041,
+            "editable": false,
+            "title": "Hate On Me (Featuring. Bos Cool)",
+            "album": {
+              "id": 483177040,
+              "title": "Hate On Me (Featuring. Bos Cool)",
+              "version": null,
+              "cover": "dac1a01e-68f7-45d1-919f-4c8bed48802e",
+              "vibrantColor": "#f1d794",
+              "videoCover": null,
+              "releaseDate": "2025-12-19",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 57430362,
+                "name": "Nuk",
+                "handle": "iamnuk",
+                "picture": "6650d26a-5041-4e3e-b629-a5aac6ce08c4",
+                "main": true,
+                "userId": 12345
+              }
+            ],
+            "version": null,
+            "duration": 250,
+            "popularity": 6,
+            "doublePopularity": 0.061719063407580786,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": true,
+            "replayGain": -3.06,
+            "audioQuality": "HIGH",
+            "allowStreaming": true,
+            "streamStartDate": "1970-01-01T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": null,
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": []
+            },
+            "providerId": 1094,
+            "providerName": "TIDAL Uploads",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 6,
+                "name": "Hip Hop/Rap",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "toneTags": "rebellious",
+              "keyScale": "MINOR",
+              "key": "Ab",
+              "bpm": "130.0"
+            },
+            "upload": true,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2025-12-19T01:06:30.119141Z",
+            "userId": 12345,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "UPL483177041",
+            "peak": 1.033052,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "",
+            "trackGroup": "1f0dcfedeb67a6e8a108b69e2111f263",
+            "firstAvailable": "1969-12-31T12:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "1970-01-01T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": true
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 456972760,
+            "editable": false,
+            "title": "PASSENGER",
+            "album": {
+              "id": 456972761,
+              "title": "PASSENGER",
+              "version": null,
+              "cover": "f7aed697-86f3-4053-a5cd-9beb04163c04",
+              "vibrantColor": "#FFFFFF",
+              "videoCover": null,
+              "releaseDate": "2025-08-28",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 37713780,
+                "name": "Mat Bakari",
+                "handle": null,
+                "picture": "4e2d1ff7-cac6-42ea-889e-2978175c07d7",
+                "main": true,
+                "userId": 12345
+              }
+            ],
+            "version": null,
+            "duration": 254,
+            "popularity": 8,
+            "doublePopularity": 0.07977998403735685,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": true,
+            "replayGain": -3.34,
+            "audioQuality": "HIGH",
+            "allowStreaming": true,
+            "streamStartDate": "2025-08-28T01",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": null,
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": []
+            },
+            "providerId": 1094,
+            "providerName": "TIDAL Uploads",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 6,
+                "name": "Hip Hop/Rap",
+                "parentId": null
+              },
+              {
+                "id": 9,
+                "name": "Alternative",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "keyScale": "MINOR",
+              "key": "B",
+              "bpm": "83.0"
+            },
+            "upload": true,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2025-08-28T18:07:37.378672Z",
+            "userId": 12345,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "UPL___147756",
+            "peak": 0.923041,
+            "prePaywallPresentation": "FULL",
+            "copyright": "TIDAL",
+            "trackGroup": "1f08439eb00b658984a53dfbeb102e43",
+            "firstAvailable": "2025-08-28T00:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2025-08-28T01:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": true
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 488262187,
+            "editable": false,
+            "title": "Electro Bass Vai Dominar (Vocal)",
+            "album": {
+              "id": 488262178,
+              "title": "Electro Bass Vai Dominar (Vocal)",
+              "version": null,
+              "cover": "1554782a-62ad-4e49-b267-a07006291cf3",
+              "vibrantColor": null,
+              "videoCover": null,
+              "releaseDate": "2026-01-08",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 69253087,
+                "name": "Dj TalenoPlayz",
+                "handle": null,
+                "picture": null,
+                "main": true,
+                "userId": 12345
+              }
+            ],
+            "version": null,
+            "duration": 237,
+            "popularity": 18,
+            "doublePopularity": 0.18018278837638194,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -2.9,
+            "audioQuality": "HIGH",
+            "allowStreaming": true,
+            "streamStartDate": "1970-01-01T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001fbcddd9d495eddb1078073a04dc"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": []
+            },
+            "providerId": 1094,
+            "providerName": "TIDAL Uploads",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "toneTags": "positive,fun,rebellious",
+              "keyScale": "MINOR",
+              "key": "G",
+              "bpm": "130.0"
+            },
+            "upload": true,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2026-01-08T21:15:26.938007Z",
+            "userId": 12345,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "UPL488262187",
+            "peak": 0.706672,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "",
+            "trackGroup": "1f0ed62c32f24b7b88acf2dc353bf313",
+            "firstAvailable": "1969-12-31T12:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "1970-01-01T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": true
+          }
+        }
+      ]
+    }
+  ]
+}

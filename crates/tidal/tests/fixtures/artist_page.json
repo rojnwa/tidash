@@ -1,0 +1,2444 @@
+{
+  "type": "ARTIST",
+  "header": {
+    "type": "ARTIST",
+    "profilePrivacyType": "PUBLIC",
+    "contributionLinkUrl": null,
+    "contributions": null,
+    "playableContent": {
+      "play": true,
+      "shuffle": true,
+      "items": [
+        {
+          "id": 1550546,
+          "editable": false,
+          "title": "One More Time",
+          "album": {
+            "id": 1550545,
+            "title": "Discovery",
+            "version": null,
+            "cover": "7d3b9810-5634-400c-ad89-50609e0ce800",
+            "vibrantColor": "#dca60f",
+            "videoCover": null,
+            "releaseDate": "2001-03-12",
+            "upload": false,
+            "ai": false
+          },
+          "artists": [
+            {
+              "id": 8847,
+              "name": "Daft Punk",
+              "handle": null,
+              "picture": "c92cf3f5-066f-4f0a-87d0-c2bebff46d36",
+              "main": true,
+              "userId": null
+            }
+          ],
+          "version": null,
+          "duration": 320,
+          "popularity": 90,
+          "doublePopularity": 0.8994656247498766,
+          "trackNumber": 1,
+          "volumeNumber": 1,
+          "explicit": false,
+          "replayGain": -6.83,
+          "audioQuality": "LOSSLESS",
+          "allowStreaming": true,
+          "streamStartDate": "2005-01-24T00",
+          "streamReady": true,
+          "audioModes": [
+            "STEREO"
+          ],
+          "mixes": {
+            "TRACK_MIX": "001862b4e8a51e878d8ca2a5f06f01"
+          },
+          "adSupportedStreamReady": true,
+          "mediaMetadata": {
+            "tags": [
+              "LOSSLESS"
+            ]
+          },
+          "providerId": 342,
+          "providerName": "WMG",
+          "djReady": true,
+          "stemReady": false,
+          "payToStream": false,
+          "genres": [
+            {
+              "id": 3,
+              "name": "Electronic",
+              "parentId": null
+            }
+          ],
+          "audioAnalysisAttributes": {
+            "scale": "major",
+            "bpm": "123.0",
+            "key": "G",
+            "keyScale": "MAJOR"
+          },
+          "upload": false,
+          "accessType": "PUBLIC",
+          "spotlighted": false,
+          "createdAt": "2008-01-09T17:58:47Z",
+          "userId": null,
+          "downloadReady": false,
+          "priceCode": null,
+          "ai": false,
+          "isrc": "GBDUW0000053",
+          "peak": 0.979767,
+          "prePaywallPresentation": "PREVIEW",
+          "copyright": "℗ 2001 Daft Life Limited",
+          "trackGroup": "1ebc9f52a5becf1aebe076fc874abff3",
+          "firstAvailable": "2005-01-23T11:00:00Z",
+          "linkedStereoIsrc": null,
+          "validFrom": "2005-01-24T00:00:00",
+          "validUntil": "9999-01-01T00:00:00",
+          "inherited": null
+        },
+        {
+          "id": 20115564,
+          "editable": false,
+          "title": "Get Lucky",
+          "album": {
+            "id": 20115556,
+            "title": "Random Access Memories",
+            "version": null,
+            "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+            "vibrantColor": "#efdd83",
+            "videoCover": null,
+            "releaseDate": "2013-05-20",
+            "upload": false,
+            "ai": false
+          },
+          "artists": [
+            {
+              "id": 8847,
+              "name": "Daft Punk",
+              "handle": null,
+              "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+              "main": true,
+              "userId": null
+            },
+            {
+              "id": 4900204,
+              "name": "Pharrell Williams",
+              "handle": null,
+              "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+              "main": true,
+              "userId": null
+            },
+            {
+              "id": 30528,
+              "name": "Nile Rodgers",
+              "handle": null,
+              "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4",
+              "main": true,
+              "userId": null
+            }
+          ],
+          "version": "feat. Pharrell Williams and Nile Rodgers",
+          "duration": 370,
+          "popularity": 90,
+          "doublePopularity": 0.8961077193805813,
+          "trackNumber": 8,
+          "volumeNumber": 1,
+          "explicit": false,
+          "replayGain": -7.55,
+          "audioQuality": "LOSSLESS",
+          "allowStreaming": true,
+          "streamStartDate": "2013-05-20T00",
+          "streamReady": true,
+          "audioModes": [
+            "STEREO"
+          ],
+          "mixes": {
+            "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+          },
+          "adSupportedStreamReady": true,
+          "mediaMetadata": {
+            "tags": [
+              "LOSSLESS"
+            ]
+          },
+          "providerId": 50,
+          "providerName": "Sony Music",
+          "djReady": true,
+          "stemReady": false,
+          "payToStream": false,
+          "genres": [
+            {
+              "id": 3,
+              "name": "Electronic",
+              "parentId": null
+            },
+            {
+              "id": 5,
+              "name": "Dance",
+              "parentId": 1
+            },
+            {
+              "id": 19,
+              "name": "House",
+              "parentId": 3
+            }
+          ],
+          "audioAnalysisAttributes": {
+            "scale": "minor",
+            "bpm": "116.0",
+            "key": "B",
+            "keyScale": "MINOR"
+          },
+          "upload": false,
+          "accessType": "PUBLIC",
+          "spotlighted": false,
+          "createdAt": "2013-05-09T04:31:31.621Z",
+          "userId": null,
+          "downloadReady": false,
+          "priceCode": null,
+          "ai": false,
+          "isrc": "USQX91300108",
+          "peak": 0.997345,
+          "prePaywallPresentation": "PREVIEW",
+          "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+          "trackGroup": "1ef8711ac36f01e8e189db1cd0899b03",
+          "firstAvailable": "2013-05-16T12:00:00Z",
+          "linkedStereoIsrc": null,
+          "validFrom": "2013-05-20T00:00:00",
+          "validUntil": "9999-01-01T00:00:00",
+          "inherited": null
+        },
+        {
+          "id": 20115561,
+          "editable": false,
+          "title": "Instant Crush",
+          "album": {
+            "id": 20115556,
+            "title": "Random Access Memories",
+            "version": null,
+            "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+            "vibrantColor": "#efdd83",
+            "videoCover": null,
+            "releaseDate": "2013-05-20",
+            "upload": false,
+            "ai": false
+          },
+          "artists": [
+            {
+              "id": 8847,
+              "name": "Daft Punk",
+              "handle": null,
+              "picture": "c92cf3f5-066f-4f0a-87d0-c2bebff46d36",
+              "main": true,
+              "userId": null
+            },
+            {
+              "id": 3636357,
+              "name": "Julian Casablancas",
+              "handle": null,
+              "picture": "623365da-df54-47ab-889e-226806ff9322",
+              "main": true,
+              "userId": null
+            }
+          ],
+          "version": "feat. Julian Casablancas",
+          "duration": 338,
+          "popularity": 83,
+          "doublePopularity": 0.8347282820258214,
+          "trackNumber": 5,
+          "volumeNumber": 1,
+          "explicit": false,
+          "replayGain": -7.55,
+          "audioQuality": "LOSSLESS",
+          "allowStreaming": true,
+          "streamStartDate": "2013-05-20T00",
+          "streamReady": true,
+          "audioModes": [
+            "STEREO"
+          ],
+          "mixes": {
+            "TRACK_MIX": "001e89518713fb47d964a39b42c593"
+          },
+          "adSupportedStreamReady": true,
+          "mediaMetadata": {
+            "tags": [
+              "LOSSLESS"
+            ]
+          },
+          "providerId": 50,
+          "providerName": "Sony Music",
+          "djReady": true,
+          "stemReady": false,
+          "payToStream": false,
+          "genres": [
+            {
+              "id": 3,
+              "name": "Electronic",
+              "parentId": null
+            },
+            {
+              "id": 5,
+              "name": "Dance",
+              "parentId": 1
+            },
+            {
+              "id": 19,
+              "name": "House",
+              "parentId": 3
+            }
+          ],
+          "audioAnalysisAttributes": {
+            "scale": "major",
+            "bpm": "110.0",
+            "key": "Ab",
+            "keyScale": "MAJOR"
+          },
+          "upload": false,
+          "accessType": "PUBLIC",
+          "spotlighted": false,
+          "createdAt": "2013-05-09T04:31:31.62Z",
+          "userId": null,
+          "downloadReady": false,
+          "priceCode": null,
+          "ai": false,
+          "isrc": "USQX91300105",
+          "peak": 0.997345,
+          "prePaywallPresentation": "PREVIEW",
+          "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+          "trackGroup": "1efc2fa0d109db08c998be4f44892a23",
+          "firstAvailable": "2013-05-16T12:00:00Z",
+          "linkedStereoIsrc": null,
+          "validFrom": "2013-05-20T00:00:00",
+          "validUntil": "9999-01-01T00:00:00",
+          "inherited": null
+        }
+      ],
+      "url": "artist/8847/playable",
+      "cursor": null
+    },
+    "biography": {
+      "text": "Daft Punk is an organism that transcends all comparisons.<br/><br/>Enigmatically disguised beneath their iconic robot helmets, the creative team of Guy-Manuel de Homem-Christo and Thomas Bangalter have gained worldwide fame for their irresistible, evolutionary and artistic pop that blends futuristic flavorings of acid house and techno with fresh elements of disco, funk and hip-hop.<br/><br/>Beginning with their seminal 1997 debut, Homework, the dynamic duo revolutionized the European house music scene they were born out of, before swiftly carving out a category all their own. Their now-classic 2001 follow­up, [wimpLink albumId=\"1550545\"]Discovery[/wimpLink], launched them into a new atmosphere of popularity, thanks to dance­floor hits like “One More Time” and “Harder, Better, Faster, Stronger,” but the album also found the group adapting a more conceptual approach, which they would only foster as time went on.<br/><br/>In 2005 the band took on a more minimalistic, guitar-heavy sound with Human After All, then adapting much of the same material for their legendary live tour, recorded on Alive 2007. After a brief period of silence, Homem-Christo and Bangalter composed the acclaimed score to Disney’s Tron: Legacy (2010), which, in yet another new direction for Daft Punk, was recorded with a live orchestra. <br/><br/>With 2013′s [wimpLink albumId=\"20115556\"]Random Access Memories[/wimpLink], Daft Punk made their most ambitious and sonically brilliant work yet. A love letter to 1970s studio craft, the record features inspired collaborations with the likes of [wimpLink artistId=\"4900204\"]Pharrell Williams[/wimpLink], [wimpLink artistId=\"3609536\"]Panda Bear[/wimpLink], [wimpLink artistId=\"3636357\"]Julian Casablancas[/wimpLink], [wimpLink artistId=\"30528\"]Nile Rodgers[/wimpLink], Paul Williams and [wimpLink artistId=\"7540\"]Giorgio Moroder[/wimpLink], which they scrupulously recorded with live instrumentation to aural perfection.<br/><br/>RAM earned Daft Punk five Grammys, including Album of the Year and Record of the Year for the instant-classic single “Get Lucky.” In a conversation with TIDAL, [wimpLink artistId=\"8722\"]Mark Ronson[/wimpLink] called the album, “something that they’ll be testing stereo systems with for hundreds of years to come.” With the music world now firmly at their mercy, we’ve since been waiting for the next move from the secretive electro-pioneers.<br/><br/>As much as they own it, Daft Punk are far more than just musicians. Well known for their meticulous attention for visual presentation – in artwork, live performance, and of course their emblematic costumes – their strong visual identity is an essential element to their iconographic mystique.<br/><br/>Film, in particular, has been an integral component of Daft Punk, dating back to their classic Spike Jones­ directed video for Homework’s “Da Funk”. On top of music videos and their work with Tron, no small part of this ocular legacy is D.A.F.T.: A Story About Dogs, Androids, Firemen and Tomatoes (1999), the band’s collection of early music videos, and their two feature­-length films, Interstella 5555: The 5tory of the 5ecret 5tar 5ystem (2003) and Daft Punk’s Electroma (2006).",
+      "source": "TIDAL",
+      "moderationStatus": null
+    },
+    "mainLink": null,
+    "followersAmount": 1581575,
+    "followingsAmount": 0,
+    "listeners": null
+  },
+  "item": {
+    "type": "ARTIST",
+    "following": true,
+    "data": {
+      "id": 8847,
+      "name": "Daft Punk",
+      "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+      "popularity": 94,
+      "doublePopularity": 0.9363624453544617,
+      "artistTypes": [
+        "ARTIST",
+        "CONTRIBUTOR"
+      ],
+      "artistRoles": [
+        {
+          "categoryId": -1,
+          "category": "Artist"
+        },
+        {
+          "categoryId": 2,
+          "category": "Songwriter"
+        },
+        {
+          "categoryId": 11,
+          "category": "Performer"
+        }
+      ],
+      "mixes": {
+        "ARTIST_MIX": "0002737adb8d077f4591c4cdb7ba60"
+      },
+      "vibrantColor": "#FFFFFF",
+      "selectedAlbumCoverFallback": null,
+      "handle": null,
+      "userId": null,
+      "artworkId": null,
+      "spotlighted": false,
+      "contributionsEnabled": false,
+      "cashAppOnboarded": false,
+      "ownerType": "LABEL"
+    }
+  },
+  "items": [
+    {
+      "type": "TRACK_LIST",
+      "moduleId": "ARTIST_TOP_TRACKS",
+      "title": "Top Tracks",
+      "icons": [],
+      "items": [
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 1550546,
+            "editable": false,
+            "title": "One More Time",
+            "album": {
+              "id": 1550545,
+              "title": "Discovery",
+              "version": null,
+              "cover": "7d3b9810-5634-400c-ad89-50609e0ce800",
+              "vibrantColor": "#dca60f",
+              "videoCover": null,
+              "releaseDate": "2001-03-12",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "c92cf3f5-066f-4f0a-87d0-c2bebff46d36",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": null,
+            "duration": 320,
+            "popularity": 90,
+            "doublePopularity": 0.8994656247498766,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -6.83,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2005-01-24T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001862b4e8a51e878d8ca2a5f06f01"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "major",
+              "bpm": "123.0",
+              "key": "G",
+              "keyScale": "MAJOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2008-01-09T17:58:47Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "GBDUW0000053",
+            "peak": 0.979767,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "℗ 2001 Daft Life Limited",
+            "trackGroup": "1ebc9f52a5becf1aebe076fc874abff3",
+            "firstAvailable": "2005-01-23T11:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2005-01-24T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 20115564,
+            "editable": false,
+            "title": "Get Lucky",
+            "album": {
+              "id": 20115556,
+              "title": "Random Access Memories",
+              "version": null,
+              "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+              "vibrantColor": "#efdd83",
+              "videoCover": null,
+              "releaseDate": "2013-05-20",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 4900204,
+                "name": "Pharrell Williams",
+                "handle": null,
+                "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 30528,
+                "name": "Nile Rodgers",
+                "handle": null,
+                "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": "feat. Pharrell Williams and Nile Rodgers",
+            "duration": 370,
+            "popularity": 90,
+            "doublePopularity": 0.8961077193805813,
+            "trackNumber": 8,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -7.55,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2013-05-20T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              },
+              {
+                "id": 5,
+                "name": "Dance",
+                "parentId": 1
+              },
+              {
+                "id": 19,
+                "name": "House",
+                "parentId": 3
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "minor",
+              "bpm": "116.0",
+              "key": "B",
+              "keyScale": "MINOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2013-05-09T04:31:31.621Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "USQX91300108",
+            "peak": 0.997345,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "trackGroup": "1ef8711ac36f01e8e189db1cd0899b03",
+            "firstAvailable": "2013-05-16T12:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2013-05-20T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        },
+        {
+          "type": "TRACK",
+          "following": false,
+          "data": {
+            "id": 20115561,
+            "editable": false,
+            "title": "Instant Crush",
+            "album": {
+              "id": 20115556,
+              "title": "Random Access Memories",
+              "version": null,
+              "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+              "vibrantColor": "#efdd83",
+              "videoCover": null,
+              "releaseDate": "2013-05-20",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "c92cf3f5-066f-4f0a-87d0-c2bebff46d36",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 3636357,
+                "name": "Julian Casablancas",
+                "handle": null,
+                "picture": "623365da-df54-47ab-889e-226806ff9322",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": "feat. Julian Casablancas",
+            "duration": 338,
+            "popularity": 83,
+            "doublePopularity": 0.8347282820258214,
+            "trackNumber": 5,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -7.55,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2013-05-20T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001e89518713fb47d964a39b42c593"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              },
+              {
+                "id": 5,
+                "name": "Dance",
+                "parentId": 1
+              },
+              {
+                "id": 19,
+                "name": "House",
+                "parentId": 3
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "major",
+              "bpm": "110.0",
+              "key": "Ab",
+              "keyScale": "MAJOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2013-05-09T04:31:31.62Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "isrc": "USQX91300105",
+            "peak": 0.997345,
+            "prePaywallPresentation": "PREVIEW",
+            "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "trackGroup": "1efc2fa0d109db08c998be4f44892a23",
+            "firstAvailable": "2013-05-16T12:00:00Z",
+            "linkedStereoIsrc": null,
+            "validFrom": "2013-05-20T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "inherited": null
+          }
+        }
+      ],
+      "subtitle": null,
+      "viewAll": "artist/ARTIST_TOP_TRACKS/view-all?artistId=8847"
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_ALBUMS",
+      "title": "Albums",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_ALBUMS/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 328638757,
+            "title": "Random Access Memories (Drumless Edition)",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 4477,
+            "cover": "114606c8-4ab5-4bef-85d8-0539eb99df27",
+            "vibrantColor": "#FFFFFF",
+            "videoCover": null,
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 13,
+            "numberOfVideos": 0,
+            "popularity": 62,
+            "doublePopularity": 0.6233635675754825,
+            "version": null,
+            "releaseDate": "2013-05-20",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "196871342049",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1ee856c33d7160ba73467e8a2f30b0f2",
+              "releaseDate": "2013-05-20",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-11-17T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-11-14T00:44:45.456187Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-11-17T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 211822890,
+            "title": "Random Access Memories",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 4475,
+            "cover": "09b59e6e-717e-43e3-b2e2-d2a153c24775",
+            "vibrantColor": "#f5e27f",
+            "videoCover": null,
+            "copyright": "(P)  2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 13,
+            "numberOfVideos": 0,
+            "popularity": 75,
+            "doublePopularity": 0.7495892882478068,
+            "version": null,
+            "releaseDate": "2013-05-20",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "886443984059",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7dfa23d8b9cac1aef5938ffe2",
+              "releaseDate": "2013-05-20",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2015-09-08T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2022-01-10T03:01:42.480286Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2015-09-08T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 293301129,
+            "title": "Random Access Memories (10th Anniversary Edition)",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 6611,
+            "cover": "8723c4d1-12b4-402c-8d88-898475087e25",
+            "vibrantColor": "#b9c2e3",
+            "videoCover": "7660a82d-e3da-4ada-8c75-8abb9bacd50c",
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 2,
+            "numberOfTracks": 22,
+            "numberOfVideos": 0,
+            "popularity": 83,
+            "doublePopularity": 0.8274526194143352,
+            "version": "10th Anniversary Edition",
+            "releaseDate": "2013-05-20",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "196589921154",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7dfa23d8b9cac1aef5938ffe2",
+              "releaseDate": "2013-05-20",
+              "categories": [
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-05-12T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-05-05T22:18:52.205661Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-05-12T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_TOP_SINGLES",
+      "title": "EP & Singles",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_TOP_SINGLES/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 289261563,
+            "title": "GLBTM (Studio Outtakes)",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 815,
+            "cover": "5dfc07f9-036f-4d79-aae2-0d058afdeca0",
+            "vibrantColor": "#b9c2e3",
+            "videoCover": null,
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 3,
+            "numberOfVideos": 0,
+            "popularity": 30,
+            "doublePopularity": 0.3038367188396614,
+            "version": null,
+            "releaseDate": "2023-04-20",
+            "type": "EP",
+            "explicit": false,
+            "upc": "196871049191",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1eddadbabe0e913b376ffd0c382918b2",
+              "releaseDate": "2023-04-20",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-04-20T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-04-14T15:47:31.275706Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-04-20T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 282247821,
+            "title": "The Writing of Fragments of Time",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 3566370,
+                "name": "Todd Edwards",
+                "handle": null,
+                "picture": "0b0cc4fb-e551-4e08-8a24-ee51abbdeca9",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 777,
+            "cover": "ed1b1b67-0c73-49b5-a5ac-695ccca22e91",
+            "vibrantColor": "#b9c2e3",
+            "videoCover": null,
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 2,
+            "numberOfVideos": 0,
+            "popularity": 15,
+            "doublePopularity": 0.1524379943447825,
+            "version": null,
+            "releaseDate": "2023-03-22",
+            "type": "SINGLE",
+            "explicit": false,
+            "upc": "196589957634",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1ee888e23585922a4c0ad1dd963b8972",
+              "releaseDate": "2023-03-22",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-03-22T19",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-03-16T16:30:28.742069Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-03-22T19:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 283966030,
+            "title": "The Writing of Fragments of Time",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 3566370,
+                "name": "Todd Edwards",
+                "handle": null,
+                "picture": "0b0cc4fb-e551-4e08-8a24-ee51abbdeca9",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 497,
+            "cover": "76ed4c61-759a-4a68-9ba6-4dbb8c670097",
+            "vibrantColor": "#b9c2e3",
+            "videoCover": null,
+            "copyright": "(P) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 1,
+            "numberOfVideos": 0,
+            "popularity": 12,
+            "doublePopularity": 0.12145525523453436,
+            "version": null,
+            "releaseDate": "2023-03-22",
+            "type": "SINGLE",
+            "explicit": false,
+            "upc": "196871003261",
+            "audioQuality": "LOW",
+            "masterAlbum": {
+              "id": "1ee888e23585922a4c0ad1dd963b8972",
+              "releaseDate": "2023-03-22",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2023-03-22T19",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "DOLBY_ATMOS"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "DOLBY_ATMOS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2023-03-21T21:43:56.603213Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2023-03-22T19:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_COMPILATIONS",
+      "title": "Compilations",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_COMPILATIONS/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 124208,
+            "title": "Musique, Vol. 1",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 4511,
+            "cover": "931d4459-bcf0-43a9-81dd-4d9d59911874",
+            "vibrantColor": "#dd0425",
+            "videoCover": null,
+            "copyright": "© 2006 Daft Life Limited",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 15,
+            "numberOfVideos": 0,
+            "popularity": 62,
+            "doublePopularity": 0.620141664686567,
+            "version": null,
+            "releaseDate": "2006-04-04",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "0094635840551",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7e7ac5d3b9ca4730359573b62",
+              "releaseDate": "2006-04-04",
+              "categories": [
+                "COMPILATION",
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2006-04-03T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2007-05-09T12:03:29Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2006-04-03T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 32648403,
+            "title": "Human After All (Remixes)",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 5081,
+            "cover": "7c8002e0-5189-463e-933b-5d3f7549fad2",
+            "vibrantColor": "#c6e4e2",
+            "videoCover": null,
+            "copyright": "Distributed exclusively by Warner Music France / ADA France, © 2014 Daft Life Ltd.",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 15,
+            "numberOfVideos": 0,
+            "popularity": 37,
+            "doublePopularity": 0.37028890437609585,
+            "version": null,
+            "releaseDate": "2005-03-01",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "825646243501",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7e7631efb9cad9cb78f7993e2",
+              "releaseDate": "2005-03-01",
+              "categories": [
+                "COMPILATION"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2014-08-27T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2014-07-30T20:43:07.412Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2014-08-27T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 1570697,
+            "title": "Daft Club",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 4407,
+            "cover": "e0e6863f-eedc-44e7-aaa2-633d0adf7745",
+            "vibrantColor": "#dd646d",
+            "videoCover": null,
+            "copyright": "Distributed exclusively by Warner Music France / ADA France, © 2003 Daft Life Ltd.",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 14,
+            "numberOfVideos": 0,
+            "popularity": 48,
+            "doublePopularity": 0.4817821217994878,
+            "version": null,
+            "releaseDate": "2003-12-16",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "0724359638959",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7e7595aeb9caa97a59b3dd0d2",
+              "releaseDate": "2003-12-16",
+              "categories": [
+                "COMPILATION",
+                "STUDIO"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2003-12-01T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2008-01-11T09:12:20.497Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2003-12-01T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_LIVE_ALBUMS",
+      "title": "Live albums",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_LIVE_ALBUMS/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 1198530,
+            "title": "Alive 2007",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 5043,
+            "cover": "be0b70c6-f1be-4e1b-a26d-5abc4fa6d296",
+            "vibrantColor": "#1f95c5",
+            "videoCover": null,
+            "copyright": "© 2007 Daft Life Limited",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 13,
+            "numberOfVideos": 0,
+            "popularity": 69,
+            "doublePopularity": 0.6880527245532339,
+            "version": null,
+            "releaseDate": "2007-12-04",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "5099951165857",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1e804ef7e165e81b9ca0f5db745940a2",
+              "releaseDate": "2007-12-04",
+              "categories": [
+                "LIVE"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2007-11-19T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2007-11-01T14:48:51.347Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2007-11-19T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_PLAYLIST",
+      "title": "Playlists",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_PLAYLIST/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "abd35446-6a67-4f2b-9f92-0636742c63cb",
+            "type": "EDITORIAL",
+            "creator": {
+              "id": 0,
+              "name": null,
+              "picture": null,
+              "type": "TIDAL"
+            },
+            "curators": [],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "DEFAULT",
+            "title": "Daft Punk Essentials",
+            "description": "Daft Punk called it quits in 2021 as one of the most beloved acts of the 21st century. They emerged out of the French house scene of the late ‘90s to become the biggest (and most mysterious) dance group on earth. Anonymously disguised beneath their iconic robot helmets, the dynamic duo of Guy-Manuel de Homem-Christo and Thomas Bangalter have gained international fame with their irresistible, evolutionary and  artistic pop that blends futuristic flavorings of acid house and techno with fresh elements of disco, funk and hip-hop. The pair has been known to take long breaks of silence between releases, but they reclaim their dominance with every new move. Daft Punk made its most popular mark yet with 2013’s tremendous ‘Random Access Memories’, led by the instant-classic single, \"Get Lucky\" — now the focus of a 10th anniversary reissue campaign. Their mission to give life back to music was, you have to admit, a success. (Photo: Rovi)",
+            "image": "cc169813-ac53-4bfe-9164-304de2b6f1c6",
+            "squareImage": "2a1eae8e-49e9-4d79-bb00-956a242eddd6",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/abd35446-6a67-4f2b-9f92-0636742c63cb",
+            "created": "2014-09-30T15:27:05.510+0000",
+            "lastUpdated": "2023-09-03T20:38:45.303+0000",
+            "lastItemAddedAt": "2023-09-03T20:37:45.344+0000",
+            "duration": 8038,
+            "numberOfTracks": 25,
+            "numberOfVideos": 0,
+            "promotedArtists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "type": "MAIN"
+              },
+              {
+                "id": 16053482,
+                "name": "Stardust",
+                "type": "MAIN"
+              }
+            ],
+            "trn": "trn:playlist:abd35446-6a67-4f2b-9f92-0636742c63cb"
+          }
+        },
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "8c20978f-74eb-4a27-b28c-3dcda62ef51a",
+            "type": "EDITORIAL",
+            "creator": {
+              "id": 0,
+              "name": null,
+              "picture": null,
+              "type": "TIDAL"
+            },
+            "curators": [],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "DEFAULT",
+            "title": "DJ Classics",
+            "description": "The DJs have spoken. These are the most played classic songs of thousands of users of our TIDAL DJ integrations like Serato, Algoriddim djay Pro or Rekordbox. Updated weekly! (Cover: Usher / Photo: Rovi)",
+            "image": "29b31f5c-4277-410f-a9ad-93300319ff02",
+            "squareImage": "bd09ce3f-632e-49af-a424-0c25524ed369",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/8c20978f-74eb-4a27-b28c-3dcda62ef51a",
+            "created": "2024-03-15T11:06:11.502+0000",
+            "lastUpdated": "2026-10-05T09:14:26.324+0000",
+            "lastItemAddedAt": "2026-10-05T09:14:26.315+0000",
+            "duration": 12348,
+            "numberOfTracks": 50,
+            "numberOfVideos": 0,
+            "promotedArtists": [
+              {
+                "id": 1518,
+                "name": "USHER",
+                "type": "MAIN"
+              },
+              {
+                "id": 37258,
+                "name": "Cupid",
+                "type": "MAIN"
+              },
+              {
+                "id": 9502,
+                "name": "Daddy Yankee",
+                "type": "MAIN"
+              }
+            ],
+            "trn": "trn:playlist:8c20978f-74eb-4a27-b28c-3dcda62ef51a"
+          }
+        },
+        {
+          "type": "PLAYLIST",
+          "following": false,
+          "numberOfFollowers": 0,
+          "data": {
+            "uuid": "eacd9536-3a86-4841-a930-0d3a4cdb6a21",
+            "type": "EDITORIAL",
+            "creator": {
+              "id": 0,
+              "name": null,
+              "picture": null,
+              "type": "TIDAL"
+            },
+            "curators": [],
+            "collaborators": [],
+            "contentBehavior": "UNRESTRICTED",
+            "sharingLevel": "PUBLIC",
+            "status": "READY",
+            "source": "DEFAULT",
+            "title": "Rolling Stone: Best Songs of All Time",
+            "description": "In 2010, institutional music magazine Rolling Stone updated its list of the “500 Greatest Songs of All Time\". Releases from ‘60s and ‘70s are the most represented, but it includes a good share of songs from all decades, all the way back to 1940. [This playlist is updated with the 2021 edition]",
+            "image": "bc79eb20-914b-4bf2-9003-54183487c390",
+            "squareImage": "818d657d-0bd3-4c6f-8077-4167a1cb0308",
+            "artworkId": null,
+            "url": "http://www.tidal.com/playlist/eacd9536-3a86-4841-a930-0d3a4cdb6a21",
+            "created": "2014-10-01T10:14:43.415+0000",
+            "lastUpdated": "2026-09-03T21:46:48.628+0000",
+            "lastItemAddedAt": "2026-09-03T21:46:45.767+0000",
+            "duration": 126927,
+            "numberOfTracks": 497,
+            "numberOfVideos": 0,
+            "promotedArtists": [
+              {
+                "id": 152,
+                "name": "Aretha Franklin",
+                "type": "MAIN"
+              },
+              {
+                "id": 30307,
+                "name": "Public Enemy",
+                "type": "MAIN"
+              },
+              {
+                "id": 3500082,
+                "name": "Sam Cooke",
+                "type": "MAIN"
+              }
+            ],
+            "trn": "trn:playlist:eacd9536-3a86-4841-a930-0d3a4cdb6a21"
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_VIDEOS",
+      "title": "Videos",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_VIDEOS/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "VIDEO",
+          "following": false,
+          "data": {
+            "id": 500668348,
+            "audioOnlyTrackId": 500668353,
+            "duration": 154,
+            "adsUrl": null,
+            "adsPrePaywallOnly": true,
+            "title": "Human After All",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "album": null,
+            "version": null,
+            "type": "Music Video",
+            "volumeNumber": 0,
+            "trackNumber": 0,
+            "isrc": "GBDUW2600011",
+            "copyright": "© 2026 Daft Life Limited",
+            "explicit": false,
+            "releaseDate": "2026-02-22",
+            "image": "890ff3f1-dcb5-4508-bd99-7cb64dc70522",
+            "vibrantColor": "#d9c795",
+            "popularity": 1,
+            "doublePopularity": 0.01,
+            "allowStreaming": true,
+            "streamStartDate": "2026-02-22T16",
+            "streamReady": true,
+            "adSupportedStreamReady": true,
+            "providerId": 342,
+            "providerName": "WMG",
+            "djReady": true,
+            "stemReady": false,
+            "downloadReady": false,
+            "createdAt": null,
+            "priceCode": null,
+            "validFrom": null,
+            "validUntil": null
+          }
+        },
+        {
+          "type": "VIDEO",
+          "following": false,
+          "data": {
+            "id": 471397361,
+            "audioOnlyTrackId": 471397363,
+            "duration": 281,
+            "adsUrl": null,
+            "adsPrePaywallOnly": true,
+            "title": "Contact",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "album": null,
+            "version": "Official Music Video",
+            "type": "Music Video",
+            "volumeNumber": 0,
+            "trackNumber": 0,
+            "isrc": "GBDUW2500031",
+            "copyright": "(C) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "explicit": false,
+            "releaseDate": "2025-11-07",
+            "image": "f905668b-0590-4624-ab2e-9f100c1c5e60",
+            "vibrantColor": "#476bb8",
+            "popularity": 1,
+            "doublePopularity": 0.01,
+            "allowStreaming": true,
+            "streamStartDate": "2025-11-07T19",
+            "streamReady": true,
+            "adSupportedStreamReady": true,
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "downloadReady": false,
+            "createdAt": null,
+            "priceCode": null,
+            "validFrom": null,
+            "validUntil": null
+          }
+        },
+        {
+          "type": "VIDEO",
+          "following": false,
+          "data": {
+            "id": 334327975,
+            "audioOnlyTrackId": 334327977,
+            "duration": 484,
+            "adsUrl": null,
+            "adsPrePaywallOnly": true,
+            "title": "Memory Tapes - Episode 6 - Pharrell Williams",
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "album": null,
+            "version": "Official Video",
+            "type": "Music Video",
+            "volumeNumber": 0,
+            "trackNumber": 0,
+            "isrc": "GBDUW2300111",
+            "copyright": "(C) 2023 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "explicit": false,
+            "releaseDate": "2023-12-08",
+            "image": "c841c140-bbd3-42de-8354-78f14f4102a0",
+            "vibrantColor": "#FFFFFF",
+            "popularity": 16,
+            "doublePopularity": 0.1607043369242061,
+            "allowStreaming": true,
+            "streamStartDate": "2023-12-08T00",
+            "streamReady": true,
+            "adSupportedStreamReady": true,
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "downloadReady": false,
+            "createdAt": null,
+            "priceCode": null,
+            "validFrom": null,
+            "validUntil": null
+          }
+        }
+      ]
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_SIMILAR_ARTISTS",
+      "title": "Fans Also Like",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_SIMILAR_ARTISTS/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ARTIST",
+          "following": true,
+          "data": {
+            "id": 57425,
+            "name": "Justice",
+            "picture": "e86288c1-e40b-43ca-9e15-63563e4a2361",
+            "popularity": 73,
+            "doublePopularity": 0.7261010493635182,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              },
+              {
+                "categoryId": 1,
+                "category": "Producer"
+              },
+              {
+                "categoryId": 3,
+                "category": "Engineer"
+              }
+            ],
+            "mixes": {
+              "ARTIST_MIX": "000f7a18489eccab469d437e870aec"
+            },
+            "vibrantColor": "#FFFFFF",
+            "selectedAlbumCoverFallback": null,
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": "LABEL"
+          }
+        },
+        {
+          "type": "ARTIST",
+          "following": false,
+          "data": {
+            "id": 16053482,
+            "name": "Stardust",
+            "picture": "dbf274c3-77c1-4995-b505-7a7fc88e4cf4",
+            "popularity": 65,
+            "doublePopularity": 0.6537143319624332,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              }
+            ],
+            "mixes": {
+              "ARTIST_MIX": "0004b8bbc62b2043ce6728d6b43021"
+            },
+            "vibrantColor": "#9cc2eb",
+            "selectedAlbumCoverFallback": null,
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": null
+          }
+        },
+        {
+          "type": "ARTIST",
+          "following": false,
+          "data": {
+            "id": 30456,
+            "name": "Modjo",
+            "picture": "469a434f-4c2f-40bb-8a92-b5ec5314fa1b",
+            "popularity": 64,
+            "doublePopularity": 0.6394080113447976,
+            "artistTypes": [
+              "ARTIST",
+              "CONTRIBUTOR"
+            ],
+            "artistRoles": [
+              {
+                "categoryId": -1,
+                "category": "Artist"
+              },
+              {
+                "categoryId": 2,
+                "category": "Songwriter"
+              },
+              {
+                "categoryId": 11,
+                "category": "Performer"
+              }
+            ],
+            "mixes": {
+              "ARTIST_MIX": "000ec30a355eb5e99bb9db54fe2ff3"
+            },
+            "vibrantColor": "#FFFFFF",
+            "selectedAlbumCoverFallback": null,
+            "handle": null,
+            "userId": null,
+            "artworkId": null,
+            "spotlighted": false,
+            "contributionsEnabled": false,
+            "cashAppOnboarded": false,
+            "ownerType": "LABEL"
+          }
+        }
+      ]
+    },
+    {
+      "type": "ARTIST_TRACK_CREDITS_CARD",
+      "moduleId": "ARTIST_CREDITS",
+      "title": "Credits",
+      "icons": [],
+      "items": [
+        {
+          "type": "TRACK_CREDITS",
+          "following": false,
+          "data": {
+            "id": 20115564,
+            "editable": false,
+            "title": "Get Lucky",
+            "album": {
+              "id": 20115556,
+              "title": "Random Access Memories",
+              "version": null,
+              "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+              "vibrantColor": "#efdd83",
+              "videoCover": null,
+              "releaseDate": "2013-05-20",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 4900204,
+                "name": "Pharrell Williams",
+                "handle": null,
+                "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 30528,
+                "name": "Nile Rodgers",
+                "handle": null,
+                "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "version": "feat. Pharrell Williams and Nile Rodgers",
+            "duration": 370,
+            "popularity": 90,
+            "doublePopularity": 0.8961077193805813,
+            "trackNumber": 8,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -7.55,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2013-05-20T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 3,
+                "name": "Electronic",
+                "parentId": null
+              },
+              {
+                "id": 5,
+                "name": "Dance",
+                "parentId": 1
+              },
+              {
+                "id": 19,
+                "name": "House",
+                "parentId": 3
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "minor",
+              "bpm": "116.0",
+              "key": "B",
+              "keyScale": "MINOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2013-05-09T04:31:31.621Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "credits": [
+              {
+                "artistId": 8847,
+                "name": null,
+                "role": "Associated Performer",
+                "roleCategory": "PERFORMER"
+              },
+              {
+                "artistId": 8847,
+                "name": null,
+                "role": "Synthesizer",
+                "roleCategory": "PERFORMER"
+              },
+              {
+                "artistId": 8847,
+                "name": null,
+                "role": "Vocal",
+                "roleCategory": "PERFORMER"
+              }
+            ]
+          }
+        },
+        {
+          "type": "TRACK_CREDITS",
+          "following": false,
+          "data": {
+            "id": 77706588,
+            "editable": false,
+            "title": "Starboy",
+            "album": {
+              "id": 77706587,
+              "title": "Starboy",
+              "version": null,
+              "cover": "59c4dbdf-e38b-4c8d-9f9f-b043dbb8850a",
+              "vibrantColor": "#e4b50c",
+              "videoCover": null,
+              "releaseDate": "2016-11-25",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 4761957,
+                "name": "The Weeknd",
+                "handle": null,
+                "picture": "5598dc62-acf6-49f1-b468-192ad3555278",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": false,
+                "userId": null
+              }
+            ],
+            "version": null,
+            "duration": 230,
+            "popularity": 87,
+            "doublePopularity": 0.872577331875347,
+            "trackNumber": 1,
+            "volumeNumber": 1,
+            "explicit": true,
+            "replayGain": -9.48,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2016-11-25T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001577f3bb0e376d07c9254985e50d"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 350,
+            "providerName": "Universal",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 21,
+                "name": "R&B",
+                "parentId": 20
+              },
+              {
+                "id": 20,
+                "name": "R&B/Soul",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "minor",
+              "bpm": "93.0",
+              "key": "D",
+              "keyScale": "MINOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2017-08-21T18:32:00.834Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "credits": [
+              {
+                "artistId": 8847,
+                "name": null,
+                "role": "Producer",
+                "roleCategory": "PRODUCER"
+              }
+            ]
+          }
+        },
+        {
+          "type": "TRACK_CREDITS",
+          "following": false,
+          "data": {
+            "id": 77706605,
+            "editable": false,
+            "title": "I Feel It Coming",
+            "album": {
+              "id": 77706587,
+              "title": "Starboy",
+              "version": null,
+              "cover": "59c4dbdf-e38b-4c8d-9f9f-b043dbb8850a",
+              "vibrantColor": "#e4b50c",
+              "videoCover": null,
+              "releaseDate": "2016-11-25",
+              "upload": false,
+              "ai": false
+            },
+            "artists": [
+              {
+                "id": 4761957,
+                "name": "The Weeknd",
+                "handle": null,
+                "picture": "5598dc62-acf6-49f1-b468-192ad3555278",
+                "main": true,
+                "userId": null
+              },
+              {
+                "id": 8847,
+                "name": "Daft Punk",
+                "handle": null,
+                "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                "main": false,
+                "userId": null
+              }
+            ],
+            "version": null,
+            "duration": 269,
+            "popularity": 86,
+            "doublePopularity": 0.8612334933181117,
+            "trackNumber": 18,
+            "volumeNumber": 1,
+            "explicit": false,
+            "replayGain": -9.48,
+            "audioQuality": "LOSSLESS",
+            "allowStreaming": true,
+            "streamStartDate": "2016-11-25T00",
+            "streamReady": true,
+            "audioModes": [
+              "STEREO"
+            ],
+            "mixes": {
+              "TRACK_MIX": "001cc5f3f54287fe96bab888a08e1f"
+            },
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 350,
+            "providerName": "Universal",
+            "djReady": true,
+            "stemReady": false,
+            "payToStream": false,
+            "genres": [
+              {
+                "id": 21,
+                "name": "R&B",
+                "parentId": 20
+              },
+              {
+                "id": 20,
+                "name": "R&B/Soul",
+                "parentId": null
+              }
+            ],
+            "audioAnalysisAttributes": {
+              "scale": "major",
+              "bpm": "93.0",
+              "key": "Eb",
+              "keyScale": "MAJOR"
+            },
+            "upload": false,
+            "accessType": "PUBLIC",
+            "spotlighted": false,
+            "createdAt": "2017-08-21T18:32:00.97Z",
+            "userId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "ai": false,
+            "credits": [
+              {
+                "artistId": 8847,
+                "name": null,
+                "role": "Producer",
+                "roleCategory": "PRODUCER"
+              }
+            ]
+          }
+        }
+      ],
+      "viewAll": "artist/ARTIST_CREDITS/view-all?artistId=8847",
+      "contributorId": "8847"
+    },
+    {
+      "type": "HORIZONTAL_LIST",
+      "moduleId": "ARTIST_APPEARS_ON",
+      "title": "Appears On",
+      "icons": [],
+      "showQuickPlay": false,
+      "viewAll": "artist/ARTIST_APPEARS_ON/view-all?artistId=8847",
+      "items": [
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 391896755,
+            "title": "Piece By Piece - Music from the Motion Picture",
+            "artists": [
+              {
+                "id": 4900204,
+                "name": "Pharrell Williams",
+                "handle": null,
+                "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 5209,
+            "cover": "8f2f9f28-daeb-41de-80bc-b55491556c39",
+            "vibrantColor": "#50b1dc",
+            "videoCover": null,
+            "copyright": "(P) 2024 Focus Features LLC, under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 21,
+            "numberOfVideos": 0,
+            "popularity": 41,
+            "doublePopularity": 0.40981544102662415,
+            "version": null,
+            "releaseDate": "2024-10-11",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "196872452662",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1ef84f4c720d93ab5d14d26883f70dd2",
+              "releaseDate": "2024-10-11",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2024-10-11T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 50,
+            "providerName": "Sony Music",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": "2024-10-07T21:40:27.46694Z",
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": false,
+            "priceCode": null,
+            "validFrom": "2024-10-11T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 298243851,
+            "title": "BiPolar - Digital vs. Analog",
+            "artists": [
+              {
+                "id": 39862602,
+                "name": "ReCirc",
+                "handle": null,
+                "picture": null,
+                "main": true,
+                "userId": 12345
+              }
+            ],
+            "duration": 8496,
+            "cover": "15d88c80-2dfe-4b17-a72b-7f23140c13ce",
+            "vibrantColor": "#e68c93",
+            "videoCover": null,
+            "copyright": "2022 ReCirc",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 36,
+            "numberOfVideos": 0,
+            "popularity": 11,
+            "doublePopularity": 0.11104350379252724,
+            "version": null,
+            "releaseDate": "2022-10-15",
+            "type": "ALBUM",
+            "explicit": true,
+            "upc": "859766803963",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1ee0214c58e68cab48b9f064414d6a42",
+              "releaseDate": "2022-10-15",
+              "categories": [
+                "UNDEFINED"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2022-10-15T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS"
+              ]
+            },
+            "providerId": 619,
+            "providerName": "TuneCore",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": null,
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": true,
+            "priceCode": "AMid",
+            "validFrom": "2022-10-15T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        },
+        {
+          "type": "ALBUM",
+          "following": false,
+          "latestRelease": false,
+          "data": {
+            "id": 407368886,
+            "title": "Defected presents House Masters - Todd Edwards",
+            "artists": [
+              {
+                "id": 3566370,
+                "name": "Todd Edwards",
+                "handle": null,
+                "picture": "0b0cc4fb-e551-4e08-8a24-ee51abbdeca9",
+                "main": true,
+                "userId": null
+              }
+            ],
+            "duration": 15688,
+            "cover": "86a798b6-f1bf-4d29-b6e0-b8ff33363ae1",
+            "vibrantColor": "#e1be21",
+            "videoCover": null,
+            "copyright": "Defected Records Limited",
+            "numberOfVolumes": 1,
+            "numberOfTracks": 42,
+            "numberOfVideos": 0,
+            "popularity": 26,
+            "doublePopularity": 0.2576804152602714,
+            "version": null,
+            "releaseDate": "2021-06-18",
+            "type": "ALBUM",
+            "explicit": false,
+            "upc": "826194543198",
+            "audioQuality": "LOSSLESS",
+            "masterAlbum": {
+              "id": "1ebc3b32b10b6ae999619e39c811ba72",
+              "releaseDate": "2021-06-18",
+              "categories": [
+                "COMPILATION"
+              ]
+            },
+            "allowStreaming": true,
+            "streamStartDate": "2021-06-18T00",
+            "streamReady": true,
+            "payToStream": false,
+            "audioModes": [
+              "STEREO"
+            ],
+            "adSupportedStreamReady": true,
+            "mediaMetadata": {
+              "tags": [
+                "LOSSLESS",
+                "HIRES_LOSSLESS"
+              ]
+            },
+            "providerId": 547,
+            "providerName": "IIP-DDS",
+            "djReady": true,
+            "stemReady": false,
+            "upload": false,
+            "accessType": "PUBLIC",
+            "createdAt": null,
+            "userId": null,
+            "artworkId": null,
+            "downloadReady": true,
+            "priceCode": "FRONT",
+            "validFrom": "2021-06-18T00:00:00",
+            "validUntil": "9999-01-01T00:00:00",
+            "ai": false
+          }
+        }
+      ]
+    }
+  ]
+}

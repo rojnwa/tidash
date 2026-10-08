@@ -1,0 +1,335 @@
+{
+  "selfLink": null,
+  "id": "eyJwIjoiOGMxZjRkNjAtZDhmNS00YmU2LTg1YjMtYTA0NDExNDVkYmMwIiwicFYiOjE0fQ==",
+  "title": "Daft Punk",
+  "rows": [
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiOGMxZjRkNjAtZDhmNS00YmU2LTg1YjMtYTA0NDExNDVkYmMwIiwicFYiOjE0LCJtIjoiMTg3ZGVhMTMtNWI1ZS00OWYwLWI5YjktYjc5ODk3M2M2MjVmIiwibVYiOjEsIm1IIjoiMWE2ZjhjODMifQ==",
+          "type": "MIX_HEADER",
+          "width": 100,
+          "description": "",
+          "mix": {
+            "id": "0002737adb8d077f4591c4cdb7ba60",
+            "title": "Daft Punk",
+            "subTitle": "Artist Radio",
+            "description": null,
+            "graphic": {
+              "type": "SQUARES_GRID",
+              "text": "Daft Punk",
+              "images": [
+                {
+                  "id": "dummy-placeholder",
+                  "vibrantColor": "#FFFFFF",
+                  "type": "ARTIST"
+                }
+              ]
+            },
+            "images": {
+              "SMALL": {
+                "width": 320,
+                "height": 320,
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAg?token=95454e683072fdd0e82b18a10645289c4a5d2182"
+              },
+              "MEDIUM": {
+                "width": 640,
+                "height": 640,
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAg?token=b5f030afd93ba9a0e431ab25574fef5f9eead056"
+              },
+              "LARGE": {
+                "width": 1500,
+                "height": 1500,
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAg?token=c083f3f409e808d95fa68144578cfb564453ea34"
+              }
+            },
+            "sharingImages": null,
+            "mixType": "ARTIST_MIX",
+            "mixNumber": null,
+            "contentBehavior": "UNRESTRICTED",
+            "master": false,
+            "titleColor": "#B39450",
+            "subTitleColor": "#B39450",
+            "descriptionColor": null,
+            "detailImages": {
+              "SMALL": {
+                "width": 320,
+                "height": 320,
+                "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAjgB?token=bf25226b13b148ae1e199efa6ec745179d96623b"
+              },
+              "MEDIUM": {
+                "width": 640,
+                "height": 640,
+                "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAjgB?token=0ed213f9c65c66d24f59bcf85d9339cb916ab5a4"
+              },
+              "LARGE": {
+                "width": 1500,
+                "height": 1500,
+                "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQAhokNjVkMjNkZGMvN2IzYi80YjE3L2JjODQvYjAyODMyZGRjMjA0GiQ5MGY3MGI3Zi81MzkzLzRmMTQvYWU4NS9jODg4OTBmMDA2MTAaJDU1OThkYzYyL2FjZjYvNDlmMS9iNDY4LzE5MmFkMzU1NTI3OCIMQXJ0aXN0IFJhZGlvIglEYWZ0IFB1bmsqByNCMzk0NTAwAjgB?token=5222635d17e37b51c65f73d46e754af7529e6c98"
+              }
+            },
+            "shortSubtitle": "Created by TIDAL"
+          },
+          "playbackControls": [
+            {
+              "shuffle": false,
+              "playbackMode": "PLAY",
+              "title": "Play",
+              "icon": "play_tracks",
+              "targetModuleId": "eyJwIjoiOGMxZjRkNjAtZDhmNS00YmU2LTg1YjMtYTA0NDExNDVkYmMwIiwicFYiOjE0LCJtIjoiNmU5OWY3ZjUtMDk4My00Mzk5LWFkYjEtZDk2NzRmMGQ2ZDQ5IiwibVYiOjEsIm1IIjoiNWVhNDFhMCJ9"
+            },
+            {
+              "shuffle": true,
+              "playbackMode": "SHUFFLE",
+              "title": "Shuffle",
+              "icon": "shuffle_tracks",
+              "targetModuleId": "eyJwIjoiOGMxZjRkNjAtZDhmNS00YmU2LTg1YjMtYTA0NDExNDVkYmMwIiwicFYiOjE0LCJtIjoiNmU5OWY3ZjUtMDk4My00Mzk5LWFkYjEtZDk2NzRmMGQ2ZDQ5IiwibVYiOjEsIm1IIjoiNWVhNDFhMCJ9"
+            }
+          ],
+          "title": "",
+          "preTitle": ""
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiOGMxZjRkNjAtZDhmNS00YmU2LTg1YjMtYTA0NDExNDVkYmMwIiwicFYiOjE0LCJtIjoiNmU5OWY3ZjUtMDk4My00Mzk5LWFkYjEtZDk2NzRmMGQ2ZDQ5IiwibVYiOjEsIm1IIjoiNWVhNDFhMCJ9",
+          "type": "TRACK_LIST",
+          "width": 100,
+          "title": "",
+          "description": "",
+          "listFormat": "COVERS",
+          "scroll": "VERTICAL",
+          "showMore": null,
+          "pagedList": {
+            "dataApiPath": "pages/data/518d479b-3510-41ba-a62b-4c06055ec580?mixId=0002737adb8d077f4591c4cdb7ba60",
+            "limit": 100,
+            "offset": 0,
+            "totalNumberOfItems": 100,
+            "items": [
+              {
+                "id": 20115564,
+                "title": "Get Lucky",
+                "duration": 370,
+                "version": "feat. Pharrell Williams and Nile Rodgers",
+                "url": "https://tidal.com/browse/track/20115564",
+                "artists": [
+                  {
+                    "id": 8847,
+                    "name": "Daft Punk",
+                    "type": "MAIN",
+                    "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 4900204,
+                    "name": "Pharrell Williams",
+                    "type": "MAIN",
+                    "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 30528,
+                    "name": "Nile Rodgers",
+                    "type": "MAIN",
+                    "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": {
+                  "id": 20115556,
+                  "title": "Random Access Memories",
+                  "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+                  "vibrantColor": "#efdd83",
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/20115556",
+                  "releaseDate": "2013-05-20",
+                  "ai": false
+                },
+                "explicit": false,
+                "volumeNumber": 1,
+                "trackNumber": 8,
+                "popularity": 90,
+                "doublePopularity": 0.8961077193805813,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2013-05-20T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -7.55,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": {
+                  "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+                },
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              },
+              {
+                "id": 19823990,
+                "title": "Get Lucky",
+                "duration": 248,
+                "version": "Radio Edit - feat. Pharrell Williams and Nile Rodgers",
+                "url": "https://tidal.com/browse/track/19823990",
+                "artists": [
+                  {
+                    "id": 8847,
+                    "name": "Daft Punk",
+                    "type": "MAIN",
+                    "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 4900204,
+                    "name": "Pharrell Williams",
+                    "type": "MAIN",
+                    "picture": "90f70b7f-5393-4f14-ae85-c88890f00610",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 30528,
+                    "name": "Nile Rodgers",
+                    "type": "MAIN",
+                    "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": {
+                  "id": 19823989,
+                  "title": "Get Lucky (Radio Edit - feat. Pharrell Williams and Nile Rodgers)",
+                  "cover": "5b3c232a-c6c1-4f3d-b014-fe7f3a3d86a8",
+                  "vibrantColor": "#db4530",
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/19823989",
+                  "releaseDate": "2013-04-19",
+                  "ai": false
+                },
+                "explicit": false,
+                "volumeNumber": 1,
+                "trackNumber": 1,
+                "popularity": 82,
+                "doublePopularity": 0.8179192611203759,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2013-04-19T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -6.13,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": {
+                  "TRACK_MIX": "001d0d4483d30e5aa8e1059bbd1ecc"
+                },
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              },
+              {
+                "id": 77706605,
+                "title": "I Feel It Coming",
+                "duration": 269,
+                "version": null,
+                "url": "https://tidal.com/browse/track/77706605",
+                "artists": [
+                  {
+                    "id": 4761957,
+                    "name": "The Weeknd",
+                    "type": "MAIN",
+                    "picture": "5598dc62-acf6-49f1-b468-192ad3555278",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 8847,
+                    "name": "Daft Punk",
+                    "type": "FEATURED",
+                    "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": {
+                  "id": 77706587,
+                  "title": "Starboy",
+                  "cover": "59c4dbdf-e38b-4c8d-9f9f-b043dbb8850a",
+                  "vibrantColor": "#e4b50c",
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/77706587",
+                  "releaseDate": "2016-11-25",
+                  "ai": false
+                },
+                "explicit": false,
+                "volumeNumber": 1,
+                "trackNumber": 18,
+                "popularity": 86,
+                "doublePopularity": 0.8612334933181117,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2016-11-25T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -9.48,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": {
+                  "TRACK_MIX": "001cc5f3f54287fe96bab888a08e1f"
+                },
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "showTableHeaders": true,
+          "layout": "LIST",
+          "quickPlay": false,
+          "preTitle": null
+        }
+      ]
+    }
+  ]
+}

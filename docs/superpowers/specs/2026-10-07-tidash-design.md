@@ -139,10 +139,14 @@ none is available, tokens stay in memory with a visible warning — no plaintext
 401; all other requests run concurrently (no global client mutex). Concurrency cap ~6 in-flight requests; honor
 `Retry-After` on 429.
 
-**Endpoints.** Exactly the set the official desktop client uses (v1 `api.tidal.com/v1`, plus `api.tidal.com/v2` /
-`openapi.tidal.com/v2` where the official client uses them): pages (home, explore, artist, album, mix), search,
-favorites + ids, playlists CRUD + items + folders, mixes, track/artist radio, lyrics, credits, playbackinfo, user,
-event batch.
+**Endpoints.** Exactly the set the official desktop client uses (S4): Home is the v2 feed
+`api.tidal.com/v2/home/feed/static` (cursor pages, a `view-all` per shelf); the artist page is v2 `artist/{id}`;
+Explore, genre/mood pages and the mix page are v1 `pages/*` documents; playlists, favorite tracks/albums/artists and
+favorite ids are v1; favorite mixes and the playlist list are v2 (`favorites/mixes`, `my-collection/playlists/folders`).
+Also search, album, playlist edits, radio, lyrics, credits, playbackinfo, user, event batch. v1 requests add
+`countryCode`, `locale=en_US` and `deviceType=DESKTOP`; v2 requests also add `platform=DESKTOP` and the header
+`x-tidal-client-version` (required). The public `openapi.tidal.com/v2` API accepts our token and is the fallback if the
+internal endpoints break; M2 does not use it.
 
 **Models.** Hand-written serde structs with only the fields we use; unknown fields ignored; enums carry
 `#[serde(other)] Unknown` so new values never break parsing.
@@ -267,14 +271,16 @@ Implementation plans are written one milestone at a time; the first plan covers 
 | S1 Auth + manifests | Which official client ID + redirect works with PKCE without a client secret? What manifest types (BTS single FLAC vs DASH) and encryption come back for LOSSLESS and HI_RES_LOSSLESS? Are lossy tiers DRM-free? | Written answer + a working token and a decodable Hi-Res stream URL |
 | S2 Audio | symphonia decode from a progressive temp file; WASAPI exclusive at 24/96 and 24/192 via `wasapi`; gapless append between two FLACs | Bit-identical capture and audible gapless on Windows; notes for macOS/Linux |
 | S3 UI | egui virtualized grid of 10 000 covers at 320 px with async decode | RAM and frame-time numbers recorded |
+| S4 Library (M2) | Which endpoints and response shapes do Home, Explore, artist, playlist, mix and the collection use, with which page sizes and cache headers? | Live recordings, sanitized fixtures, written answers |
 
-**Findings (M0, 2026-10-07)**
+**Findings (M0, 2026-10-07; S4, 2026-10-08)**
 
 | Spike | Result |
 |---|---|
 | [S1](../../spikes/s1-auth-manifests.md) | Client `android` `6BDSRdpK9hqEBTgU` via PKCE, redirect `https://tidal.com/android/login/auth`; no client secret for exchange or refresh; refresh returns no new `refresh_token` (keep the old one). Every quality (LOW to HI_RES_LOSSLESS) is unencrypted DASH, FLAC in fMP4 for lossless; lossy tiers are DRM-free too. Images: `resources.tidal.com`. Play events: `POST ec.tidal.com/api/event-batch`. |
 | [S2](../../spikes/s2-audio.md) | WASAPI exclusive works on the test DAC (24/96 USB, accepts 24-bit packed at 44.1/48/96 kHz only). Gapless a→b: 0 underruns, output sample-equal to the source. fMP4 FLAC decodes bit-exact via symphonia, but `num_frames = 0` (duration from the MPD) and `tfdt` is ignored (add segment start to pts). Pre-open the next track before EOF; the probe's 118–154 µs open was a warm local file. Unsupported source rates exist (88.2 kHz on a 24/96 DAC) → M3 decision. |
 | [S3](../../spikes/s3-grid.md) | 10 000-cell grid: working set 90–114 MB, app CPU ~0.3 ms/frame; 144 Hz pacing not demonstrated (stalls up to 59 ms, mostly in frames with 0 uploads; cause not isolated, driver/DWM suspected); idle repaints from the egui scrollbar fade while the pointer hovers; 200 px display-size textures save ~60 MB. Verdict: keep egui. |
+| [S4](../../spikes/s4-library-endpoints.md) | All probed endpoints answer the android token. Home = v2 feed (cursor; 10 + 8 modules), artist = v2 `artist/{id}` (discography as separate shelves, no tabs seen), Explore/genre/mix = v1 `pages/*`. v2 rejects requests without `x-tidal-client-version`; `DESKTOP` and `BROWSER`/`WEB` return the same. Page caps: playlist items 100, v1 `pages/data` 50, v2 folders 50; favorites pages run short mid-list (unavailable items dropped), so offsets step by `limit` up to the total. v1 pages, playlists and favorites honour `If-None-Match` (304); v2 home/artist are `no-store` with no ETag. Favorited playlists are `itemType: PLAYLIST` in the flattened list. `openapi.tidal.com/v2` accepts the token. |
 
 **Gate decisions (human, 2026-10-07)**
 

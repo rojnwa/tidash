@@ -1,0 +1,1309 @@
+{
+  "selfLink": null,
+  "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyfQ==",
+  "title": "Pop",
+  "rows": [
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiMmJlYTE1MDAtY2JjYi00NGFlLWFiODAtM2NjNDhlNzI3MTZhIiwibVYiOjEsIm1IIjoiZDc2YTQ1NiJ9",
+          "type": "PLAYLIST_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Playlists",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/2bea1500-cbcb-44ae-ab80-3cc48e72716a/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/be45400e-c7c1-4e0c-a505-eac1be5f869b",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 21,
+            "items": [
+              {
+                "uuid": "b0d95b5e-7c4f-4dae-b042-b8c6228c2ba4",
+                "title": "Pop Life: Best New Tracks",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/b0d95b5e-7c4f-4dae-b042-b8c6228c2ba4",
+                "image": "dad2801a-acce-459d-92ef-4cb06264d607",
+                "squareImage": "ebb11bf5-098e-4bf4-9c0a-6a18f3fb8dcd",
+                "duration": 9336,
+                "numberOfTracks": 49,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-10-02T05:20:16.146Z",
+                "promotedArtists": [
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "dc7b6e54-699f-4eb1-bb2b-32aed3fc571e",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 15545,
+                    "name": "Madonna",
+                    "type": "MAIN",
+                    "picture": "65d2499c-9152-43ac-98e6-45e002e88425",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 4542094,
+                    "name": "Charli xcx",
+                    "type": "MAIN",
+                    "picture": "7ba892b0-bbf3-40fb-b7de-df2a72ebcf33",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Your one-stop shop for the best new pop music you need to know right now. (Cover: Taylor Swift/ Photo: Republic Records/Press)  "
+              },
+              {
+                "uuid": "36ea71a8-445e-41a4-82ab-6628c581535d",
+                "title": "Pop Hits",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/36ea71a8-445e-41a4-82ab-6628c581535d",
+                "image": "f99bb8a6-03a5-43de-86a9-e0904e5225dc",
+                "squareImage": "9e4c437b-a908-49f7-adb3-61067cc76ad2",
+                "duration": 9996,
+                "numberOfTracks": 50,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-09-28T20:56:07.285Z",
+                "promotedArtists": [
+                  {
+                    "id": 10697175,
+                    "name": "Adéla",
+                    "type": "MAIN",
+                    "picture": "ec997b58-99df-4a2a-b25d-fc90df1b5d35",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "58fac352-8af0-45b8-90e1-7183f2a6d04b",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 4332277,
+                    "name": "Ariana Grande",
+                    "type": "MAIN",
+                    "picture": "9b18dc21-95ea-4dd9-9c5b-46ef012ec00d",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "The pop songs everyone knows and loves. Current chart toppers and undeniable favorites in one place. (Cover: Adéla/ Photo: Capitol/press) "
+              },
+              {
+                "uuid": "edb69697-fc65-4580-b938-55f0f4bd7c54",
+                "title": "Pop Classics",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/edb69697-fc65-4580-b938-55f0f4bd7c54",
+                "image": "f6c6c5ea-5a76-4791-af06-daf9be3c5a77",
+                "squareImage": "595a4cb8-2656-4157-a7b6-f2d84405b956",
+                "duration": 54632,
+                "numberOfTracks": 235,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-10-07T02:56:45.438Z",
+                "promotedArtists": [
+                  {
+                    "id": 10665,
+                    "name": "Rihanna",
+                    "type": "MAIN",
+                    "picture": "1ce84233-1364-4947-b472-b7d6bcc99c5f",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 8401,
+                    "name": "Calvin Harris",
+                    "type": "MAIN",
+                    "picture": "df9ebe34-0083-4c94-a78f-2b899fe9d1b8",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 1566,
+                    "name": "Beyoncé",
+                    "type": "MAIN",
+                    "picture": "0073e74d-ccf0-41d6-855d-374fdf71e5ed",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "A mega playlist with unforgettable throwback pop jams for all generations. (Cover: Rihanna / Photo: Republic Collective/Press)"
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "playlistStyle": null,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiMGZmZjViZGQtMWFmOS00NjNmLTg4NjktM2E2NjNhYTAyYWU5IiwibVYiOjEsIm1IIjoiNzYzODIxZDUifQ==",
+          "type": "TRACK_LIST",
+          "width": 100,
+          "title": "New Tracks",
+          "description": "",
+          "listFormat": "COVERS",
+          "scroll": null,
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/0fff5bdd-1af9-463f-8869-3a663aa02ae9/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/638452de-9be9-46ed-a75b-62ff9155fd40",
+            "limit": 5,
+            "offset": 0,
+            "totalNumberOfItems": 471,
+            "items": [
+              {
+                "id": 565150295,
+                "title": "Leave The Rodeo",
+                "duration": 178,
+                "version": null,
+                "url": "https://tidal.com/browse/track/565150295",
+                "artists": [
+                  {
+                    "id": 67670741,
+                    "name": "Tyler Miller",
+                    "type": "MAIN",
+                    "picture": "6fbf879a-dbc4-4308-9d6f-87e550b2e7bd",
+                    "handle": "tylermiller",
+                    "userId": 12345
+                  }
+                ],
+                "album": {
+                  "id": 565150294,
+                  "title": "Leave The Rodeo",
+                  "cover": "8b18ca50-4966-4946-b86a-c9124091e41c",
+                  "vibrantColor": null,
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/565150294",
+                  "releaseDate": "2026-10-06",
+                  "ai": false
+                },
+                "explicit": true,
+                "volumeNumber": 1,
+                "trackNumber": 1,
+                "popularity": 31,
+                "doublePopularity": 0.3116361184175076,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-06T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -8.28,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": null,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              },
+              {
+                "id": 564081073,
+                "title": "Careless Whisper",
+                "duration": 472,
+                "version": "Live in Paris, 1988",
+                "url": "https://tidal.com/browse/track/564081073",
+                "artists": [
+                  {
+                    "id": 531,
+                    "name": "George Michael",
+                    "type": "MAIN",
+                    "picture": "54129d5e-33dc-4d6f-bb57-74eaf9edba7f",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": {
+                  "id": 564081069,
+                  "title": "Careless Whisper (Live in Paris, 1988)",
+                  "cover": "276961bf-a611-4161-956e-5455e7c444bc",
+                  "vibrantColor": null,
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/564081069",
+                  "releaseDate": "2026-10-08",
+                  "ai": false
+                },
+                "explicit": false,
+                "volumeNumber": 1,
+                "trackNumber": 1,
+                "popularity": 0,
+                "doublePopularity": 0.0,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-08T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -6.78,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": null,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              },
+              {
+                "id": 564178214,
+                "title": "Draw You Out",
+                "duration": 256,
+                "version": "From The Hunger Games: Sunrise on the Reaping - The Album",
+                "url": "https://tidal.com/browse/track/564178214",
+                "artists": [
+                  {
+                    "id": 8451939,
+                    "name": "Noah Kahan",
+                    "type": "MAIN",
+                    "picture": "6ebc79ce-56c9-4e35-8782-722e368faf90",
+                    "handle": null,
+                    "userId": null
+                  },
+                  {
+                    "id": 86841321,
+                    "name": "The Hunger Games",
+                    "type": "MAIN",
+                    "picture": "42d650f1-1c4b-4363-b467-43d8ab7a5b4a",
+                    "handle": "thehungergames",
+                    "userId": 12345
+                  }
+                ],
+                "album": {
+                  "id": 564178213,
+                  "title": "Draw You Out (From The Hunger Games: Sunrise on the Reaping - The Album)",
+                  "cover": "016f5fd0-7d80-4ee9-9238-62b63bab593b",
+                  "vibrantColor": null,
+                  "videoCover": null,
+                  "url": "https://tidal.com/browse/album/564178213",
+                  "releaseDate": "2026-10-02",
+                  "ai": false
+                },
+                "explicit": false,
+                "volumeNumber": 1,
+                "trackNumber": 1,
+                "popularity": 64,
+                "doublePopularity": 0.6358514578144021,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-02T00:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "editable": false,
+                "replayGain": -9.23,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "mixes": {
+                  "TRACK_MIX": "001c7c650ff067a4798f55cf1a1b22"
+                },
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS"
+                  ]
+                },
+                "upload": false,
+                "payToStream": false,
+                "accessType": "PUBLIC",
+                "spotlighted": false,
+                "ai": false
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "showTableHeaders": true,
+          "layout": null,
+          "quickPlay": false,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiZDNmMDZmYTQtNDY3MC00ZDY3LTk3YzItY2U2ZTNkMDUxNmQwIiwibVYiOjEsIm1IIjoiODk1Y2E1NDcifQ==",
+          "type": "ALBUM_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "New Albums",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/d3f06fa4-4670-4d67-97c2-ce6e3d0516d0/1"
+          },
+          "listFormat": null,
+          "pagedList": {
+            "dataApiPath": "pages/data/9e5adc1c-f0c5-4cc0-9dc7-8c092f284d98",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 271,
+            "items": [
+              {
+                "id": 564082191,
+                "title": "The Life of a Showgirl: The Encore",
+                "cover": "39e3dad3-33fb-47f2-87f8-8b6f8c55734c",
+                "vibrantColor": "#ec0b6f",
+                "videoCover": null,
+                "url": "https://tidal.com/browse/album/564082191",
+                "artists": [
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "dc7b6e54-699f-4eb1-bb2b-32aed3fc571e",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": true,
+                "streamReady": true,
+                "streamStartDate": "2026-09-25T05:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 16,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "releaseDate": "2025-10-03",
+                "duration": 3348,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                }
+              },
+              {
+                "id": 562393322,
+                "title": "Popstar",
+                "cover": "b5ecdb9d-c9b4-460d-bf46-5dfdc341b5c9",
+                "vibrantColor": "#facbb1",
+                "videoCover": null,
+                "url": "https://tidal.com/browse/album/562393322",
+                "artists": [
+                  {
+                    "id": 5222063,
+                    "name": "Tinashe",
+                    "type": "MAIN",
+                    "picture": "21309700-cc94-4fd5-8aaf-692a39d97681",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": true,
+                "streamReady": true,
+                "streamStartDate": "2026-09-25T00:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 16,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "releaseDate": "2026-09-25",
+                "duration": 2371,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                }
+              },
+              {
+                "id": 565483277,
+                "title": "LOST IN LUST",
+                "cover": "ce01dafb-8340-42b9-a6a5-a0e6d936767f",
+                "vibrantColor": "#418ebe",
+                "videoCover": null,
+                "url": "https://tidal.com/browse/album/565483277",
+                "artists": [
+                  {
+                    "id": 8419680,
+                    "name": "Pabllo Vittar",
+                    "type": "MAIN",
+                    "picture": "dcf4ad2b-72f6-4c3f-b25b-88e036f9a1bc",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-02T01:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 12,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO",
+                  "DOLBY_ATMOS"
+                ],
+                "releaseDate": "2026-10-01",
+                "duration": 1739,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS",
+                    "DOLBY_ATMOS"
+                  ]
+                }
+              }
+            ]
+          },
+          "header": null,
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiYjBhMjViMDItYmQ2Mi00YmVmLWEyMGUtOTAyNDA3YTE3NGI5IiwibVYiOjEsIm1IIjoiNDdkZjNkMTAifQ==",
+          "type": "VIDEO_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "New Music Videos",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/b0a25b02-bd62-4bef-a20e-902407a174b9/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/945bf9e9-3eeb-4e74-8c74-5d79f1c4b16a",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 199,
+            "items": [
+              {
+                "id": 566286674,
+                "title": "Dance With Me",
+                "duration": 221,
+                "version": null,
+                "url": "https://tidal.com/browse/video/566286674",
+                "artists": [
+                  {
+                    "id": 3658521,
+                    "name": "Bruno Mars",
+                    "type": "MAIN",
+                    "picture": "00b6904f-7ef7-4f79-8c53-2cb170d23c32",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": null,
+                "explicit": false,
+                "volumeNumber": 0,
+                "trackNumber": 0,
+                "popularity": 1,
+                "doublePopularity": 0.01,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-01T17:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "imageId": "1484bc32-0662-450b-b1e1-4eea23a73f4b",
+                "vibrantColor": null,
+                "releaseDate": "2026-10-01",
+                "type": "Music Video",
+                "adsUrl": null,
+                "adsPrePaywallOnly": true
+              },
+              {
+                "id": 564826003,
+                "title": "Patient Zero",
+                "duration": 312,
+                "version": null,
+                "url": "https://tidal.com/browse/video/564826003",
+                "artists": [
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "dc7b6e54-699f-4eb1-bb2b-32aed3fc571e",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": null,
+                "explicit": false,
+                "volumeNumber": 0,
+                "trackNumber": 0,
+                "popularity": 47,
+                "doublePopularity": 0.46934868821077214,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-09-28T03:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "imageId": "27cc21e1-f84a-4caf-824f-d28f31570bce",
+                "vibrantColor": null,
+                "releaseDate": "2026-09-28",
+                "type": "Music Video",
+                "adsUrl": null,
+                "adsPrePaywallOnly": true
+              },
+              {
+                "id": 566293027,
+                "title": "World's Greatest!",
+                "duration": 369,
+                "version": "Official Video",
+                "url": "https://tidal.com/browse/video/566293027",
+                "artists": [
+                  {
+                    "id": 9996466,
+                    "name": "Lil Nas X",
+                    "type": "MAIN",
+                    "picture": "4f37b3c1-d232-4984-8d41-53d1bb3307b6",
+                    "handle": null,
+                    "userId": null
+                  }
+                ],
+                "album": null,
+                "explicit": true,
+                "volumeNumber": 0,
+                "trackNumber": 0,
+                "popularity": 25,
+                "doublePopularity": 0.25319782904769406,
+                "allowStreaming": true,
+                "streamReady": true,
+                "streamStartDate": "2026-10-01T17:00:00.000+0000",
+                "adSupportedStreamReady": true,
+                "djReady": true,
+                "stemReady": false,
+                "imageId": "cdd58c7f-ff18-4fc0-a899-cec489a09d8b",
+                "vibrantColor": null,
+                "releaseDate": "2026-10-01",
+                "type": "Music Video",
+                "adsUrl": null,
+                "adsPrePaywallOnly": true
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "showTableHeaders": false,
+          "listFormat": null,
+          "layout": null,
+          "quickPlay": false,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiZDRhNWFkMWItYWEwYS00ZTU1LTgxYjEtZGFlNTc5OGZlNTFjIiwibVYiOjEsIm1IIjoiYzNlYzRiNjgifQ==",
+          "type": "PLAYLIST_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Essentials",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/d4a5ad1b-aa0a-4e55-81b1-dae5798fe51c/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/767d4792-4f5c-4031-88be-58b3246d27c3",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 244,
+            "items": [
+              {
+                "uuid": "4d056fb5-99f9-46ec-8ff3-f2dddd41821f",
+                "title": "Taylor Swift Essentials",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/4d056fb5-99f9-46ec-8ff3-f2dddd41821f",
+                "image": "747e4c6f-7eaa-416b-86f7-7d4b55d4d0f7",
+                "squareImage": "2eb4f8da-1c35-4571-865a-6a6b77cc07cf",
+                "duration": 7135,
+                "numberOfTracks": 30,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-09-28T15:03:17.43Z",
+                "promotedArtists": [
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "58fac352-8af0-45b8-90e1-7183f2a6d04b",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Step into the tracks that made Taylor Swift the leading lady of girl power and heartbreak anthems. (Photo: Republic Records, press) "
+              },
+              {
+                "uuid": "0d5b825a-df9a-42f5-b4fc-c0be39aaa74a",
+                "title": "Noah Kahan Essentials",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/0d5b825a-df9a-42f5-b4fc-c0be39aaa74a",
+                "image": "1fcc87a3-25e4-417d-8ca9-cd0b8025d62f",
+                "squareImage": "6c320a58-57da-44ea-9377-04c60a9a44fa",
+                "duration": 3557,
+                "numberOfTracks": 15,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-06-25T19:05:24.188Z",
+                "promotedArtists": [
+                  {
+                    "id": 8451939,
+                    "name": "Noah Kahan",
+                    "type": "MAIN",
+                    "picture": "6ebc79ce-56c9-4e35-8782-722e368faf90",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 6521080,
+                    "name": "Post Malone",
+                    "type": "MAIN",
+                    "picture": "039dedb4-2e50-41df-ae8f-54ad371a31f3",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Noah Kahan Essentials captures the introspective songwriting that made him a breakout voice in modern folk. Blending raw emotion with anthemic choruses, his music turns personal reflection into something universally felt. (Photo: Mercury/Press)"
+              },
+              {
+                "uuid": "97683944-c667-4709-a539-1284bdf7806f",
+                "title": "Adéla Essentials",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/97683944-c667-4709-a539-1284bdf7806f",
+                "image": "8c333429-1246-4f38-bd34-242814a54137",
+                "squareImage": "15bcd8c0-b968-4716-b11b-187b69958a73",
+                "duration": 2576,
+                "numberOfTracks": 15,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-09-08T19:03:16.768Z",
+                "promotedArtists": [
+                  {
+                    "id": 10697175,
+                    "name": "Adéla",
+                    "type": "MAIN",
+                    "picture": "ec997b58-99df-4a2a-b25d-fc90df1b5d35",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Slovak singer/songwriter Adéla makes irresistible dance hits built for every mood and moment. Dive into the essential tracks from one of pop’s rising voices. (Photo: Interscope)"
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "playlistStyle": null,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiNGY4MjI5YTQtMDI0Yy00N2VlLTg2ZmYtZWViZDRjZTIyYTM1IiwibVYiOjEsIm1IIjoiZDM2MDdjMDkifQ==",
+          "type": "PLAYLIST_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Classics",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/4f8229a4-024c-47ee-86ff-eebd4ce22a35/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/5de727d5-594c-42eb-a1a4-5cf3c24f70f3",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 8,
+            "items": [
+              {
+                "uuid": "edb69697-fc65-4580-b938-55f0f4bd7c54",
+                "title": "Pop Classics",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/edb69697-fc65-4580-b938-55f0f4bd7c54",
+                "image": "f6c6c5ea-5a76-4791-af06-daf9be3c5a77",
+                "squareImage": "595a4cb8-2656-4157-a7b6-f2d84405b956",
+                "duration": 54632,
+                "numberOfTracks": 235,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-10-07T02:56:45.438Z",
+                "promotedArtists": [
+                  {
+                    "id": 10665,
+                    "name": "Rihanna",
+                    "type": "MAIN",
+                    "picture": "1ce84233-1364-4947-b472-b7d6bcc99c5f",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 8401,
+                    "name": "Calvin Harris",
+                    "type": "MAIN",
+                    "picture": "df9ebe34-0083-4c94-a78f-2b899fe9d1b8",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 1566,
+                    "name": "Beyoncé",
+                    "type": "MAIN",
+                    "picture": "0073e74d-ccf0-41d6-855d-374fdf71e5ed",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "A mega playlist with unforgettable throwback pop jams for all generations. (Cover: Rihanna / Photo: Republic Collective/Press)"
+              },
+              {
+                "uuid": "1c2b8486-5e4c-45f4-a6c8-049e3c642f79",
+                "title": "1960s Pop Hits",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/1c2b8486-5e4c-45f4-a6c8-049e3c642f79",
+                "image": null,
+                "squareImage": "30c709d1-ae00-4f3c-aa55-411cd8c3104c",
+                "duration": 18258,
+                "numberOfTracks": 100,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-01-13T05:42:53.182Z",
+                "promotedArtists": [
+                  {
+                    "id": 9371,
+                    "name": "The Beach Boys",
+                    "type": "MAIN",
+                    "picture": "9bd1c4e6-a45f-4f60-a6fe-a446bfa8d6da",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 19369,
+                    "name": "The Ronettes",
+                    "type": "MAIN",
+                    "picture": "394809b3-1737-418e-a78f-511c1c1e0aec",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 3634161,
+                    "name": "The Beatles",
+                    "type": "MAIN",
+                    "picture": "17cc66ef-75c2-4033-a776-ac56d1af856f",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Jump on the nostalgic train and enjoy this selection of unforgettable hits, one-hit wonders and forgotten pop gems from the 1960s. (Cover: The Beach Boys - Pet Sounds, Capitol/Universal). "
+              },
+              {
+                "uuid": "5f163a91-90a3-4adf-b643-4218e41d35a7",
+                "title": "1970s Pop Hits",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/5f163a91-90a3-4adf-b643-4218e41d35a7",
+                "image": null,
+                "squareImage": "7bc6d08a-ab6b-43a0-a049-8e25de925617",
+                "duration": 23635,
+                "numberOfTracks": 100,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2025-01-21T11:49:05.34Z",
+                "promotedArtists": [],
+                "creators": [],
+                "description": "Jump on the nostalgic train and enjoy this selection of unforgettable hits, one-hit wonders and forgotten pop gems from the 1970s. (Cover: Simon & Garfunkel - Bridge Over Troubled Water, Columbia/Sony). "
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "playlistStyle": null,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiOTJmYTM2YzAtNTE3NS00YmIzLTgxNWEtMGQ3YjQxYzNjOGZjIiwibVYiOjEsIm1IIjoiMzg4NmI4NmQifQ==",
+          "type": "ALBUM_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Classic Albums",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/92fa36c0-5175-4bb3-815a-0d7b41c3c8fc/1"
+          },
+          "listFormat": null,
+          "pagedList": {
+            "dataApiPath": "pages/data/ec82c058-68cc-43b4-ac52-2a1adcc10abf",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 143,
+            "items": [
+              {
+                "id": 553021,
+                "title": "B'Day",
+                "cover": "98da5755-d1f3-4e63-b0db-8c8c8d738a6b",
+                "vibrantColor": "#99cbd9",
+                "videoCover": "95a05a33-f0e5-4202-8646-e5d120558bee",
+                "url": "https://tidal.com/browse/album/553021",
+                "artists": [
+                  {
+                    "id": 1566,
+                    "name": "Beyoncé",
+                    "type": "MAIN",
+                    "picture": "0073e74d-ccf0-41d6-855d-374fdf71e5ed",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": false,
+                "streamReady": true,
+                "streamStartDate": "2006-09-04T00:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 14,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "releaseDate": "2006-09-05",
+                "duration": 3111,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS"
+                  ]
+                }
+              },
+              {
+                "id": 512746,
+                "title": "FutureSex/LoveSounds",
+                "cover": "8901e5ad-41fb-491c-9efd-d5aa880db078",
+                "vibrantColor": "#c16356",
+                "videoCover": null,
+                "url": "https://tidal.com/browse/album/512746",
+                "artists": [
+                  {
+                    "id": 1569,
+                    "name": "Justin Timberlake",
+                    "type": "MAIN",
+                    "picture": "d98b512b-94d1-4f81-af3a-4b84a33a5e82",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": true,
+                "streamReady": true,
+                "streamStartDate": "2019-08-07T00:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 12,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "releaseDate": "2006-09-12",
+                "duration": 3977,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS"
+                  ]
+                }
+              },
+              {
+                "id": 562057220,
+                "title": "Illuminate (10th Anniversary Edition)",
+                "cover": "4f9a20c9-b9f7-4a87-b612-6bc77290b2aa",
+                "vibrantColor": "#85c9e0",
+                "videoCover": null,
+                "url": "https://tidal.com/browse/album/562057220",
+                "artists": [
+                  {
+                    "id": 5747802,
+                    "name": "Shawn Mendes",
+                    "type": "MAIN",
+                    "picture": "42b307e2-d48d-4ea2-a64a-2a5694ac4eb3",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "explicit": false,
+                "streamReady": true,
+                "streamStartDate": "2026-09-25T00:00:00.000+00:00",
+                "allowStreaming": true,
+                "payToStream": false,
+                "numberOfTracks": 19,
+                "numberOfVideos": 0,
+                "audioQuality": "LOSSLESS",
+                "audioModes": [
+                  "STEREO"
+                ],
+                "releaseDate": "2016-09-23",
+                "duration": 4179,
+                "upload": false,
+                "ai": false,
+                "mediaMetadata": {
+                  "tags": [
+                    "LOSSLESS",
+                    "HIRES_LOSSLESS"
+                  ]
+                }
+              }
+            ]
+          },
+          "header": null,
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiYzNjZGI3ZmEtZDg2NS00NzY0LTgyYTQtNWMxZmRlMTNlZjk3IiwibVYiOjEsIm1IIjoiNDY4MzAwNWUifQ==",
+          "type": "PLAYLIST_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Mood Playlists",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/c3cdb7fa-d865-4764-82a4-5c1fde13ef97/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/4550bf13-5442-4c82-ac48-27333e112ae5",
+            "limit": 10,
+            "offset": 0,
+            "totalNumberOfItems": 11,
+            "items": [
+              {
+                "uuid": "1f7ea38e-26a7-49be-ad17-56d9a9a6a230",
+                "title": "Autumn Pop",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/1f7ea38e-26a7-49be-ad17-56d9a9a6a230",
+                "image": "affd357d-3957-42c4-9856-e6529cce7148",
+                "squareImage": "1bcbb92b-08b1-49d4-878e-12c0a754215e",
+                "duration": 10370,
+                "numberOfTracks": 50,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-09-08T19:19:11.852Z",
+                "promotedArtists": [
+                  {
+                    "id": 53407296,
+                    "name": "girlsweetvoiced",
+                    "type": "MAIN",
+                    "picture": "66cb2fb6-7f2c-4758-8a88-991b23d22082",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 27561,
+                    "name": "The La's",
+                    "type": "MAIN",
+                    "picture": "12e71ea4-9722-489d-a907-68a306eaa058",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 8451939,
+                    "name": "Noah Kahan",
+                    "type": "MAIN",
+                    "picture": "6ebc79ce-56c9-4e35-8782-722e368faf90",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "Whether you're having a stroll in the park on a rainy day, or spending the day indoors, this selection of laidback pop songs might be what you need as your autumn soundtrack. (Photo: Roman Kraft/Unsplash)"
+              },
+              {
+                "uuid": "ae24e029-6024-4fc4-9c83-f77487a77bc7",
+                "title": "Coffee & Chill",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/ae24e029-6024-4fc4-9c83-f77487a77bc7",
+                "image": "b5699812-f26e-4647-bf17-f5aee8d31093",
+                "squareImage": "13e93495-c595-4785-86a6-b664ae2bc15c",
+                "duration": 9984,
+                "numberOfTracks": 50,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-09-25T04:00:20.242Z",
+                "promotedArtists": [
+                  {
+                    "id": 33236,
+                    "name": "Miley Cyrus",
+                    "type": "MAIN",
+                    "picture": "02f36ccd-73d3-4e2b-967a-d1a0096ea561",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 3569644,
+                    "name": "Passenger",
+                    "type": "MAIN",
+                    "picture": "a17166f5-92fa-4932-9f66-98d4feb7b613",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 32858534,
+                    "name": "Isabel Dumaa",
+                    "type": "MAIN",
+                    "picture": "01261c91-02ff-4ba8-a37f-4269d73f397d",
+                    "handle": null,
+                    "userId": 12345,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "This mix of lo-fi, indie-electro pop, acoustic, and chill pop is brewed perfectly for a productive afternoon. (Photo: Unsplash) "
+              },
+              {
+                "uuid": "0b96ad68-f1c3-4273-93dc-af2e8bb955d2",
+                "title": "Pop Workout",
+                "type": "EDITORIAL",
+                "url": "https://tidal.com/browse/playlist/0b96ad68-f1c3-4273-93dc-af2e8bb955d2",
+                "image": "cbccd04a-4043-454b-b390-96405c5994fb",
+                "squareImage": "9791849c-77a9-4ef4-aac7-9c5d527f7df0",
+                "duration": 8748,
+                "numberOfTracks": 50,
+                "numberOfVideos": 0,
+                "lastItemAddedAt": "2026-03-17T19:10:18.829Z",
+                "promotedArtists": [
+                  {
+                    "id": 23409727,
+                    "name": "PinkPantheress",
+                    "type": "MAIN",
+                    "picture": "81ef2d70-3905-4998-8f0a-b41b453ec57f",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 3557299,
+                    "name": "Taylor Swift",
+                    "type": "MAIN",
+                    "picture": "acce3554-c0dd-428b-b39a-18a06897a7c3",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  },
+                  {
+                    "id": 18324,
+                    "name": "Chris Lake",
+                    "type": "MAIN",
+                    "picture": "20b1fa75-c036-4b30-9d15-ef0886d98986",
+                    "handle": null,
+                    "userId": null,
+                    "contributionLinkUrl": null
+                  }
+                ],
+                "creators": [],
+                "description": "These pop hits make it easier to lace up those sneakers for an evening jog. (Photo: Unsplash)"
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "playlistStyle": null,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiMDE4N2RhMjMtZDhkNS00ZGZkLTljMGYtOGE3NDY1OGI0OTliIiwicFYiOjUyLCJtIjoiYWZiNjIzZDQtMTdiMy00Zjc5LWI3ZjktNWY5NDM4Y2QwOGEwIiwibVYiOjEsIm1IIjoiMjEyMDc5MDAifQ==",
+          "type": "ARTIST_LIST",
+          "width": 100,
+          "scroll": "HORIZONTAL",
+          "title": "Top Artists",
+          "description": "",
+          "showMore": {
+            "title": "View all",
+            "apiPath": "pages/single-module-page/0187da23-d8d5-4dfd-9c0f-8a74658b499b/52/afb623d4-17b3-4f79-b7f9-5f9438cd08a0/1"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/4b21d2a0-7556-4d03-a33b-cbe64366c5fc",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 201,
+            "items": [
+              {
+                "id": 3632070,
+                "name": "Drake",
+                "picture": "3812d980-630e-4948-a72e-f21a546ec2e3",
+                "selectedAlbumCoverFallback": null,
+                "artistTypes": null,
+                "artistRoles": [
+                  {
+                    "category": "Artist",
+                    "categoryId": -1
+                  },
+                  {
+                    "category": "Songwriter",
+                    "categoryId": 2
+                  },
+                  {
+                    "category": "Performer",
+                    "categoryId": 11
+                  }
+                ],
+                "mixes": {
+                  "ARTIST_MIX": "000af989e0bab94040bde3f0246609"
+                }
+              },
+              {
+                "id": 8877,
+                "name": "Depeche Mode",
+                "picture": "bc719058-31de-4fcd-b95f-f2e06d97447c",
+                "selectedAlbumCoverFallback": null,
+                "artistTypes": null,
+                "artistRoles": [
+                  {
+                    "category": "Artist",
+                    "categoryId": -1
+                  },
+                  {
+                    "category": "Performer",
+                    "categoryId": 11
+                  },
+                  {
+                    "category": "Songwriter",
+                    "categoryId": 2
+                  }
+                ],
+                "mixes": {
+                  "ARTIST_MIX": "000f4ee64d1336ab58d9e8ff66e685"
+                }
+              },
+              {
+                "id": 7806,
+                "name": "Black Eyed Peas",
+                "picture": "1b99c28b-9e06-4b6c-8074-9418764427ce",
+                "selectedAlbumCoverFallback": null,
+                "artistTypes": null,
+                "artistRoles": [
+                  {
+                    "category": "Artist",
+                    "categoryId": -1
+                  },
+                  {
+                    "category": "Songwriter",
+                    "categoryId": 2
+                  },
+                  {
+                    "category": "Performer",
+                    "categoryId": 11
+                  }
+                ],
+                "mixes": {
+                  "ARTIST_MIX": "000d366ef9197c022b6096dc76e508"
+                }
+              }
+            ]
+          },
+          "supportsPaging": false,
+          "layout": null,
+          "quickPlay": false,
+          "header": null,
+          "preTitle": null
+        }
+      ]
+    }
+  ]
+}

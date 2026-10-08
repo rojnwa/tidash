@@ -1,0 +1,226 @@
+{
+  "title": "Suggested new albums for you",
+  "subtitle": null,
+  "itemLayout": "GRID",
+  "filters": [],
+  "items": [
+    {
+      "type": "ALBUM",
+      "following": false,
+      "latestRelease": false,
+      "data": {
+        "id": 566318157,
+        "title": "How To Love",
+        "artists": [
+          {
+            "id": 8913982,
+            "name": "Shiloh Dynasty",
+            "handle": null,
+            "picture": "03466b74-606c-43b6-90c4-84c7b7f79de6",
+            "main": true,
+            "userId": null
+          },
+          {
+            "id": 76564492,
+            "name": "VNI.",
+            "handle": null,
+            "picture": null,
+            "main": true,
+            "userId": null
+          }
+        ],
+        "duration": 1357,
+        "cover": "bfb4283e-52e5-4c2a-821a-d8205760a16f",
+        "vibrantColor": null,
+        "videoCover": null,
+        "copyright": "VNI / CC",
+        "numberOfVolumes": 1,
+        "numberOfTracks": 10,
+        "numberOfVideos": 0,
+        "popularity": 52,
+        "doublePopularity": 0.5161827602179124,
+        "version": null,
+        "releaseDate": "2026-10-04",
+        "type": "ALBUM",
+        "explicit": true,
+        "upc": "612891275599",
+        "audioQuality": "LOSSLESS",
+        "masterAlbum": {
+          "id": "1f1bdc40bae0683bb54b103018b11d22",
+          "releaseDate": "2026-10-04",
+          "categories": [
+            "UNDEFINED"
+          ]
+        },
+        "allowStreaming": true,
+        "streamStartDate": "2026-10-04T00",
+        "streamReady": true,
+        "payToStream": false,
+        "audioModes": [
+          "STEREO"
+        ],
+        "adSupportedStreamReady": true,
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "providerId": 848,
+        "providerName": "Label Engine",
+        "djReady": true,
+        "stemReady": false,
+        "upload": false,
+        "accessType": "PUBLIC",
+        "createdAt": "2026-10-01T18:15:10.023713Z",
+        "userId": null,
+        "artworkId": null,
+        "downloadReady": false,
+        "priceCode": null,
+        "validFrom": "2026-10-04T00:00:00",
+        "validUntil": "9999-01-01T00:00:00",
+        "ai": false
+      }
+    },
+    {
+      "type": "ALBUM",
+      "following": false,
+      "latestRelease": false,
+      "data": {
+        "id": 561107007,
+        "title": "red",
+        "artists": [
+          {
+            "id": 13268796,
+            "name": "Lil Darkie",
+            "handle": null,
+            "picture": "41e69c5f-49ca-4e49-a9a9-e914d6ceee4f",
+            "main": true,
+            "userId": null
+          }
+        ],
+        "duration": 1956,
+        "cover": "69b07450-480c-4d64-a50e-3afe3d1b7c0d",
+        "vibrantColor": null,
+        "videoCover": null,
+        "copyright": "2026 Lil Darkie",
+        "numberOfVolumes": 1,
+        "numberOfTracks": 11,
+        "numberOfVideos": 0,
+        "popularity": 51,
+        "doublePopularity": 0.5063927896386546,
+        "version": null,
+        "releaseDate": "2026-10-06",
+        "type": "ALBUM",
+        "explicit": true,
+        "upc": "712132169820",
+        "audioQuality": "LOSSLESS",
+        "masterAlbum": {
+          "id": "1f1b03cfa856b1580fd31a3ff15a3b72",
+          "releaseDate": "2026-10-06",
+          "categories": [
+            "UNDEFINED"
+          ]
+        },
+        "allowStreaming": true,
+        "streamStartDate": "2026-10-06T00",
+        "streamReady": true,
+        "payToStream": false,
+        "audioModes": [
+          "STEREO"
+        ],
+        "adSupportedStreamReady": true,
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "providerId": 931,
+        "providerName": "Vydia",
+        "djReady": true,
+        "stemReady": false,
+        "upload": false,
+        "accessType": "PUBLIC",
+        "createdAt": "2026-09-14T13:05:33.570607Z",
+        "userId": null,
+        "artworkId": null,
+        "downloadReady": true,
+        "priceCode": null,
+        "validFrom": "2026-10-06T00:00:00",
+        "validUntil": "9999-01-01T00:00:00",
+        "ai": false
+      }
+    },
+    {
+      "type": "ALBUM",
+      "following": false,
+      "latestRelease": false,
+      "data": {
+        "id": 555130524,
+        "title": "The Last Goodbye",
+        "artists": [
+          {
+            "id": 3500380,
+            "name": "Escape the Fate",
+            "handle": null,
+            "picture": "093b865d-f486-4d34-8d31-478f58fa257d",
+            "main": true,
+            "userId": null
+          }
+        ],
+        "duration": 2875,
+        "cover": "946db973-5051-4ce5-9deb-ef380260af4c",
+        "vibrantColor": "#b43c4b",
+        "videoCover": null,
+        "copyright": "© 2026 Big Noise Music Group, LLC",
+        "numberOfVolumes": 1,
+        "numberOfTracks": 13,
+        "numberOfVideos": 0,
+        "popularity": 55,
+        "doublePopularity": 0.5488339620025479,
+        "version": null,
+        "releaseDate": "2026-10-02",
+        "type": "ALBUM",
+        "explicit": true,
+        "upc": "823375394259",
+        "audioQuality": "LOSSLESS",
+        "masterAlbum": {
+          "id": "1f19fd97ef12bb18792832575759f342",
+          "releaseDate": "2026-10-02",
+          "categories": [
+            "UNDEFINED"
+          ]
+        },
+        "allowStreaming": true,
+        "streamStartDate": "2026-10-02T00",
+        "streamReady": true,
+        "payToStream": false,
+        "audioModes": [
+          "STEREO"
+        ],
+        "adSupportedStreamReady": true,
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "providerId": 53,
+        "providerName": "Virgin Music Group",
+        "djReady": true,
+        "stemReady": false,
+        "upload": false,
+        "accessType": "PUBLIC",
+        "createdAt": "2026-08-24T16:33:07.465301Z",
+        "userId": null,
+        "artworkId": null,
+        "downloadReady": false,
+        "priceCode": null,
+        "validFrom": "2026-10-02T00:00:00",
+        "validUntil": "9999-01-01T00:00:00",
+        "ai": false
+      }
+    }
+  ],
+  "description": null
+}

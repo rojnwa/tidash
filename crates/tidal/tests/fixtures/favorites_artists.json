@@ -1,0 +1,112 @@
+{
+  "limit": 100,
+  "offset": 0,
+  "totalNumberOfItems": 3,
+  "items": [
+    {
+      "created": "2026-08-12T09:13:19.618+0000",
+      "item": {
+        "id": 21078379,
+        "name": "Allt",
+        "artistTypes": [
+          "ARTIST",
+          "CONTRIBUTOR"
+        ],
+        "url": "http://www.tidal.com/artist/21078379",
+        "picture": "46a56474-d0fb-4efa-bc1c-c30355ac9e4a",
+        "selectedAlbumCoverFallback": "7a808bb3-8500-496a-b519-b0890e1a0629",
+        "popularity": 41,
+        "artistRoles": [
+          {
+            "categoryId": -1,
+            "category": "Artist"
+          },
+          {
+            "categoryId": 11,
+            "category": "Performer"
+          },
+          {
+            "categoryId": 1,
+            "category": "Producer"
+          }
+        ],
+        "mixes": {
+          "ARTIST_MIX": "000584ea14bc77afa19d5430ec0390"
+        },
+        "handle": null,
+        "userId": null,
+        "spotlighted": false
+      }
+    },
+    {
+      "created": "2026-07-25T12:00:38.718+0000",
+      "item": {
+        "id": 33953262,
+        "name": "Bits & Hits",
+        "artistTypes": [
+          "ARTIST",
+          "CONTRIBUTOR"
+        ],
+        "url": "http://www.tidal.com/artist/33953262",
+        "picture": null,
+        "selectedAlbumCoverFallback": "2e467b40-0696-45e3-8b18-55a6369e2ea1",
+        "popularity": 42,
+        "artistRoles": [
+          {
+            "categoryId": -1,
+            "category": "Artist"
+          },
+          {
+            "categoryId": 1,
+            "category": "Producer"
+          },
+          {
+            "categoryId": 11,
+            "category": "Performer"
+          }
+        ],
+        "mixes": {
+          "ARTIST_MIX": "0003bdd68ca0574c02b63d6ba148f4"
+        },
+        "handle": null,
+        "userId": null,
+        "spotlighted": false
+      }
+    },
+    {
+      "created": "2026-06-08T11:30:41.138+0000",
+      "item": {
+        "id": 5905356,
+        "name": "Danger Dan",
+        "artistTypes": [
+          "ARTIST",
+          "CONTRIBUTOR"
+        ],
+        "url": "http://www.tidal.com/artist/5905356",
+        "picture": "1447e105-45a7-4c4e-8640-59a825e4662b",
+        "selectedAlbumCoverFallback": null,
+        "popularity": 59,
+        "artistRoles": [
+          {
+            "categoryId": -1,
+            "category": "Artist"
+          },
+          {
+            "categoryId": 11,
+            "category": "Performer"
+          },
+          {
+            "categoryId": 2,
+            "category": "Songwriter"
+          }
+        ],
+        "mixes": {
+          "ARTIST_MIX": "00087cefaf8a492bb4c08eb3df4faf"
+        },
+        "handle": null,
+        "userId": null,
+        "spotlighted": false
+      }
+    }
+  ]
+}

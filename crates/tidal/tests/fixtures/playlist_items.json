@@ -1,0 +1,254 @@
+{
+  "limit": 100,
+  "offset": 0,
+  "totalNumberOfItems": 3,
+  "items": [
+    {
+      "item": {
+        "id": 10582679,
+        "title": "We Found Love",
+        "duration": 215,
+        "replayGain": -10.39,
+        "peak": 0.998444,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2011-11-21T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 3,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 87,
+        "copyright": "℗ 2011 Def Jam Recordings, a division of UMG Recordings, Inc.",
+        "bpm": 128,
+        "key": "FSharp",
+        "keyScale": "MAJOR",
+        "description": null,
+        "url": "http://www.tidal.com/track/10582679",
+        "isrc": "USUM71115507",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 10665,
+          "name": "Rihanna",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "1ce84233-1364-4947-b472-b7d6bcc99c5f"
+        },
+        "artists": [
+          {
+            "id": 10665,
+            "name": "Rihanna",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "1ce84233-1364-4947-b472-b7d6bcc99c5f"
+          },
+          {
+            "id": 8401,
+            "name": "Calvin Harris",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "23aeba0b-12f9-457e-a0c5-3944ede8d89e"
+          }
+        ],
+        "album": {
+          "id": 10582676,
+          "title": "Talk That Talk (Deluxe)",
+          "cover": "4840e94c-7787-4fa7-bdf6-c86d2d448d07",
+          "vibrantColor": "#FFFFFF",
+          "videoCover": null,
+          "releaseDate": "2011-11-21"
+        },
+        "mixes": {
+          "TRACK_MIX": "001b3a7a50857e8eb96604ac70bca4"
+        },
+        "dateAdded": "2023-11-29T22:56:37.925+0000",
+        "index": 73,
+        "itemUuid": "f8c6f4d8-e4e6-4e17-8ee2-c43ac6403363"
+      },
+      "type": "track",
+      "cut": null
+    },
+    {
+      "item": {
+        "id": 558208631,
+        "title": "DEJA VU (feat. JAŸ-Z)",
+        "duration": 240,
+        "replayGain": -11.34,
+        "peak": 0.992996,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2026-09-04T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 35,
+        "copyright": "(P) 2026 Parkwood Entertainment LLC, under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+        "bpm": null,
+        "key": null,
+        "keyScale": null,
+        "description": null,
+        "url": "http://www.tidal.com/track/558208631",
+        "isrc": "USSM12604126",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 1566,
+          "name": "Beyoncé",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "0073e74d-ccf0-41d6-855d-374fdf71e5ed"
+        },
+        "artists": [
+          {
+            "id": 1566,
+            "name": "Beyoncé",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "0073e74d-ccf0-41d6-855d-374fdf71e5ed"
+          },
+          {
+            "id": 7804,
+            "name": "JAŸ-Z",
+            "handle": null,
+            "type": "FEATURED",
+            "picture": "83d34f7b-38ba-4898-bfe9-1d9ba9cd934d"
+          }
+        ],
+        "album": {
+          "id": 558208630,
+          "title": "B'DAY (20th ANNIVERSARY DELUXE EDITION)",
+          "cover": "ea77ba1c-297e-44fb-901a-0d0ca644d42c",
+          "vibrantColor": "#4db2a0",
+          "videoCover": null,
+          "releaseDate": "2006-09-05"
+        },
+        "mixes": {
+          "TRACK_MIX": "00184f72ac35d468608ab6ed281660"
+        },
+        "dateAdded": "2026-09-03T23:00:14.550+0000",
+        "index": 146,
+        "itemUuid": "d951b376-7189-4d0e-bd4e-3d101b5f89a6"
+      },
+      "type": "track",
+      "cut": null
+    },
+    {
+      "item": {
+        "id": 555115,
+        "title": "SexyBack (feat. Timbaland)",
+        "duration": 243,
+        "replayGain": -10.17,
+        "peak": 0.997437,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2019-08-07T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 2,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 85,
+        "copyright": "(P) 2006 Sony Music Entertainment",
+        "bpm": 117,
+        "key": "G",
+        "keyScale": "MINOR",
+        "description": null,
+        "url": "http://www.tidal.com/track/555115",
+        "isrc": "USJI10600269",
+        "editable": false,
+        "explicit": true,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 1569,
+          "name": "Justin Timberlake",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "eaf27e06-961b-4ab3-b1ef-ac76a4327e91"
+        },
+        "artists": [
+          {
+            "id": 1569,
+            "name": "Justin Timberlake",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "eaf27e06-961b-4ab3-b1ef-ac76a4327e91"
+          },
+          {
+            "id": 15708,
+            "name": "Timbaland",
+            "handle": null,
+            "type": "FEATURED",
+            "picture": "61acd1c9-525f-4e7a-ab44-3c3fe1685a3c"
+          }
+        ],
+        "album": {
+          "id": 512746,
+          "title": "FutureSex/LoveSounds",
+          "cover": "8901e5ad-41fb-491c-9efd-d5aa880db078",
+          "vibrantColor": "#c16356",
+          "videoCover": null,
+          "releaseDate": "2006-09-12"
+        },
+        "mixes": {
+          "TRACK_MIX": "001f2722ca9ef9c30802921e7fba1e"
+        },
+        "dateAdded": "2023-11-29T22:56:37.925+0000",
+        "index": 219,
+        "itemUuid": "a9126a84-dc8c-46d8-91e5-b1ac298f3ca7"
+      },
+      "type": "track",
+      "cut": null
+    }
+  ]
+}

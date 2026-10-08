@@ -1,0 +1,159 @@
+{
+  "items": [
+    {
+      "dateAdded": "2026-02-05T09:38:03.919629Z",
+      "id": "001630ec416425e180d18273a59246",
+      "mixType": "TRACK_MIX",
+      "titleTextInfo": {
+        "text": "Мокрые кроссы",
+        "color": "#A3C2D6"
+      },
+      "subTitleTextInfo": {
+        "text": "Тима Белорусских",
+        "color": "#A3C2D6"
+      },
+      "updated": "2026-10-08T18:34:17.010Z",
+      "images": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAg?token=a4d42e03435b4a18b878844c5d5a36709bdcf97b"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAg?token=73945fdcf8582116c0a36c14c141033a4893fb02"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAg?token=01fc3058c12779db03fdf547ac12bab3847d3e59"
+        }
+      },
+      "detailImages": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAjgB?token=8cbfcfeab16c52bd737c438562376f57cc5add7b"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAjgB?token=52cc85dd2c8d9ab3c209510ca3d686350d7631bb"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEQBhokZjc5NDVhMTIvZmU0My80YjA0L2ExZWIvMTkxYzBjZDY1ZjVjGiRiMmI3Yjc5Yi8wMTA1LzRkODMvYjAxZC8yMjQ5MWFmODc5MDYaJDAwNzcwYTNhL2JjZGUvNGJhYy84YTg0L2JmYmYwZGZmYTYyMCILVHJhY2sgUmFkaW8iGdCc0L7QutGA0YvQtSDQutGA0L7RgdGB0YsqByNBM0MyRDYwAjgB?token=19cb1724c373cb74b03e3a9aebf013f9fc0b203f"
+        }
+      },
+      "master": false,
+      "title": "Мокрые кроссы",
+      "subTitle": "Тима Белорусских"
+    },
+    {
+      "dateAdded": "2026-01-26T15:46:39.473842Z",
+      "id": "002c20f9756af3547934ad0e57ab38",
+      "mixType": "DAILY_MIX",
+      "titleTextInfo": {
+        "text": "My Mix 3",
+        "color": "#E0C27B"
+      },
+      "subTitleTextInfo": {
+        "text": "TOOL, System Of A Down, Lindemann and more",
+        "color": "#E0C27B"
+      },
+      "updated": "2026-10-08T08:41:36.473Z",
+      "images": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAg?token=edbadc917560615d299d4c52297fa42116a5dc68"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAg?token=2ca7d3a615db45e457ea92916a219cd286fdc8c6"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAg?token=6cb02f6aeccf6f3d27fa53e942ba3a33ae5980c0"
+        }
+      },
+      "detailImages": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAjgB?token=4e1e11ee74be63bb8f8e8182ec48e0d3d6d3a521"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAjgB?token=c954a4ac27487590954a82bab8b6a36de7f23982"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDc1NmIxM2U0LzIxOTUvNGE4Yy84NzU4L2QzYTNhMGJmZjA0ZhokMmJkNjM0ZjYvNzEwZi80YWUzLzk2NmQvY2Y0OTFhYzljMDk5GiQ2ZThiMTg3Yy82YzIxLzRhYWUvODk2NC8wMWYzMjRhMGI2YmEiATMqByNFMEMyN0IwAjgB?token=5d9b688fe2e85ed9945c8914cf59a1262f29a17d"
+        }
+      },
+      "master": false,
+      "title": "My Mix 3",
+      "subTitle": "TOOL, System Of A Down, Lindemann and more"
+    },
+    {
+      "dateAdded": "2026-01-26T15:43:07.427830Z",
+      "id": "002c2dd49e6c588d521d134e915284",
+      "mixType": "DAILY_MIX",
+      "titleTextInfo": {
+        "text": "My Mix 1",
+        "color": "#D2AC54"
+      },
+      "subTitleTextInfo": {
+        "text": "Yungblud, Polyphia, Chiodos and more",
+        "color": "#D2AC54"
+      },
+      "updated": "2026-10-08T08:41:36.473Z",
+      "images": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=f4ecfbac8b5324830c5e82bf4b878ef86a30ad92"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=5cb73447cd925f2e9a605823dd7235cb1672471b"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAg?token=f8704edd3a3666b764c9a13bed5a18fc7facfb86"
+        }
+      },
+      "detailImages": {
+        "SMALL": {
+          "width": 320,
+          "height": 320,
+          "url": "https://images.tidal.com/0/EMACGMACIKABKKAB/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=3c898ff96732b4599c21fb042d80b8afa1910b1d"
+        },
+        "MEDIUM": {
+          "width": 640,
+          "height": 640,
+          "url": "https://images.tidal.com/0/EIAFGIAFIMACKMAC/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=9942f2a4773930999f72ee015a6c7d66e79257df"
+        },
+        "LARGE": {
+          "width": 1500,
+          "height": 1500,
+          "url": "https://images.tidal.com/0/ENwLGNwLIO4FKO4F/CAEaJDZiMzYzM2U2LzZiOGYvNDI5Ni9iNDJiL2UzNjFlNmEyODJkZhokNDMzNDRlYTgvMzBjYi80NTdhLzk5M2UvMTJkOWIyYWE1Y2JkGiQ2MTgzNTQ2YS83OTg4LzQzNjQvOWIyNC85NWQwYmQ4YmI0YTIiATEqByNEMkFDNTQwAjgB?token=26a370e230cf793bb1161b483a0bdbf82004a07b"
+        }
+      },
+      "master": false,
+      "title": "My Mix 1",
+      "subTitle": "Yungblud, Polyphia, Chiodos and more"
+    }
+  ],
+  "cursor": null,
+  "lastModifiedAt": "2026-05-13T15:32:43.829853Z"
+}

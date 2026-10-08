@@ -1,0 +1,44 @@
+{
+  "uuid": "edb69697-fc65-4580-b938-55f0f4bd7c54",
+  "title": "Pop Classics",
+  "numberOfTracks": 235,
+  "numberOfVideos": 0,
+  "creator": {
+    "id": 0
+  },
+  "description": "A mega playlist with unforgettable throwback pop jams for all generations. (Cover: Rihanna / Photo: Republic Collective/Press)",
+  "duration": 54632,
+  "lastUpdated": "2026-10-07T02:56:45.463+0000",
+  "created": "2015-05-28T12:22:50.208+0000",
+  "type": "EDITORIAL",
+  "publicPlaylist": true,
+  "url": "http://www.tidal.com/playlist/edb69697-fc65-4580-b938-55f0f4bd7c54",
+  "image": "f6c6c5ea-5a76-4791-af06-daf9be3c5a77",
+  "popularity": 0,
+  "squareImage": "595a4cb8-2656-4157-a7b6-f2d84405b956",
+  "customImageUrl": null,
+  "promotedArtists": [
+    {
+      "id": 10665,
+      "name": "Rihanna",
+      "handle": null,
+      "type": "MAIN",
+      "picture": null
+    },
+    {
+      "id": 8401,
+      "name": "Calvin Harris",
+      "handle": null,
+      "type": "MAIN",
+      "picture": null
+    },
+    {
+      "id": 1566,
+      "name": "Beyoncé",
+      "handle": null,
+      "type": "MAIN",
+      "picture": null
+    }
+  ],
+  "lastItemAddedAt": "2026-10-07T02:56:45.438+0000"
+}

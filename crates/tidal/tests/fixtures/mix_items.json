@@ -1,0 +1,251 @@
+{
+  "limit": 100,
+  "offset": 0,
+  "totalNumberOfItems": 3,
+  "items": [
+    {
+      "item": {
+        "id": 20115564,
+        "title": "Get Lucky",
+        "duration": 370,
+        "replayGain": -7.55,
+        "peak": 0.997345,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2013-05-20T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 8,
+        "volumeNumber": 1,
+        "version": "feat. Pharrell Williams and Nile Rodgers",
+        "popularity": 90,
+        "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+        "bpm": 116,
+        "key": "B",
+        "keyScale": "MINOR",
+        "url": "http://www.tidal.com/track/20115564",
+        "isrc": "USQX91300108",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 8847,
+          "name": "Daft Punk",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+        },
+        "artists": [
+          {
+            "id": 8847,
+            "name": "Daft Punk",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+          },
+          {
+            "id": 4900204,
+            "name": "Pharrell Williams",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "90f70b7f-5393-4f14-ae85-c88890f00610"
+          },
+          {
+            "id": 30528,
+            "name": "Nile Rodgers",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4"
+          }
+        ],
+        "album": {
+          "id": 20115556,
+          "title": "Random Access Memories",
+          "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+          "vibrantColor": "#efdd83",
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+        }
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 19823990,
+        "title": "Get Lucky",
+        "duration": 248,
+        "replayGain": -6.13,
+        "peak": 0.988553,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2013-04-19T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 1,
+        "volumeNumber": 1,
+        "version": "Radio Edit - feat. Pharrell Williams and Nile Rodgers",
+        "popularity": 82,
+        "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+        "bpm": 116,
+        "key": "B",
+        "keyScale": "MINOR",
+        "url": "http://www.tidal.com/track/19823990",
+        "isrc": "USQX91300809",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 8847,
+          "name": "Daft Punk",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+        },
+        "artists": [
+          {
+            "id": 8847,
+            "name": "Daft Punk",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+          },
+          {
+            "id": 4900204,
+            "name": "Pharrell Williams",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "90f70b7f-5393-4f14-ae85-c88890f00610"
+          },
+          {
+            "id": 30528,
+            "name": "Nile Rodgers",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4"
+          }
+        ],
+        "album": {
+          "id": 19823989,
+          "title": "Get Lucky (Radio Edit - feat. Pharrell Williams and Nile Rodgers)",
+          "cover": "5b3c232a-c6c1-4f3d-b014-fe7f3a3d86a8",
+          "vibrantColor": "#db4530",
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "001d0d4483d30e5aa8e1059bbd1ecc"
+        }
+      },
+      "type": "track"
+    },
+    {
+      "item": {
+        "id": 77706605,
+        "title": "I Feel It Coming",
+        "duration": 269,
+        "replayGain": -9.48,
+        "peak": 0.99884,
+        "allowStreaming": true,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2016-11-25T00:00:00.000+0000",
+        "premiumStreamingOnly": false,
+        "trackNumber": 18,
+        "volumeNumber": 1,
+        "version": null,
+        "popularity": 86,
+        "copyright": "℗ 2016 The Weeknd XO, Inc., Manufactured and Marketed by Republic Records, a Division of UMG Recordings, Inc.",
+        "bpm": 93,
+        "key": "Eb",
+        "keyScale": "MAJOR",
+        "url": "http://www.tidal.com/track/77706605",
+        "isrc": "USUG11601012",
+        "editable": false,
+        "explicit": false,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS",
+            "HIRES_LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "accessType": "PUBLIC",
+        "spotlighted": false,
+        "ai": false,
+        "artist": {
+          "id": 4761957,
+          "name": "The Weeknd",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "5598dc62-acf6-49f1-b468-192ad3555278"
+        },
+        "artists": [
+          {
+            "id": 4761957,
+            "name": "The Weeknd",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "5598dc62-acf6-49f1-b468-192ad3555278"
+          },
+          {
+            "id": 8847,
+            "name": "Daft Punk",
+            "handle": null,
+            "type": "FEATURED",
+            "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+          }
+        ],
+        "album": {
+          "id": 77706587,
+          "title": "Starboy",
+          "cover": "59c4dbdf-e38b-4c8d-9f9f-b043dbb8850a",
+          "vibrantColor": "#e4b50c",
+          "videoCover": null
+        },
+        "mixes": {
+          "TRACK_MIX": "001cc5f3f54287fe96bab888a08e1f"
+        }
+      },
+      "type": "track"
+    }
+  ]
+}

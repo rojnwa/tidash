@@ -1,0 +1,121 @@
+{
+  "limit": 100,
+  "offset": 0,
+  "totalNumberOfItems": 2,
+  "items": [
+    {
+      "created": "2025-06-04T06:50:45.162+0000",
+      "item": {
+        "id": 428817523,
+        "title": "Clair Obscur: Expedition 33 (Original Soundtrack)",
+        "duration": 29373,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2025-04-24T00:00:00.000+0000",
+        "allowStreaming": true,
+        "premiumStreamingOnly": false,
+        "numberOfTracks": 154,
+        "numberOfVideos": 0,
+        "numberOfVolumes": 3,
+        "releaseDate": "2025-04-24",
+        "copyright": "Sandfall Interactive under license to Laced Music Ltd t/a Laced Records",
+        "type": "ALBUM",
+        "version": null,
+        "url": "http://www.tidal.com/album/428817523",
+        "cover": "7bbcff67-29c5-4521-88c5-e95f84176ffd",
+        "vibrantColor": "#cfc198",
+        "videoCover": null,
+        "explicit": false,
+        "upc": "8721215081586",
+        "popularity": 78,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "ai": false,
+        "artist": {
+          "id": 22178906,
+          "name": "Lorien Testard",
+          "handle": null,
+          "type": "MAIN",
+          "picture": null
+        },
+        "artists": [
+          {
+            "id": 22178906,
+            "name": "Lorien Testard",
+            "handle": null,
+            "type": "MAIN",
+            "picture": null
+          }
+        ]
+      }
+    },
+    {
+      "created": "2025-01-30T16:56:24.885+0000",
+      "item": {
+        "id": 116334456,
+        "title": "Legacy - Best Of (Remastered)",
+        "duration": 8946,
+        "streamReady": true,
+        "payToStream": false,
+        "adSupportedStreamReady": true,
+        "djReady": true,
+        "stemReady": false,
+        "streamStartDate": "2019-09-01T00:00:00.000+0000",
+        "allowStreaming": true,
+        "premiumStreamingOnly": false,
+        "numberOfTracks": 40,
+        "numberOfVideos": 0,
+        "numberOfVolumes": 2,
+        "releaseDate": "2017-07-14",
+        "copyright": "(P) 2017 Selfmade Records",
+        "type": "ALBUM",
+        "version": null,
+        "url": "http://www.tidal.com/album/116334456",
+        "cover": "72e98447-7fec-4362-a32a-f43822a57d6f",
+        "vibrantColor": "#FFFFFF",
+        "videoCover": null,
+        "explicit": true,
+        "upc": "886447823552",
+        "popularity": 41,
+        "audioQuality": "LOSSLESS",
+        "audioModes": [
+          "STEREO"
+        ],
+        "mediaMetadata": {
+          "tags": [
+            "LOSSLESS"
+          ]
+        },
+        "upload": false,
+        "ai": false,
+        "artist": {
+          "id": 4100215,
+          "name": "Kollegah",
+          "handle": null,
+          "type": "MAIN",
+          "picture": "2770eda0-f921-4e74-8dd6-bb075938d25a"
+        },
+        "artists": [
+          {
+            "id": 4100215,
+            "name": "Kollegah",
+            "handle": null,
+            "type": "MAIN",
+            "picture": "2770eda0-f921-4e74-8dd6-bb075938d25a"
+          }
+        ]
+      }
+    }
+  ]
+}

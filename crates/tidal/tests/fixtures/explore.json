@@ -1,0 +1,173 @@
+{
+  "selfLink": null,
+  "id": "eyJwIjoiODBjZDhmNGQtZjc3NC00MTJkLWFmNjItMjA5YzRlOTZiM2JlIiwicFYiOjd9",
+  "title": "Explore",
+  "rows": [
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiODBjZDhmNGQtZjc3NC00MTJkLWFmNjItMjA5YzRlOTZiM2JlIiwicFYiOjcsIm0iOiI0YzFiZmIzNi1hMzQ1LTRkNTYtODg3NC1hNDY2MDU5NDQzMTMiLCJtViI6MiwibUgiOiI1MTAyZTZhYyJ9",
+          "type": "PAGE_LINKS_CLOUD",
+          "width": 100,
+          "title": "Genres",
+          "description": "",
+          "showMore": {
+            "title": "View as list",
+            "apiPath": "pages/genre_page"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/867cb0ec-d00d-46e7-ad25-2c60957f8ecf",
+            "limit": 40,
+            "offset": 0,
+            "totalNumberOfItems": 18,
+            "items": [
+              {
+                "title": "Hip-Hop",
+                "icon": "hiphop",
+                "apiPath": "pages/genre_hip_hop",
+                "imageId": "hiphop"
+              },
+              {
+                "title": "Pop",
+                "icon": "pop",
+                "apiPath": "pages/genre_pop",
+                "imageId": "pop"
+              },
+              {
+                "title": "R&B / Soul",
+                "icon": "rnb",
+                "apiPath": "pages/genre_rnb",
+                "imageId": "rnb"
+              }
+            ]
+          },
+          "lines": 1,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiODBjZDhmNGQtZjc3NC00MTJkLWFmNjItMjA5YzRlOTZiM2JlIiwicFYiOjcsIm0iOiJlODcxYmM3Zi1kNzI5LTQ0NzUtYWVhNy1kMmYyMzBjMmIwMzQiLCJtViI6MiwibUgiOiJhYTU3NWM0MCJ9",
+          "type": "PAGE_LINKS_CLOUD",
+          "width": 100,
+          "title": "Moods & Activities",
+          "description": "",
+          "showMore": {
+            "title": "View as list",
+            "apiPath": "pages/moods_page"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/8c0053cd-e5ad-4ff3-b995-b84abd0827ae",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 19,
+            "items": [
+              {
+                "title": "For DJs",
+                "icon": "mood_djselector",
+                "apiPath": "pages/mood_djselector",
+                "imageId": "mood_djselector"
+              },
+              {
+                "title": "TIDAL Magazine",
+                "icon": null,
+                "apiPath": "pages/tidal_magazine",
+                "imageId": null
+              },
+              {
+                "title": "Record Labels",
+                "icon": null,
+                "apiPath": "pages/record_labels",
+                "imageId": null
+              }
+            ]
+          },
+          "lines": 1,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiODBjZDhmNGQtZjc3NC00MTJkLWFmNjItMjA5YzRlOTZiM2JlIiwicFYiOjcsIm0iOiI4YTE0YmFhNC1jMzVkLTRmMGYtYjczOC01MjViNTllNGYwZjMiLCJtViI6MiwibUgiOiJmYjQyOWMwZSJ9",
+          "type": "PAGE_LINKS_CLOUD",
+          "width": 100,
+          "title": "Decades",
+          "description": "",
+          "showMore": {
+            "title": "View as list",
+            "apiPath": "pages/genre_decades"
+          },
+          "pagedList": {
+            "dataApiPath": "pages/data/75b2d516-b031-48e5-8179-82752ad5be61",
+            "limit": 15,
+            "offset": 0,
+            "totalNumberOfItems": 7,
+            "items": [
+              {
+                "title": "1950s",
+                "icon": "1950s",
+                "apiPath": "pages/m_1950s",
+                "imageId": "1950s"
+              },
+              {
+                "title": "1960s",
+                "icon": "1960s",
+                "apiPath": "pages/m_1960s",
+                "imageId": "1960s"
+              },
+              {
+                "title": "1970s",
+                "icon": "1970s",
+                "apiPath": "pages/m_1970s",
+                "imageId": "1970s"
+              }
+            ]
+          },
+          "lines": 1,
+          "preTitle": null
+        }
+      ]
+    },
+    {
+      "modules": [
+        {
+          "id": "eyJwIjoiODBjZDhmNGQtZjc3NC00MTJkLWFmNjItMjA5YzRlOTZiM2JlIiwicFYiOjcsIm0iOiI1OTE2Y2I2NS02NDdjLTRmODUtOGQwYy01OTEwZDllNGRjNjciLCJtViI6NSwibUgiOiI2MzgyYzdiNyJ9",
+          "type": "PAGE_LINKS",
+          "width": 100,
+          "title": "",
+          "description": "",
+          "pagedList": {
+            "limit": 10,
+            "offset": 0,
+            "totalNumberOfItems": 5,
+            "items": [
+              {
+                "title": "New",
+                "icon": "new",
+                "apiPath": "pages/explore_new_music",
+                "imageId": null
+              },
+              {
+                "title": "Top",
+                "icon": "top",
+                "apiPath": "pages/explore_top_music",
+                "imageId": null
+              },
+              {
+                "title": "Videos",
+                "icon": "videos",
+                "apiPath": "pages/videos",
+                "imageId": null
+              }
+            ]
+          },
+          "preTitle": null
+        }
+      ]
+    }
+  ]
+}
