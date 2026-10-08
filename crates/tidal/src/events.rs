@@ -67,11 +67,36 @@ fn claims(token: &str) -> Result<(u64, u64, String)> {
 }
 
 impl Client {
-    /// Reports one finished play. Best effort, sent once.
+    /// Reports one finished play. Best effort: a stale token (401 or 403, S1) is refreshed and
+    /// the report sent once more.
     // ponytail: no retry queue; persist failed reports if plays go missing
     pub async fn report_playback(&self, r: &PlaybackReport) -> Result<()> {
         let token = self.session().access_token;
-        let (uid, cid, sid) = claims(&token)?;
+        match self.send_report(r).await {
+            Err(Error::Status { status: 403, .. }) => {
+                self.refresh_after(&token).await?;
+                self.send_report(r).await
+            }
+            res => res,
+        }
+    }
+
+    async fn send_report(&self, r: &PlaybackReport) -> Result<()> {
+        let resp = self.send(|token| self.report_request(r, token)).await?;
+        let status = resp.status().as_u16();
+        if resp.text().await?.contains("<BatchResultErrorEntry") {
+            return Err(Error::Status {
+                status,
+                sub_status: None,
+                message: "event rejected".into(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The SQS batch for `r`; its body carries `token` as well as the bearer header.
+    fn report_request(&self, r: &PlaybackReport, token: &str) -> Result<reqwest::RequestBuilder> {
+        let (uid, cid, sid) = claims(token)?;
         let cfg = self.config();
         let message = json!({
             "group": "play_log", "version": 2, "ts": r.ended_at_ms, "uuid": new_session_id(),
@@ -113,20 +138,10 @@ impl Client {
             )
             .append_pair(&format!("{k}.MessageAttribute.2.Value.DataType"), "String")
             .finish();
-        let req = self
+        Ok(self
             .http()
             .post(cfg.events_url.clone())
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body);
-        let resp = self.send(req).await?;
-        let status = resp.status().as_u16();
-        if resp.text().await?.contains("<BatchResultErrorEntry") {
-            return Err(Error::Status {
-                status,
-                sub_status: None,
-                message: "event rejected".into(),
-            });
-        }
-        Ok(())
+            .body(body))
     }
 }
