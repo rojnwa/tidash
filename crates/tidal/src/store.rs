@@ -173,13 +173,13 @@ impl TokenStore for MemoryStore {
     }
 }
 
-/// The OS store if a probe `load()` works (nothing stored counts), else memory. `true` = persistent.
-pub fn default_store() -> (Arc<dyn TokenStore>, bool) {
+/// The OS store and the session its probe read, so nobody reads it again (each read can raise
+/// a macOS keychain prompt). When the OS store cannot be read: memory, and why.
+pub fn default_store() -> (Arc<dyn TokenStore>, Result<Option<Session>>) {
     let k = KeyringStore::new();
-    if k.load().is_ok() {
-        (Arc::new(k), true)
-    } else {
-        (Arc::new(MemoryStore::default()), false)
+    match k.load() {
+        Ok(session) => (Arc::new(k), Ok(session)),
+        Err(e) => (Arc::new(MemoryStore::default()), Err(e)),
     }
 }
 #[cfg(test)]

@@ -65,7 +65,9 @@ pub fn start(
             });
             rt.block_on(async move {
                 let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
-                Backend::new(emit, playback).run(action_rx, msg_rx).await;
+                Backend::new(emit, playback, tidal::default_store())
+                    .run(action_rx, msg_rx)
+                    .await;
             });
         });
     if let Err(e) = spawned {
@@ -111,7 +113,6 @@ struct Backend {
     cfg: ClientConfig,
     http: reqwest::Client,
     store: Arc<dyn TokenStore>,
-    persistent: bool,
     pkce: Option<Pkce>,
     search_task: Option<tokio::task::JoinHandle<()>>,
     client: Option<Arc<Client>>,
@@ -120,27 +121,29 @@ struct Backend {
 }
 
 impl Backend {
-    fn new(emit: Arc<Emitter>, playback: Option<Playback>) -> Self {
-        let (store, persistent) = tidal::default_store();
-        Self {
+    /// `store` comes with what its probe read (`tidal::default_store`); the session logs in
+    /// from that.
+    fn new(
+        emit: Arc<Emitter>,
+        playback: Option<Playback>,
+        (store, stored): (Arc<dyn TokenStore>, tidal::Result<Option<tidal::Session>>),
+    ) -> Self {
+        let mut backend = Self {
             emit,
             cfg: ClientConfig::default(),
             http: reqwest::Client::new(),
             store,
-            persistent,
             pkce: None,
             search_task: None,
             client: None,
             playback,
-        }
+        };
+        backend.resume(stored);
+        backend
     }
 
     /// Until the UI drops its sender (app closing); then the current play is reported.
     async fn run(mut self, mut rx: UnboundedReceiver<Action>, mut msgs: UnboundedReceiver<Msg>) {
-        if !self.persistent {
-            self.emit.send(Event::CredentialsNotPersistent);
-        }
-        self.resume();
         // Samples the position for a resume after a player error; only ticks while playing.
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -170,12 +173,15 @@ impl Backend {
     }
 
     /// A stored session logs in without any network call; expiry refreshes lazily.
-    fn resume(&mut self) {
-        match self.store.load() {
+    fn resume(&mut self, stored: tidal::Result<Option<tidal::Session>>) {
+        match stored {
             Ok(Some(session)) => self.log_in(session),
             Ok(None) => {}
             // Left in place: a denied or locked store may read fine next launch.
-            Err(e) => log::warn!("stored session unreadable: {e}"),
+            Err(e) => {
+                log::warn!("stored session unreadable: {e}");
+                self.emit.send(Event::CredentialsNotPersistent);
+            }
         }
     }
 
@@ -299,5 +305,66 @@ impl Backend {
                 .emit
                 .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every read of the OS store can raise a macOS keychain prompt.
+    struct NoReads;
+
+    impl TokenStore for NoReads {
+        fn load(&self) -> tidal::Result<Option<tidal::Session>> {
+            panic!("the stored session was read again");
+        }
+        fn save(&self, _: &tidal::Session) -> tidal::Result<()> {
+            Ok(())
+        }
+        fn clear(&self) -> tidal::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// The events of a startup whose store probe read `stored`.
+    fn startup(stored: tidal::Result<Option<tidal::Session>>) -> Vec<Event> {
+        let (tx, events) = channel();
+        let emit = Arc::new(Emitter {
+            tx,
+            waker: Box::new(|| {}),
+        });
+        let backend = Backend::new(emit, None, (Arc::new(NoReads), stored));
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        // Senders dropped at once: `run` goes through startup and returns.
+        let (_, actions) = unbounded_channel();
+        let (_, msgs) = unbounded_channel();
+        rt.block_on(backend.run(actions, msgs));
+        events.try_iter().collect()
+    }
+
+    #[test]
+    fn stored_session_logs_in_without_a_second_read() {
+        let session = tidal::Session {
+            access_token: "a".into(),
+            refresh_token: "r".into(),
+            expires_at: 0,
+            user_id: 1,
+            country_code: "US".into(),
+        };
+        let events = startup(Ok(Some(session)));
+        assert!(matches!(events[..], [Event::LoggedIn]), "{events:?}");
+    }
+
+    #[test]
+    fn unreadable_store_warns_and_stays_logged_out() {
+        let events = startup(Err(tidal::Error::Store("denied".into())));
+        assert!(
+            matches!(events[..], [Event::CredentialsNotPersistent]),
+            "{events:?}"
+        );
     }
 }
