@@ -215,6 +215,13 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 
 Release profile: thin LTO, `codegen-units = 1`, `strip`.
 
+M1 on macOS (M2 Pro, release build, idle at the start screen; the app's `first frame` log line and
+`footprint`): first frame after 179–213 ms (368 ms on the first launch of a new build), 0% CPU, a
+13.1 MB binary, and a physical footprint of 158 MB, already over the RAM budget. About 78 MB of that
+is the 24 system fallback faces (CJK, Arabic, Indic, ...) that fastframe-fonts reads whole into
+memory; mapping them instead (upstream) would bring it near 80 MB. Still to measure: Windows, and
+RAM after an album page (plan Task 21).
+
 ## 11. Shipping
 
 - **CI (GitHub Actions):** matrix Windows / macOS / Linux: `cargo fmt --check`, `cargo clippy -- -D warnings`,
