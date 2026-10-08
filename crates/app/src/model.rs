@@ -69,6 +69,8 @@ pub enum Event {
     Album { album: tidal::Album, tracks: Vec<tidal::Track> },
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
+    /// Playback jumped to this position (for the OS media controls).
+    Seeked(Duration),
     Image { cover: String, size: u32, image: egui::ColorImage },
     Error(String),
     /// Dismiss the error at this index (out of range is ignored).
@@ -157,6 +159,7 @@ impl Model {
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } => {} // handled by the UI's texture cache
+            Event::Seeked(_) => {}    // handled by the media controls
             Event::Error(e) => self.errors.push(e),
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {
