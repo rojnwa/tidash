@@ -200,6 +200,92 @@ fn session_end_stops_requests_in_flight() {
     }
 }
 
+/// Track 7, of album 1.
+fn track() -> tidal::Track {
+    tidal::Track {
+        id: 7,
+        title: "t".into(),
+        duration: 200,
+        track_number: 1,
+        volume_number: 1,
+        artists: vec![],
+        album: tidal::AlbumRef {
+            id: 1,
+            title: "a".into(),
+            cover: None,
+        },
+        stream_ready: true,
+    }
+}
+
+/// Its `clear` takes a while, as a keychain prompt can: logout waits on it after it has
+/// cleared the cache.
+struct SlowClear;
+
+impl TokenStore for SlowClear {
+    fn load(&self) -> tidal::Result<Option<tidal::Session>> {
+        panic!("the stored session was read again");
+    }
+    fn save(&self, _: &tidal::Session) -> tidal::Result<()> {
+        Ok(())
+    }
+    fn clear(&self) -> tidal::Result<()> {
+        std::thread::sleep(Duration::from_millis(400));
+        Ok(())
+    }
+}
+
+/// Ruling R24: the stream load, the one session request outside `tasks`, stops before logout
+/// clears the cache. Its reply lands while logout still waits on the store, and writes nothing
+/// to the cache nor reports back.
+#[test]
+fn a_stream_load_in_flight_at_logout_stops_before_the_cache_clear() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(async {
+        let server = MockServer::start().await;
+        let info = r#"{"trackId":7,"audioQuality":"LOSSLESS",
+            "manifestMimeType":"application/dash+xml","manifest":""}"#;
+        let slow = ResponseTemplate::new(200)
+            .set_body_raw(info, "application/json")
+            .set_delay(Duration::from_millis(100));
+        let mock = Mock::given(method("GET")).and(path("/v1/tracks/7/playbackinfo"));
+        mock.respond_with(slow).mount(&server).await;
+        let dir = std::env::temp_dir().join("tidash-backend-load");
+        let _ = std::fs::remove_dir_all(&dir);
+        let cache = DiskCache::open(dir.clone(), 1 << 20, "json").expect("a cache");
+        let (mut b, _events, mut msgs) = new_backend(Arc::new(SlowClear), Ok(None));
+        b.api_cache = Some(Arc::new(cache));
+        b.cfg = ClientConfig {
+            api_base: format!("{}/v1/", server.uri()).parse().expect("a URL"),
+            ..ClientConfig::default()
+        };
+        b.log_in(session("a"));
+        let (output, _, _renderer) = player::Player::spawn_manual();
+        b.playback = Some(Playback::new(output, b.emit.clone(), b.msgs.clone()));
+        let tracks = vec![track()];
+        b.handle(Action::PlayTracks { tracks, start: 0 }).await;
+        let sent = async {
+            while server
+                .received_requests()
+                .await
+                .is_none_or(|r| r.is_empty())
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(5), sent)
+            .await
+            .expect("the stream request is in flight");
+        b.handle(Action::Logout).await; // the reply lands meanwhile
+        let left = std::fs::read_dir(&dir).expect("the cache dir").count();
+        assert_eq!(left, 0, "files in the cache");
+        assert!(msgs.try_recv().is_err(), "the load reported back");
+    });
+}
+
 #[test]
 fn logout_clears_the_store_off_the_runtime() {
     let events = run(Arc::new(OwnRuntime), Ok(None), vec![Action::Logout]);
@@ -213,21 +299,7 @@ fn an_expired_session_is_removed_and_shown_once() {
     let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(Some(session("a"))));
     let (output, _, _renderer) = player::Player::spawn_manual();
     let mut p = Playback::new(output, b.emit.clone(), b.msgs.clone());
-    let track = tidal::Track {
-        id: 7,
-        title: "t".into(),
-        duration: 200,
-        track_number: 1,
-        volume_number: 1,
-        artists: vec![],
-        album: tidal::AlbumRef {
-            id: 1,
-            title: "a".into(),
-            cover: None,
-        },
-        stream_ready: true,
-    };
-    let tracks = vec![track];
+    let tracks = vec![track()];
     p.handle(None, Action::PlayTracks { tracks, start: 0 });
     let playing = player::PlayerEvent::State(player::PlayState::Playing);
     p.on_msg(None, Msg::Player(playing));

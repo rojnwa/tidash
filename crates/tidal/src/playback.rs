@@ -56,8 +56,9 @@ impl Client {
             ("playbackmode", "STREAM".to_owned()),
             ("assetpresentation", "FULL".to_owned()),
         ];
+        // Never cached: its segment URLs are signed and short-lived.
         let p: PlaybackInfo = self
-            .get(&format!("tracks/{track_id}/playbackinfo"), &q)
+            .get_uncached(&format!("tracks/{track_id}/playbackinfo"), &q)
             .await?;
         if p.manifest_mime_type != "application/dash+xml" {
             return Err(Error::Manifest(format!(

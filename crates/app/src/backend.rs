@@ -137,7 +137,7 @@ struct Backend {
     search_task: Option<AbortHandle>,
     client: Option<Arc<Client>>,
     /// The session's page, search and favorites requests. Logout and expiry abort them and
-    /// wait, so none of their replies or cache writes come after.
+    /// wait, so none of their replies or cache writes come after (`stop_requests`).
     // ponytail: a cache write already inside its `spawn_blocking` still lands (sub-ms window);
     // have `DiskCache::clear` take the write lock and refuse later writes if that ever matters.
     tasks: JoinSet<()>,
@@ -247,6 +247,15 @@ impl Backend {
         self.tasks.spawn(task)
     }
 
+    /// Logout and expiry: the session's requests in flight, `tasks` and the stream load, are
+    /// aborted and waited for, so none of their replies or cache writes come after.
+    async fn stop_requests(&mut self) {
+        self.tasks.shutdown().await;
+        if let Some(p) = &mut self.playback {
+            p.abort_load().await;
+        }
+    }
+
     /// The favorite ids for the hearts. A failure is logged, not shown: they stay empty.
     fn load_favorites(&mut self) {
         let Some(c) = self.client.clone() else { return };
@@ -268,7 +277,7 @@ impl Backend {
             return;
         }
         self.client = None;
-        self.tasks.shutdown().await;
+        self.stop_requests().await;
         dead.detach_store().await; // as on logout
         if let Some(p) = &mut self.playback {
             p.session_lost();
@@ -294,7 +303,7 @@ impl Backend {
             Action::FinishLogin(Redirect(redirect)) => self.finish_login(&redirect).await,
             Action::Logout => {
                 let client = self.client.take();
-                self.tasks.shutdown().await; // before the cache is cleared
+                self.stop_requests().await; // before the cache is cleared
                 // What the old session still sends (the play report below, a request in flight)
                 // may refresh it, but must not write it back once the store is cleared.
                 if let Some(c) = &client {

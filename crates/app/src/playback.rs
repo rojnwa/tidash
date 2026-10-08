@@ -457,6 +457,15 @@ impl Playback {
         self.stop();
     }
 
+    /// Logout and expiry: the stream load in flight stops, and is waited for, before the
+    /// session's cache is cleared. `reset` or `session_lost` then supersedes it as ever.
+    pub async fn abort_load(&mut self) {
+        if let Some(load) = self.load.take() {
+            load.abort();
+            let _ = load.await;
+        }
+    }
+
     /// App shutdown: report the current play, waiting briefly for the send.
     pub async fn shutdown(&mut self, c: Option<&Arc<Client>>) {
         if let Some(sent) = self.end_here(c) {

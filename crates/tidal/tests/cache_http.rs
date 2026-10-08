@@ -2,16 +2,21 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use tidal::{Client, ClientConfig, DiskCache, Error, MemoryStore, Session};
+use tidal::{Client, ClientConfig, DiskCache, Error, MemoryStore, Quality, Session};
 use wiremock::matchers::{header, header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 type Val = serde_json::Value;
 
+const LOSSLESS: &str = include_str!("fixtures/playbackinfo_lossless.json");
+
+fn dir(name: &str) -> PathBuf {
+    std::env::temp_dir().join("tidal-cache-http").join(name)
+}
+
 fn cache(name: &str) -> Arc<DiskCache> {
-    let dir: PathBuf = std::env::temp_dir().join("tidal-cache-http").join(name);
-    let _ = std::fs::remove_dir_all(&dir);
-    Arc::new(DiskCache::open(dir, 1 << 20, "json").unwrap())
+    let _ = std::fs::remove_dir_all(dir(name));
+    Arc::new(DiskCache::open(dir(name), 1 << 20, "json").unwrap())
 }
 
 fn client(server: &MockServer, user_id: u64, country: &str, c: Option<Arc<DiskCache>>) -> Client {
@@ -135,4 +140,18 @@ async fn no_cache_configured_behaves_as_before() {
     }
     let r = c.cache_only().get::<Val>("playlists/p", &[]).await;
     assert!(matches!(r, Err(Error::NotCached)), "{r:?}");
+}
+
+/// Stream info carries short-lived signed segment URLs: it never goes to the cache (R24).
+#[tokio::test]
+async fn stream_info_is_never_cached() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/tracks/1/playbackinfo"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(LOSSLESS, "application/json"))
+        .mount(&server)
+        .await;
+    let c = client(&server, 1, "US", Some(cache("stream")));
+    c.stream_info(1, Quality::Lossless).await.unwrap();
+    assert_eq!(std::fs::read_dir(dir("stream")).unwrap().count(), 0);
 }

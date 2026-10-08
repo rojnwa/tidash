@@ -99,7 +99,7 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
-        self.get_json(path, query, false).await
+        self.get_json(path, query, false, true).await
     }
 
     /// `path` may carry its own query (a module's `viewAll`); `query` is appended to it.
@@ -108,7 +108,17 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
-        self.get_json(path, query, true).await
+        self.get_json(path, query, true, true).await
+    }
+
+    /// A v1 GET that never reads or writes the cache, for answers that must not be kept
+    /// (stream info's short-lived signed URLs). Cache-only, it is [`Error::NotCached`].
+    pub(crate) async fn get_uncached<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<T> {
+        self.get_json(path, query, false, false).await
     }
 
     /// Writes succeed on any 2xx (TIDAL answers 200 with a body or 204); the body is ignored.
@@ -129,17 +139,19 @@ impl Client {
         self.write(Method::PUT, path, query, form, true).await
     }
 
-    /// A GET through the cache, keyed by user and full URL (never the token). A cached ETag
-    /// goes out as `If-None-Match` and a 304 serves the cached body; a 200 replaces it.
+    /// A GET through the cache (if `use_cache`), keyed by user and full URL (never the token).
+    /// A cached ETag goes out as `If-None-Match` and a 304 serves the cached body; a 200
+    /// replaces it.
     async fn get_json<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
         v2: bool,
+        use_cache: bool,
     ) -> Result<T> {
         let url = self.url(path, query, v2)?;
         let key = format!("{} {url}", self.session().user_id);
-        let cache = self.inner.cache.clone();
+        let cache = self.inner.cache.clone().filter(|_| use_cache);
         let cached = match &cache {
             Some(c) => {
                 let (c, key) = (Arc::clone(c), key.clone());
