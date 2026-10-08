@@ -132,7 +132,13 @@ impl Backend {
         let mut backend = Self {
             emit,
             cfg: ClientConfig::default(),
-            http: reqwest::Client::new(),
+            // The token exchange is awaited in the action loop: a stalled server must not hold
+            // it. `Client::new` would panic where this fails (no TLS backend).
+            http: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .expect("an HTTP client"),
             store,
             pkce: None,
             search_task: None,
