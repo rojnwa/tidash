@@ -40,6 +40,15 @@ impl App {
             started: Some(started),
         }
     }
+
+    /// Asks the backend for the current route's page if it has none, failed or is stale.
+    fn open_current(&mut self) {
+        let route = self.model.route().clone();
+        if self.model.needs_load(&route, Instant::now()) {
+            let _ = self.actions.send(Action::Open(route.clone()));
+            self.model.apply(Event::Loading(route));
+        }
+    }
 }
 
 impl Drop for App {
@@ -86,6 +95,10 @@ impl eframe::App for App {
                     self.model.apply(Event::Playback(p));
                     self.media.show(&self.model.playback, position);
                 }
+                Event::LoggedIn => {
+                    self.model.apply(Event::LoggedIn);
+                    self.open_current();
+                }
                 ev => self.model.apply(ev),
             }
         }
@@ -98,8 +111,13 @@ impl eframe::App for App {
         if let Some(t) = self.started.take() {
             log::info!("first frame {} ms after start", t.elapsed().as_millis());
         }
+        let shown = self.model.route().clone();
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.model.apply(ev);
+        }
+        // On arrival only: a failed page waits for its Retry instead of refetching every pass.
+        if *self.model.route() != shown {
+            self.open_current();
         }
     }
 }

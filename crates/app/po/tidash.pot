@@ -138,3 +138,23 @@ msgstr ""
 #: src/model.rs
 msgid "Your TIDAL session has expired; please log in again"
 msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Forward"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Home"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Explore"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Collection"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Coming soon"
+msgstr ""

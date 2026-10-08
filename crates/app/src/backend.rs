@@ -1,7 +1,7 @@
 //! Tokio backend on its own thread: receives `Action`s, sends `Event`s.
 
 use crate::i18n::tr;
-use crate::model::{Action, Event};
+use crate::model::{Action, Event, PageData, Route};
 use crate::playback::{Msg, Playback};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -295,15 +295,17 @@ impl Backend {
                     }
                 }));
             }
-            Action::OpenAlbum(id) => {
+            Action::Open(route @ Route::Album(id)) => {
                 let Some(c) = self.client.clone() else { return };
                 let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
-                emit.send(Event::AlbumLoading(id));
                 tokio::spawn(async move {
                     match tokio::try_join!(c.album(id), c.album_tracks(id)) {
-                        Ok((album, tracks)) => emit.send(Event::Album { album, tracks }),
+                        Ok((album, tracks)) => emit.send(Event::Page {
+                            route,
+                            data: PageData::Album { album, tracks },
+                        }),
                         Err(e) => {
-                            emit.send(Event::AlbumFailed(id));
+                            emit.send(Event::PageFailed(route));
                             if !session_expired(&e, &c, &msgs) {
                                 emit.send(Event::Error(format!(
                                     "{}: {e}",
@@ -314,6 +316,7 @@ impl Backend {
                     }
                 });
             }
+            Action::Open(_) => {} // ponytail: the page loader (Task 7) fetches the other routes
             Action::LoadImage { cover, size } => {
                 let art = tidal::Image::Tidal {
                     id: cover.clone(),

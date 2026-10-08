@@ -3,7 +3,7 @@
 use super::{cover, tracks};
 use crate::i18n::{tr, tr_n};
 use crate::images::TextureCache;
-use crate::model::{Action, Model};
+use crate::model::{Action, Event, Model, PageData};
 use egui::vec2;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -12,17 +12,24 @@ const COVER: f32 = 320.0;
 pub fn show(
     ui: &mut egui::Ui,
     model: &Model,
-    id: u64,
     tx: &UnboundedSender<Action>,
     images: &mut TextureCache,
+    events: &mut Vec<Event>,
 ) {
-    let Some((album, list)) = model.albums.get(&id) else {
-        if model.album_errors.contains(&id) {
+    let route = model.route();
+    let slot = model.pages.get(route);
+    let Some(PageData::Album {
+        album,
+        tracks: list,
+    }) = slot.and_then(|s| s.data.as_ref())
+    else {
+        if slot.is_some_and(|s| s.failed) {
             ui.label(tr("Couldn't load this album"));
             if ui.button(tr("Retry")).clicked() {
-                let _ = tx.send(Action::OpenAlbum(id));
+                let _ = tx.send(Action::Open(route.clone()));
+                events.push(Event::Loading(route.clone()));
             }
-        } else {
+        } else if slot.is_some_and(|s| s.loading) {
             ui.spinner();
         }
         return;

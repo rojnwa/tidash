@@ -16,6 +16,11 @@ pub struct State {
     query: String,
 }
 
+/// The query box's id, fixed so that Ctrl+F can focus it from anywhere.
+pub fn query_id() -> egui::Id {
+    egui::Id::new("search-query")
+}
+
 pub fn show(
     ui: &mut egui::Ui,
     model: &Model,
@@ -26,6 +31,7 @@ pub fn show(
 ) {
     let edit = ui.add(
         egui::TextEdit::singleline(&mut state.query)
+            .id(query_id())
             .hint_text(tr("Search TIDAL"))
             .desired_width(f32::INFINITY),
     );
@@ -97,9 +103,6 @@ pub fn show(
                         );
                         if resp.clicked() {
                             events.push(Event::Navigate(Route::Album(a.id)));
-                            if !model.albums.contains_key(&a.id) {
-                                let _ = tx.send(Action::OpenAlbum(a.id));
-                            }
                         }
                     }
                 });

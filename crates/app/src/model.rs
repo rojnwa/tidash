@@ -2,13 +2,71 @@
 
 use crate::i18n::tr;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Entries kept for back and forward.
+const HISTORY: usize = 60;
+/// Pages whose data stays in memory.
+const PAGES: usize = 24;
+/// After this a shown page is fetched again.
+const STALE: Duration = Duration::from_secs(5 * 60);
+
+#[allow(dead_code, reason = "the views of Tasks 9–11 open the other routes")]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
     Login,
+    Home,
     Search,
+    Collection(CollectionTab),
     Album(u64),
+    Artist(u64),
+    Playlist(String),
+    Mix(String),
+    /// A v1 `apiPath`; Explore is `pages/explore`.
+    Page(String),
+    ViewAll(String),
+}
+
+#[allow(dead_code, reason = "Task 11's collection view opens the other tabs")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CollectionTab {
+    Tracks,
+    Albums,
+    Artists,
+    Playlists,
+    Mixes,
+}
+
+#[allow(dead_code, reason = "the page loader (Task 7) fills the other kinds")]
+#[derive(Clone, Debug)]
+pub enum PageData {
+    Shelves(tidal::Page),
+    Album {
+        album: tidal::Album,
+        tracks: Vec<tidal::Track>,
+    },
+    Artist(tidal::ArtistPage),
+    Playlist {
+        playlist: tidal::Playlist,
+        tracks: Vec<tidal::Track>,
+    },
+    Mix {
+        mix: tidal::Mix,
+        tracks: Vec<tidal::Track>,
+    },
+    Tracks(Vec<tidal::Track>),
+    Items(Vec<tidal::Item>),
+}
+
+/// One route's page: what was fetched last, and whether a fetch is under way or failed.
+#[derive(Default)]
+pub struct Slot {
+    pub data: Option<PageData>,
+    pub loading: bool,
+    pub failed: bool,
+    pub fetched: Option<Instant>,
+    /// When last shown or filled, on the model's clock; the least recent goes first.
+    pub used: u64,
 }
 
 #[derive(Clone)]
@@ -17,7 +75,7 @@ pub enum Action {
     FinishLogin(String),
     Logout,
     Search(String),
-    OpenAlbum(u64),
+    Open(Route),
     PlayTracks {
         tracks: Vec<tidal::Track>,
         start: usize,
@@ -42,7 +100,7 @@ impl std::fmt::Debug for Action {
             Self::FinishLogin(_) => f.write_str("FinishLogin(<redacted>)"),
             Self::Logout => f.write_str("Logout"),
             Self::Search(q) => f.debug_tuple("Search").field(q).finish(),
-            Self::OpenAlbum(id) => f.debug_tuple("OpenAlbum").field(id).finish(),
+            Self::Open(r) => f.debug_tuple("Open").field(r).finish(),
             Self::PlayTracks { tracks, start } => f
                 .debug_struct("PlayTracks")
                 .field("tracks", tracks)
@@ -77,12 +135,15 @@ pub enum Event {
         query: String,
         results: tidal::SearchResults,
     },
-    AlbumLoading(u64),
-    AlbumFailed(u64),
-    Album {
-        album: tidal::Album,
-        tracks: Vec<tidal::Track>,
+    /// The app asked the backend for this page.
+    Loading(Route),
+    Page {
+        route: Route,
+        data: PageData,
     },
+    PageFailed(Route),
+    #[allow(dead_code, reason = "the page loader (Task 7) reports it")]
+    Offline(bool),
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
     /// Playback jumped to this position (for the OS media controls).
@@ -104,6 +165,7 @@ pub enum Event {
     DismissError(usize),
     Navigate(Route),
     Back,
+    Forward,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -121,14 +183,19 @@ pub struct PlaybackSnapshot {
 }
 
 pub struct Model {
-    pub route: Route,
+    /// Never empty; `history[at]` is the current route.
     pub history: Vec<Route>,
+    pub at: usize,
+    pub pages: HashMap<Route, Slot>,
+    /// Ticks on every visit or fill, for `Slot::used`.
+    clock: u64,
+    #[allow(dead_code, reason = "the favorite hearts (Task 11) read it")]
+    pub favorites: tidal::FavoriteIds,
+    pub offline: bool,
     pub logged_in: bool,
     pub login_url: Option<String>,
     pub search: Option<(String, tidal::SearchResults)>,
     pub latest_query: Option<String>,
-    pub album_errors: std::collections::HashSet<u64>,
-    pub albums: HashMap<u64, (tidal::Album, Vec<tidal::Track>)>,
     pub queue: QueueSnapshot,
     pub playback: PlaybackSnapshot,
     pub errors: Vec<String>,
@@ -137,14 +204,16 @@ pub struct Model {
 impl Default for Model {
     fn default() -> Self {
         Self {
-            route: Route::Login,
-            history: Vec::new(),
+            history: vec![Route::Login],
+            at: 0,
+            pages: HashMap::new(),
+            clock: 0,
+            favorites: tidal::FavoriteIds::default(),
+            offline: false,
             logged_in: false,
             login_url: None,
             search: None,
             latest_query: None,
-            album_errors: Default::default(),
-            albums: HashMap::new(),
             queue: QueueSnapshot::default(),
             playback: PlaybackSnapshot::default(),
             errors: Vec::new(),
@@ -159,8 +228,8 @@ impl Model {
             Event::LoggedIn => {
                 self.logged_in = true;
                 self.login_url = None;
-                self.history.clear();
-                self.route = Route::Search;
+                self.history = vec![Route::Home];
+                self.at = 0;
             }
             Event::LoggedOut => {
                 *self = Self {
@@ -188,16 +257,28 @@ impl Model {
                     self.search = Some((query, results));
                 }
             }
-            Event::AlbumLoading(id) => {
-                self.album_errors.remove(&id);
+            Event::Loading(r) => {
+                let slot = self.pages.entry(r).or_default();
+                slot.loading = true;
+                slot.failed = false;
             }
-            Event::AlbumFailed(id) => {
-                self.album_errors.insert(id);
+            Event::Page { route, data } => {
+                self.clock += 1;
+                let slot = self.pages.entry(route).or_default();
+                *slot = Slot {
+                    data: Some(data),
+                    fetched: Some(Instant::now()),
+                    used: self.clock,
+                    ..Slot::default()
+                };
+                self.evict();
             }
-            Event::Album { album, tracks } => {
-                self.album_errors.remove(&album.id);
-                self.albums.insert(album.id, (album, tracks));
+            Event::PageFailed(r) => {
+                let slot = self.pages.entry(r).or_default();
+                slot.loading = false;
+                slot.failed = true;
             }
+            Event::Offline(o) => self.offline = o,
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -208,6 +289,9 @@ impl Model {
             Event::Back => {
                 self.back();
             }
+            Event::Forward => {
+                self.forward();
+            }
             Event::DismissError(i) => {
                 if i < self.errors.len() {
                     self.errors.remove(i);
@@ -216,20 +300,74 @@ impl Model {
         }
     }
 
+    pub fn route(&self) -> &Route {
+        &self.history[self.at]
+    }
+
+    /// Goes to `r`, dropping the forward entries; the oldest entry goes past `HISTORY`.
     pub fn navigate(&mut self, r: Route) {
-        if r != self.route {
-            self.history.push(self.route);
-            self.route = r;
+        if r == *self.route() {
+            return;
         }
+        self.history.truncate(self.at + 1);
+        self.history.push(r);
+        if self.history.len() > HISTORY {
+            self.history.remove(0);
+        }
+        self.at = self.history.len() - 1;
+        self.touch();
     }
 
     pub fn back(&mut self) -> bool {
-        match self.history.pop() {
-            Some(r) => {
-                self.route = r;
-                true
-            }
-            None => false,
+        let moved = self.at > 0;
+        if moved {
+            self.at -= 1;
+            self.touch();
+        }
+        moved
+    }
+
+    pub fn forward(&mut self) -> bool {
+        let moved = self.at + 1 < self.history.len();
+        if moved {
+            self.at += 1;
+            self.touch();
+        }
+        moved
+    }
+
+    /// Whether the app should ask for `r`: never fetched, failed, or stale and not reloading.
+    /// Login and Search have no page.
+    pub fn needs_load(&self, r: &Route, now: Instant) -> bool {
+        if matches!(r, Route::Login | Route::Search) {
+            return false;
+        }
+        self.pages.get(r).is_none_or(|s| {
+            let stale = s
+                .fetched
+                .is_none_or(|t| now.saturating_duration_since(t) > STALE);
+            s.failed || !s.loading && (s.data.is_none() || stale)
+        })
+    }
+
+    /// Marks the current route's page as just used.
+    fn touch(&mut self) {
+        self.clock += 1;
+        let r = self.route().clone();
+        self.pages.entry(r).or_default().used = self.clock;
+    }
+
+    /// Drops the least recently used pages beyond `PAGES`, never the current one.
+    fn evict(&mut self) {
+        while self.pages.values().filter(|s| s.data.is_some()).count() > PAGES {
+            let oldest = self
+                .pages
+                .iter()
+                .filter(|(r, s)| s.data.is_some() && *r != self.route())
+                .min_by_key(|(_, s)| s.used)
+                .map(|(r, _)| r.clone());
+            let Some(r) = oldest else { break };
+            self.pages.remove(&r);
         }
     }
 }
@@ -238,29 +376,49 @@ impl Model {
 mod tests {
     use super::*;
 
-    #[test]
-    fn logged_in_moves_to_search() {
+    fn logged_in() -> Model {
         let mut m = Model::default();
-        assert_eq!(m.route, Route::Login);
         m.apply(Event::LoggedIn);
-        assert_eq!(m.route, Route::Search);
+        m
+    }
+
+    fn loaded(m: &mut Model, route: Route) {
+        m.apply(Event::Page {
+            route,
+            data: PageData::Tracks(vec![]),
+        });
+    }
+
+    #[test]
+    fn logged_in_starts_at_home() {
+        let mut m = Model::default();
+        assert_eq!(m.route(), &Route::Login);
+        m.apply(Event::LoggedIn);
+        assert_eq!(m.route(), &Route::Home);
+        assert_eq!(m.history, [Route::Home]);
         assert!(m.logged_in);
     }
 
     #[test]
-    fn logged_out_returns_to_login() {
-        let mut m = Model::default();
-        m.apply(Event::LoggedIn);
-        m.apply(Event::LoggedOut);
-        assert_eq!(m.route, Route::Login);
-        assert!(!m.logged_in);
+    fn expired_and_logged_out_reset_history_to_login() {
+        for ev in [Event::LoggedOut, Event::SessionExpired] {
+            let mut m = logged_in();
+            m.navigate(Route::Album(1));
+            m.navigate(Route::Album(2));
+            m.back();
+            loaded(&mut m, Route::Album(1));
+            m.apply(ev);
+            assert_eq!(m.route(), &Route::Login);
+            assert_eq!((m.history.as_slice(), m.at), ([Route::Login].as_slice(), 0));
+            assert!(!m.logged_in);
+            assert!(!m.back() && !m.forward(), "no way past the login");
+            assert!(m.pages.is_empty());
+        }
     }
 
     #[test]
-    fn an_expired_session_returns_to_login_keeping_the_queue() {
-        let mut m = Model::default();
-        m.apply(Event::LoggedIn);
-        m.navigate(Route::Album(3));
+    fn an_expired_session_keeps_the_queue() {
+        let mut m = logged_in();
         m.apply(Event::Queue(QueueSnapshot {
             tracks: vec![],
             current: Some(4),
@@ -270,9 +428,6 @@ mod tests {
             ..Default::default()
         }));
         m.apply(Event::SessionExpired);
-        assert_eq!(m.route, Route::Login);
-        assert!(!m.logged_in);
-        assert!(!m.back(), "no way back past the login");
         assert_eq!((m.queue.current, m.playback.volume), (Some(4), 0.5));
         assert_eq!(
             m.errors,
@@ -281,25 +436,106 @@ mod tests {
     }
 
     #[test]
-    fn navigate_and_back() {
-        let mut m = Model::default();
-        m.apply(Event::LoggedIn);
-        m.navigate(Route::Album(1));
-        m.navigate(Route::Album(2));
+    fn back_forward_and_truncate() {
+        let mut m = logged_in();
+        let (a, b, c) = (Route::Album(1), Route::Artist(2), Route::Mix("c".into()));
+        for r in [&a, &b, &c] {
+            m.navigate(r.clone());
+        }
+        assert!(m.back() && m.back());
+        assert_eq!(m.route(), &a);
+        assert!(m.forward());
+        assert_eq!(m.route(), &b);
         assert!(m.back());
-        assert!(m.back());
-        assert_eq!(m.route, Route::Search);
-        assert!(!m.back());
+        let d = Route::Playlist("d".into());
+        m.navigate(d.clone());
+        m.navigate(d.clone()); // already there: no new entry
+        assert_eq!(m.history, [Route::Home, a, d]);
+        assert!(!m.forward(), "the forward entries are gone");
+        assert!(m.back() && m.back() && !m.back());
+        assert_eq!(m.route(), &Route::Home);
     }
 
     #[test]
-    fn navigate_and_back_events() {
-        let mut m = Model::default();
-        m.apply(Event::LoggedIn);
+    fn navigate_back_and_forward_events() {
+        let mut m = logged_in();
         m.apply(Event::Navigate(Route::Album(7)));
-        assert_eq!(m.route, Route::Album(7));
+        assert_eq!(m.route(), &Route::Album(7));
         m.apply(Event::Back);
-        assert_eq!(m.route, Route::Search);
+        assert_eq!(m.route(), &Route::Home);
+        m.apply(Event::Forward);
+        assert_eq!(m.route(), &Route::Album(7));
+    }
+
+    #[test]
+    fn history_caps_at_60() {
+        let mut m = logged_in();
+        for i in 0..100 {
+            m.navigate(Route::Album(i));
+        }
+        assert_eq!((m.history.len(), m.at), (60, 59));
+        assert_eq!(m.history[0], Route::Album(40));
+        assert_eq!(m.route(), &Route::Album(99));
+    }
+
+    #[test]
+    fn needs_load_rules() {
+        let mut m = logged_in();
+        let r = Route::Album(1);
+        let now = Instant::now();
+        let min = Duration::from_secs(60);
+        assert!(m.needs_load(&r, now), "none");
+        m.apply(Event::Loading(r.clone()));
+        assert!(!m.needs_load(&r, now), "loading");
+        m.apply(Event::PageFailed(r.clone()));
+        assert!(m.needs_load(&r, now), "failed");
+        m.apply(Event::Loading(r.clone()));
+        loaded(&mut m, r.clone());
+        assert!(!m.needs_load(&r, now + min), "fetched 1 min ago");
+        assert!(m.needs_load(&r, now + 6 * min), "fetched 6 min ago");
+        m.apply(Event::Loading(r.clone()));
+        assert!(!m.needs_load(&r, now + 6 * min), "stale, already reloading");
+        assert!(m.pages[&r].data.is_some(), "the stale copy stays meanwhile");
+        for r in [Route::Search, Route::Login] {
+            assert!(!m.needs_load(&r, now), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn page_evicts_lru_but_not_current() {
+        let mut m = logged_in();
+        m.navigate(Route::Album(0));
+        for i in 0..25 {
+            loaded(&mut m, Route::Album(i));
+        }
+        let held = |m: &Model| m.pages.values().filter(|s| s.data.is_some()).count();
+        assert_eq!(held(&m), 24);
+        assert!(
+            m.pages[&Route::Album(0)].data.is_some(),
+            "current, though oldest"
+        );
+        assert!(
+            !m.pages.contains_key(&Route::Album(1)),
+            "least recently used"
+        );
+        // A visit makes a page recent: the next evictions take albums 0 and 3, not 2.
+        m.navigate(Route::Album(2));
+        m.navigate(Route::Home);
+        loaded(&mut m, Route::Album(25));
+        loaded(&mut m, Route::Album(26));
+        assert_eq!(held(&m), 24);
+        assert!(m.pages.contains_key(&Route::Album(2)));
+        assert!(!m.pages.contains_key(&Route::Album(0)));
+        assert!(!m.pages.contains_key(&Route::Album(3)));
+    }
+
+    #[test]
+    fn offline_flag_follows_events() {
+        let mut m = Model::default();
+        m.apply(Event::Offline(true));
+        assert!(m.offline);
+        m.apply(Event::Offline(false));
+        assert!(!m.offline);
     }
 
     #[test]
@@ -317,30 +553,6 @@ mod tests {
         assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
         m.apply(res("a"));
         assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
-    }
-
-    #[test]
-    fn album_failure_state_transitions() {
-        let mut m = Model::default();
-        m.apply(Event::AlbumFailed(5));
-        assert!(m.album_errors.contains(&5));
-        m.apply(Event::AlbumLoading(5));
-        assert!(m.album_errors.is_empty());
-        m.apply(Event::AlbumFailed(5));
-        let album = tidal::Album {
-            id: 5,
-            title: "t".into(),
-            cover: None,
-            artists: vec![],
-            number_of_tracks: 0,
-            duration: 0,
-            release_date: None,
-        };
-        m.apply(Event::Album {
-            album,
-            tracks: vec![],
-        });
-        assert!(m.album_errors.is_empty());
     }
 
     #[test]
