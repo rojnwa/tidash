@@ -174,7 +174,8 @@ impl Client {
         if status == StatusCode::OK
             && let Some(c) = cache
         {
-            // Best-effort: a failed write leaves the old copy, or none.
+            // Best-effort: a failed write leaves the old copy, none, or this body under the old
+            // ETag (revalidated with a 200, never a 304). Writes of one key never interleave.
             let entry = Entry { etag, body };
             let _ = tokio::task::spawn_blocking(move || c.write(&key, &entry)).await;
         }

@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
@@ -16,6 +17,9 @@ pub struct DiskCache {
     cap: u64,
     ext: &'static str,
     writes: AtomicU64,
+    /// Held across a whole `write`, so one write's body and ETag land together.
+    // ponytail: in-process only; add a file lock if two app instances ever share the dir.
+    write_lock: Mutex<()>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -33,6 +37,7 @@ impl DiskCache {
             cap: cap_bytes,
             ext,
             writes: AtomicU64::new(0),
+            write_lock: Mutex::new(()),
         };
         cache.sweep()?;
         Ok(cache)
@@ -47,9 +52,9 @@ impl DiskCache {
         self.dir.join(format!("{hex}.{}", self.ext))
     }
 
-    /// Marks the entry recently used. The ETag is read before the body: with `write` putting
-    /// the body first, a racing write can only pair a new body with an old ETag, which the
-    /// server answers with a 200 rather than a 304.
+    /// Marks the entry recently used. The ETag is read before the body: writes are serialized
+    /// and put the body first, so a read racing a write (or a crash between its two files) can
+    /// only pair a new body with an old ETag, which the server answers with a 200, not a 304.
     pub fn read(&self, key: &str) -> Option<Entry> {
         let path = self.path(key);
         let etag_path = path.with_extension("etag");
@@ -62,18 +67,22 @@ impl DiskCache {
         Some(Entry { etag, body })
     }
 
-    /// Body first, then the ETag (see `read`); each lands whole or not at all.
+    /// Body first, then the ETag (see `read`), under the write lock: two writes of one key never
+    /// interleave into one's body beside the other's ETag. Each file lands whole or not at all.
     pub fn write(&self, key: &str, entry: &Entry) -> io::Result<()> {
         let n = self.writes.fetch_add(1, Ordering::Relaxed) + 1;
         let path = self.path(key);
-        put(&path, &entry.body, n)?;
-        let etag_path = path.with_extension("etag");
-        match &entry.etag {
-            Some(etag) => put(&etag_path, etag.as_bytes(), n)?,
-            None => match fs::remove_file(&etag_path) {
-                Err(e) if e.kind() != ErrorKind::NotFound => return Err(e),
-                _ => {}
-            },
+        {
+            let _guard = self.write_lock.lock().unwrap_or_else(|e| e.into_inner());
+            put(&path, &entry.body, n)?;
+            let etag_path = path.with_extension("etag");
+            match &entry.etag {
+                Some(etag) => put(&etag_path, etag.as_bytes(), n)?,
+                None => match fs::remove_file(&etag_path) {
+                    Err(e) if e.kind() != ErrorKind::NotFound => return Err(e),
+                    _ => {}
+                },
+            }
         }
         if n.is_multiple_of(SWEEP_EVERY) {
             let _ = self.sweep(); // the entry is written; the next sweep retries
@@ -183,6 +192,25 @@ mod tests {
         let e = entry(None, b"[]");
         c.write("k", &e).unwrap();
         assert_eq!(c.read("k"), Some(e));
+    }
+
+    #[test]
+    fn racing_writes_keep_body_and_etag_together() {
+        let c = DiskCache::open(tmp("race"), 1 << 20, "json").unwrap();
+        for round in 0..300 {
+            let go = std::sync::Barrier::new(2);
+            std::thread::scope(|s| {
+                for v in ["a", "b"] {
+                    let (c, go) = (&c, &go);
+                    s.spawn(move || {
+                        go.wait();
+                        c.write("k", &entry(Some(v), v.as_bytes())).unwrap();
+                    });
+                }
+            });
+            let e = c.read("k").unwrap();
+            assert_eq!(e.etag.unwrap().as_bytes(), &e.body[..], "round {round}");
+        }
     }
 
     #[test]
