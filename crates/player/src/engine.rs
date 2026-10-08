@@ -57,8 +57,8 @@ pub enum PlayerEvent {
         id: u64,
         message: String,
     },
-    /// The output could not be opened again; sent once per outage. The output keeps trying,
-    /// and a loaded track plays on once it is back.
+    /// The output could not be opened again; sent on the first failed reopen, not on the retries
+    /// after it. The output keeps trying, and a loaded track plays on once it is back.
     OutputLost,
 }
 
