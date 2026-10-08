@@ -20,7 +20,8 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 log = "0.4"
 rand = "0.10"
 fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
-fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+# ponytail: unmerged crmne/fastframe#17 (mmap fallback faces); back to the tag once released
+fastframe-fonts = { git = "https://github.com/crmne/fastframe", rev = "819d6fc31d31b9f96573981a98851e30a138d6b8" }
 fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
