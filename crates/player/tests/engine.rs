@@ -438,6 +438,35 @@ fn second_forward_seek_after_interrupted_seek() {
 }
 
 #[test]
+fn pause_and_volume_act_while_the_player_waits_on_a_read() {
+    let (player, events, mut r) = Player::spawn_manual();
+    r.configure(48_000, 2);
+    let (_open, gate) = std::sync::mpsc::channel();
+    let file = fixture("s24_96000");
+    let first = file.metadata().unwrap().len() as usize * 2 / 5; // ~200 ms of 500, then it waits
+    player.send(PlayerCmd::Load(Source {
+        id: 1,
+        reader: Box::new(Gated {
+            file,
+            first,
+            gate: Some(gate),
+        }),
+        len: None,
+    }));
+    player.send(PlayerCmd::Play);
+    render_until(&mut r, &events, &State(Playing));
+    std::thread::sleep(Duration::from_millis(100)); // decodes what arrived, then waits for more
+    player.send(PlayerCmd::SetVolume(0.0));
+    assert_eq!(nonsilent_frames(&render_ms(&mut r, 20)), 0, "volume waited");
+    player.send(PlayerCmd::SetVolume(1.0));
+    assert!(nonsilent_frames(&render_ms(&mut r, 20)) > 0, "ring ran dry");
+    player.send(PlayerCmd::Pause);
+    let at = player.position();
+    assert_eq!(nonsilent_frames(&render_ms(&mut r, 20)), 0, "pause waited");
+    assert_eq!(player.position(), at);
+}
+
+#[test]
 fn seek_backwards_after_progress() {
     let (player, events, mut r) = start("s16_44100");
     render_until(&mut r, &events, &State(Playing));

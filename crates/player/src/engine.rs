@@ -110,6 +110,14 @@ impl Player {
     }
 
     pub fn send(&self, cmd: PlayerCmd) {
+        // Pause, Play and volume reach the renderer at once, even while the thread waits on a
+        // read; the thread applies them again in order and reports the state.
+        match cmd {
+            PlayerCmd::Play => self.shared.paused.store(false, Release),
+            PlayerCmd::Pause => self.shared.paused.store(true, Release),
+            PlayerCmd::SetVolume(v) => self.shared.volume.store(v.to_bits(), Relaxed),
+            _ => {}
+        }
         // Load, Stop and Seek must not queue behind a read waiting on the network, whichever
         // source it is reading (even one the thread has yet to open): raise the interrupt. A
         // Seek leaves unfinished Loads alone; it is meant for that track. The lock keeps the
