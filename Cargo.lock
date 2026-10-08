@@ -4584,6 +4584,7 @@ dependencies = [
  "reqwest",
  "tidal",
  "tokio",
+ "wiremock",
 ]
 
 [[package]]

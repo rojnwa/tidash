@@ -216,7 +216,15 @@ impl Backend {
             }
             Action::FinishLogin(redirect) => self.finish_login(&redirect).await,
             Action::Logout => {
+                if let Some(t) = self.search_task.take() {
+                    t.abort();
+                }
                 let client = self.client.take();
+                // What the old session still sends (the play report below, a request in flight)
+                // may refresh it, but must not write it back once the store is cleared.
+                if let Some(c) = &client {
+                    c.detach_store().await;
+                }
                 self.pkce = None;
                 // The user asked to log out: do so even if the stored copy could not be removed.
                 if let Err(e) = self.with_store(|s| s.clear()).await {
@@ -335,6 +343,45 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// Records saves and clears; the session is read only at startup.
+    #[derive(Default)]
+    struct Calls(std::sync::Mutex<Vec<&'static str>>);
+
+    impl Calls {
+        fn push(&self, call: &'static str) -> tidal::Result<()> {
+            self.0.lock().expect("calls").push(call);
+            Ok(())
+        }
+
+        fn get(&self) -> Vec<&'static str> {
+            self.0.lock().expect("calls").clone()
+        }
+    }
+
+    impl TokenStore for Calls {
+        fn load(&self) -> tidal::Result<Option<tidal::Session>> {
+            panic!("the stored session was read again");
+        }
+        fn save(&self, _: &tidal::Session) -> tidal::Result<()> {
+            self.push("save")
+        }
+        fn clear(&self) -> tidal::Result<()> {
+            self.push("clear")
+        }
+    }
+
+    fn session(access_token: &str) -> tidal::Session {
+        tidal::Session {
+            access_token: access_token.into(),
+            refresh_token: "r".into(),
+            expires_at: 0,
+            user_id: 1,
+            country_code: "US".into(),
+        }
+    }
 
     /// Every read of the OS store can raise a macOS keychain prompt.
     struct NoReads;
@@ -415,6 +462,68 @@ mod tests {
     fn logout_clears_the_store_off_the_runtime() {
         let events = run(Arc::new(OwnRuntime), Ok(None), vec![Action::Logout]);
         assert!(matches!(events[..], [Event::LoggedOut]), "{events:?}");
+    }
+
+    /// A play report that goes out after Logout (from a task still holding the old client)
+    /// with a stale token refreshes it, but must not write it back to the store.
+    #[test]
+    fn a_report_refresh_after_logout_is_not_saved() {
+        // JWT-shaped: the report carries the token's claims.
+        const OLD: &str = "eyJhbGciOiJub25lIn0.eyJ1aWQiOjEsImNpZCI6Miwic2lkIjoicyJ9.old";
+        const NEW: &str = "eyJhbGciOiJub25lIn0.eyJ1aWQiOjEsImNpZCI6Miwic2lkIjoicyJ9.new";
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        rt.block_on(async {
+            let server = MockServer::start().await;
+            for (token, status) in [(OLD, 401), (NEW, 200)] {
+                Mock::given(method("POST"))
+                    .and(path("/events"))
+                    .and(header("authorization", format!("Bearer {token}")))
+                    .respond_with(ResponseTemplate::new(status))
+                    .expect(1)
+                    .mount(&server)
+                    .await;
+            }
+            Mock::given(method("POST"))
+                .and(path("/oauth2/token"))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(
+                    format!(r#"{{"access_token":"{NEW}","expires_in":14400}}"#),
+                    "application/json",
+                ))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let store = Arc::new(Calls::default());
+            let (tx, _events) = channel();
+            let emit = Arc::new(Emitter {
+                tx,
+                waker: Box::new(|| {}),
+            });
+            let mut backend = Backend::new(emit, (store.clone(), Ok(None)));
+            backend.cfg = ClientConfig {
+                events_url: format!("{}/events", server.uri()).parse().expect("a URL"),
+                auth_base: format!("{}/", server.uri()).parse().expect("a URL"),
+                ..ClientConfig::default()
+            };
+            backend.log_in(session(OLD));
+            let old = backend.client.clone().expect("logged in");
+            backend.handle(Action::Logout).await;
+            let report = tidal::PlaybackReport {
+                track_id: 1,
+                quality: "LOSSLESS".into(),
+                streaming_session_id: "p".into(),
+                started_at_ms: 0,
+                ended_at_ms: 60_000,
+                start_position_s: 0.0,
+                end_position_s: 60.0,
+                source_type: "ALBUM".into(),
+                source_id: "1".into(),
+            };
+            old.report_playback(&report).await.expect("reported");
+            assert_eq!(store.get(), ["clear"]);
+        });
     }
 
     #[test]

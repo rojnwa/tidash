@@ -12,7 +12,8 @@ const MAX_RATE_RETRIES: u32 = 2;
 pub struct Client {
     http: reqwest::Client,
     cfg: ClientConfig,
-    store: Arc<dyn TokenStore>,
+    /// Where a refreshed session is saved; `None` once detached. Held through a save.
+    store: Arc<std::sync::Mutex<Option<Arc<dyn TokenStore>>>>,
     // Never held across an await.
     session: RwLock<Session>,
     /// Single-flight guard for token refresh.
@@ -28,7 +29,7 @@ impl Client {
                 .read_timeout(Duration::from_secs(30))
                 .build()?,
             cfg,
-            store,
+            store: Arc::new(std::sync::Mutex::new(Some(store))),
             session: RwLock::new(session),
             refresh_lock: Mutex::new(()),
             permits: Semaphore::new(MAX_IN_FLIGHT),
@@ -48,6 +49,17 @@ impl Client {
 
     pub fn config(&self) -> &ClientConfig {
         &self.cfg
+    }
+
+    /// Refreshed sessions stay in memory from now on: on logout, a request still in flight
+    /// must not write the session back to the store. Waits for a save in progress.
+    pub async fn detach_store(&self) {
+        let store = Arc::clone(&self.store);
+        // A save holds the lock and can block: wait off the async runtime.
+        let _ = tokio::task::spawn_blocking(move || {
+            *store.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        })
+        .await;
     }
 
     pub async fn get<T: DeserializeOwned>(
@@ -140,7 +152,13 @@ impl Client {
         // Best-effort, off the async runtime (keyring may block). A failed save can leave the old refresh
         // token stored; fine, the in-memory session keeps working and the next refresh retries the save.
         let (store, saved) = (Arc::clone(&self.store), new);
-        let _ = tokio::task::spawn_blocking(move || store.save(&saved)).await;
+        let _ = tokio::task::spawn_blocking(move || {
+            match &*store.lock().unwrap_or_else(|e| e.into_inner()) {
+                Some(s) => s.save(&saved),
+                None => Ok(()), // detached
+            }
+        })
+        .await;
         Ok(())
     }
 }

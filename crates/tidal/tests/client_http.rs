@@ -88,6 +88,29 @@ async fn expired_token_refreshes_once_and_retries() {
 }
 
 #[tokio::test]
+async fn a_detached_client_refreshes_in_memory_only() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer OLD"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(header("authorization", "Bearer ACCESS"))
+        .respond_with(ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    token_ok(&server, 1).await;
+    let (c, store) = setup(&server, "OLD");
+    c.detach_store().await;
+    let _: Val = c.get("things", &[]).await.unwrap();
+    assert_eq!(c.session().access_token, "ACCESS");
+    assert!(store.load().unwrap().is_none(), "nothing saved");
+}
+
+#[tokio::test]
 async fn concurrent_401s_share_one_refresh() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
