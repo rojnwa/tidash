@@ -90,11 +90,9 @@ impl DiskCache {
         Ok(())
     }
 
+    /// Removes every file it can (a logout's: the next user must not find them).
     pub fn clear(&self) -> io::Result<()> {
-        for e in fs::read_dir(&self.dir)? {
-            fs::remove_file(e?.path())?;
-        }
-        Ok(())
+        remove_files(fs::read_dir(&self.dir)?.map(|e| e.map(|e| e.path())))
     }
 
     /// Deletes the least recently used files until the directory fits in the cap.
@@ -118,6 +116,20 @@ impl DiskCache {
         }
         Ok(())
     }
+}
+
+/// Removes every file it can; returns the first failure. A file already gone (a sweep racing
+/// `clear`) is no failure.
+fn remove_files(paths: impl Iterator<Item = io::Result<PathBuf>>) -> io::Result<()> {
+    let mut result = Ok(());
+    for p in paths {
+        if let Err(e) = p.and_then(fs::remove_file)
+            && e.kind() != ErrorKind::NotFound
+        {
+            result = result.and(Err(e));
+        }
+    }
+    result
 }
 
 /// Writes a uniquely named `.part` beside `path`, then renames it over `path`.
@@ -282,5 +294,18 @@ mod tests {
         c.clear().unwrap();
         assert!(names(&dir).is_empty());
         assert!(c.read("a").is_none());
+    }
+
+    /// A file listed but gone by its turn (a sweep racing a logout's clear) leaves the rest
+    /// to go, not the previous user's files on disk.
+    #[test]
+    fn clear_skips_files_already_gone() {
+        let dir = tmp("gone");
+        let c = DiskCache::open(dir.clone(), 1 << 20, "json").unwrap();
+        c.write("a", &entry(None, b"1")).unwrap();
+        c.write("b", &entry(None, b"2")).unwrap();
+        let listed = [c.path("a"), dir.join("swept.json"), c.path("b")];
+        remove_files(listed.into_iter().map(Ok)).unwrap();
+        assert!(names(&dir).is_empty());
     }
 }
