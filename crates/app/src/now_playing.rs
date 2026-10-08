@@ -5,7 +5,6 @@
 use crate::model::{Action, PlaybackSnapshot};
 use fastframe_now_playing::{App, Command, NowPlaying, Playback, State, Track};
 use player::PlayState;
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -19,8 +18,8 @@ pub struct MediaControls {
     controls: NowPlaying,
     cfg: tidal::ClientConfig,
     wake: Wake,
-    /// Where cover files go.
-    dir: PathBuf,
+    /// Where cover files go; `None` (no home directory) publishes only the cover URL.
+    dir: Option<PathBuf>,
     /// The last cover whose file was asked for: one download per cover.
     requested: Option<String>,
     landed: (Sender<()>, Receiver<()>),
@@ -35,11 +34,14 @@ impl MediaControls {
         app.can_raise = false;
         app.can_quit = false;
         let w = wake.clone();
-        // Last session's covers go; this one's are fetched again as they play.
-        let dir = cover_dir(std::env::var_os("XDG_RUNTIME_DIR"), std::env::temp_dir());
-        let _ = std::fs::remove_dir_all(&dir);
-        if let Err(e) = std::fs::create_dir_all(&dir) {
-            log::debug!("cover dir {}: {e}", dir.display());
+        // Last session's covers go; this one's are fetched again as they play. A second
+        // running instance wipes the first one's too (cosmetic; single instance comes in M4).
+        let dir = cover_dir();
+        if let Some(dir) = &dir {
+            let _ = std::fs::remove_dir_all(dir);
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                log::debug!("cover dir {}: {e}", dir.display());
+            }
         }
         Self {
             controls: NowPlaying::start(app, move || w()),
@@ -55,7 +57,7 @@ impl MediaControls {
     pub fn show(&mut self, pb: &PlaybackSnapshot, position: Duration) {
         let cover = pb.track.as_ref().and_then(|t| t.album.cover.as_deref());
         let art_url = cover.map(|c| tidal::image_url(&self.cfg, c, COVER_PX));
-        let file = cover.and_then(|c| cover_file(&self.dir, c));
+        let file = cover.and_then(|c| cover_file(self.dir.as_deref(), c));
         let on_disk = file.as_ref().is_some_and(|f| f.is_file());
         if let (Some(f), Some(url)) = (&file, &art_url)
             && !on_disk
@@ -83,18 +85,18 @@ impl MediaControls {
     }
 }
 
-/// A per-user directory for cover files: `$XDG_RUNTIME_DIR` (0700) when set to an absolute
-/// path, else the temp dir, which is per-user on Windows and macOS.
+/// The per-user cache directory for cover files; never a shared temp dir.
 // ponytail: covers pile up for one session (~50 KB per album played) and are wiped on the
-// next start; move to an evicting cache dir once the app has one.
-fn cover_dir(xdg_runtime: Option<OsString>, temp: PathBuf) -> PathBuf {
-    xdg_runtime.map(PathBuf::from).filter(|d| d.is_absolute()).unwrap_or(temp).join("tidalfast-covers")
+// next start; an evicting cache once the app keeps more than covers there.
+fn cover_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "tidalfast").map(|p| p.cache_dir().join("covers"))
 }
 
-/// Where a cover's file goes. Cover ids are UUIDs; anything else gets no file.
-fn cover_file(dir: &Path, cover: &str) -> Option<PathBuf> {
+/// Where a cover's file goes: none without a cache dir. Cover ids are UUIDs; anything else
+/// gets no file.
+fn cover_file(dir: Option<&Path>, cover: &str) -> Option<PathBuf> {
     let safe = !cover.is_empty() && cover.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-    safe.then(|| dir.join(format!("{cover}.jpg")))
+    dir.filter(|_| safe).map(|d| d.join(format!("{cover}.jpg")))
 }
 
 /// Downloads `url` to `path` on a thread of its own; `done` and `wake` once it is there.
@@ -216,20 +218,13 @@ mod tests {
     }
 
     #[test]
-    fn only_uuid_like_covers_get_a_file() {
-        let dir = Path::new("covers");
-        assert_eq!(cover_file(dir, "ab12-cd34"), Some(dir.join("ab12-cd34.jpg")));
-        assert!(cover_file(dir, "../evil").is_none());
-        assert!(cover_file(dir, "").is_none());
-    }
-
-    #[test]
-    fn covers_go_to_the_runtime_dir_when_it_is_absolute() {
-        let temp = std::env::temp_dir();
-        let runtime = temp.join("run-user-1000");
-        assert_eq!(cover_dir(Some(runtime.clone().into()), temp.clone()), runtime.join("tidalfast-covers"));
-        assert_eq!(cover_dir(None, temp.clone()), temp.join("tidalfast-covers"));
-        assert_eq!(cover_dir(Some("".into()), temp.clone()), temp.join("tidalfast-covers"), "empty");
-        assert_eq!(cover_dir(Some("rel".into()), temp.clone()), temp.join("tidalfast-covers"), "relative");
+    fn covers_go_only_into_the_cache_dir() {
+        let cache = directories::ProjectDirs::from("", "", "tidalfast").expect("a home dir");
+        let dir = cover_dir().expect("a cache dir");
+        assert!(dir.starts_with(cache.cache_dir()));
+        assert_eq!(cover_file(Some(&dir), "ab12-cd34"), Some(dir.join("ab12-cd34.jpg")));
+        assert!(cover_file(None, "ab12-cd34").is_none(), "no cache dir, no file");
+        assert!(cover_file(Some(&dir), "../evil").is_none());
+        assert!(cover_file(Some(&dir), "").is_none());
     }
 }
