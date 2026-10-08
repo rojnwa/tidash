@@ -26,7 +26,6 @@ pub enum Route {
     ViewAll(String),
 }
 
-#[allow(dead_code, reason = "Task 11's collection view opens the other tabs")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CollectionTab {
     Tracks,
@@ -36,7 +35,19 @@ pub enum CollectionTab {
     Mixes,
 }
 
-#[allow(dead_code, reason = "Task 11's collection view reads Tracks and Items")]
+impl CollectionTab {
+    /// The tab that lists `item`.
+    pub fn of(item: &tidal::Favorite) -> Self {
+        match item {
+            tidal::Favorite::Track(_) => Self::Tracks,
+            tidal::Favorite::Album(_) => Self::Albums,
+            tidal::Favorite::Artist(_) => Self::Artists,
+            tidal::Favorite::Playlist(_) => Self::Playlists,
+            tidal::Favorite::Mix(_) => Self::Mixes,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PageData {
     Shelves(tidal::Page),
@@ -90,6 +101,11 @@ pub enum Action {
         image: tidal::Image,
         px: u32,
     },
+    /// Adds (`on`) or removes a favorite; the UI has applied `Event::FavoriteSet` already.
+    SetFavorite {
+        item: tidal::Favorite,
+        on: bool,
+    },
 }
 
 // Debug is manual: `FinishLogin` carries the redirect URL with the authorization code.
@@ -117,6 +133,11 @@ impl std::fmt::Debug for Action {
                 .field("image", image)
                 .field("px", px)
                 .finish(),
+            Self::SetFavorite { item, on } => f
+                .debug_struct("SetFavorite")
+                .field("item", item)
+                .field("on", on)
+                .finish(),
         }
     }
 }
@@ -142,8 +163,20 @@ pub enum Event {
         data: PageData,
     },
     PageFailed(Route),
+    /// The route's page changed on TIDAL: the next visit fetches it again.
+    Stale(Route),
     Offline(bool),
     Favorites(tidal::FavoriteIds),
+    /// The heart shows `on` at once, before the write (`Action::SetFavorite`) is done.
+    FavoriteSet {
+        item: tidal::Favorite,
+        on: bool,
+    },
+    /// Setting the favorite to `on` failed: the heart goes back.
+    FavoriteFailed {
+        item: tidal::Favorite,
+        on: bool,
+    },
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
     /// Playback jumped to this position (for the OS media controls).
@@ -192,7 +225,6 @@ pub struct Model {
     clock: u64,
     /// The current route was arrived at (or retried) since `open_current` last looked.
     arrived: bool,
-    #[allow(dead_code, reason = "the favorite hearts (Task 11) read it")]
     pub favorites: tidal::FavoriteIds,
     pub offline: bool,
     pub logged_in: bool,
@@ -230,7 +262,13 @@ impl Model {
         // A reply that lands after logout must not refill the store with that user's pages.
         let reply = matches!(
             ev,
-            Event::Page { .. } | Event::PageFailed(_) | Event::Favorites(_) | Event::Offline(_)
+            Event::Page { .. }
+                | Event::PageFailed(_)
+                | Event::Stale(_)
+                | Event::Favorites(_)
+                | Event::FavoriteSet { .. }
+                | Event::FavoriteFailed { .. }
+                | Event::Offline(_)
         );
         if reply && !self.logged_in {
             return;
@@ -291,8 +329,15 @@ impl Model {
                 slot.loading = false;
                 slot.failed = true;
             }
+            Event::Stale(r) => {
+                if let Some(slot) = self.pages.get_mut(&r) {
+                    slot.fetched = None;
+                }
+            }
             Event::Offline(o) => self.offline = o,
             Event::Favorites(f) => self.favorites = f,
+            Event::FavoriteSet { item, on } => self.favorites.set(&item, on),
+            Event::FavoriteFailed { item, on } => self.favorites.set(&item, !on),
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -612,9 +657,35 @@ mod tests {
                 ..Default::default()
             }));
             m.apply(Event::Offline(true));
+            let item = tidal::Favorite::Track(1);
+            m.apply(Event::FavoriteSet {
+                item: item.clone(),
+                on: true,
+            });
+            m.apply(Event::FavoriteFailed { item, on: false });
+            m.apply(Event::Stale(Route::Home));
             assert!(m.pages.is_empty());
             assert_eq!(m.favorites, tidal::FavoriteIds::default());
             assert!(!m.offline);
+        }
+    }
+
+    /// The heart flips at click time; a write that fails flips it back.
+    #[test]
+    fn favorite_set_is_optimistic_and_failure_reverts() {
+        let mut m = logged_in();
+        let item = tidal::Favorite::Mix("m1".into());
+        for on in [true, false] {
+            m.apply(Event::FavoriteSet {
+                item: item.clone(),
+                on,
+            });
+            assert_eq!(m.favorites.contains(&item), on, "shown at once");
+            m.apply(Event::FavoriteFailed {
+                item: item.clone(),
+                on,
+            });
+            assert_eq!(m.favorites.contains(&item), !on, "reverted");
         }
     }
 

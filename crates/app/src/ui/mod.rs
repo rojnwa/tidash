@@ -4,6 +4,7 @@ mod album;
 mod artist;
 mod browse;
 mod card;
+mod collection;
 mod header;
 mod login;
 mod mix;
@@ -18,6 +19,7 @@ mod tracks;
 use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::{Action, Event, Model, PageData, Route};
+use std::borrow::Cow;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct UiState {
@@ -58,6 +60,25 @@ impl Ctx<'_> {
 
     pub fn go(&mut self, route: Route) {
         self.events.push(Event::Navigate(route));
+    }
+
+    /// What toggling `item` does: "Add to favorites" or "Remove from favorites".
+    pub fn favorite_label(&self, item: &tidal::Favorite) -> Cow<'static, str> {
+        if self.model.favorites.contains(item) {
+            tr("Remove from favorites")
+        } else {
+            tr("Add to favorites")
+        }
+    }
+
+    /// Flips `item`'s heart now and has the backend write it; a failed write flips it back.
+    pub fn toggle_favorite(&mut self, item: tidal::Favorite) {
+        let on = !self.model.favorites.contains(&item);
+        self.events.push(Event::FavoriteSet {
+            item: item.clone(),
+            on,
+        });
+        self.send(Action::SetFavorite { item, on });
     }
 }
 
@@ -261,10 +282,7 @@ pub fn draw(
             Route::Artist(_) => artist::show(ui, &mut ctx, route),
             Route::Playlist(_) => playlist::show(ui, &mut ctx, route),
             Route::Mix(_) => mix::show(ui, &mut ctx, route),
-            // ponytail: Task 11's collection view replaces this
-            Route::Collection(_) => {
-                ui.label(tr("Coming soon"));
-            }
+            Route::Collection(_) => collection::show(ui, &mut ctx, route),
         }
     });
     events
@@ -289,6 +307,28 @@ mod testing {
             repeat: false,
             modifiers: Default::default(),
         }
+    }
+
+    /// A screen reader's click on the node labelled `label` in `out`.
+    pub fn click(out: &egui::FullOutput, label: &str) -> egui::Event {
+        use egui::accesskit;
+        let tree = out
+            .platform_output
+            .accesskit_update
+            .as_ref()
+            .expect("AccessKit is on");
+        let node = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some(label))
+            .map(|(id, _)| *id)
+            .unwrap_or_else(|| panic!("no {label:?} shown"));
+        egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+            action: accesskit::Action::Click,
+            target_tree: accesskit::TreeId::ROOT,
+            target_node: node,
+            data: None,
+        })
     }
 
     /// Logged in, at `route`.

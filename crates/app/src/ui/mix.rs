@@ -18,6 +18,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             &mix.title,
             subtitle,
             Some(list),
+            Some(tidal::Favorite::Mix(mix.id.clone())),
         );
         tracks::show(ui, ctx, "mix-tracks", list, false);
     });

@@ -16,7 +16,15 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             ui.label(p.creator.as_deref().unwrap_or("TIDAL")); // a brand: not translated
             ui.label(tracks::summary(list));
         };
-        header::header(ui, ctx, p.image().as_ref(), &p.title, details, Some(list));
+        header::header(
+            ui,
+            ctx,
+            p.image().as_ref(),
+            &p.title,
+            details,
+            Some(list),
+            Some(tidal::Favorite::Playlist(p.uuid.clone())),
+        );
         tracks::show(ui, ctx, "playlist-tracks", list, false);
     });
 }

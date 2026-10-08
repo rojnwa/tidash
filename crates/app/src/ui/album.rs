@@ -37,6 +37,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             &album.title,
             details,
             Some(list),
+            Some(tidal::Favorite::Album(album.id)),
         );
         tracks::show(ui, ctx, "album-tracks", list, true);
     });
@@ -44,17 +45,51 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{PageData, Route};
-    use crate::ui::testing::{album, every_state, tracks};
+    use crate::model::{Action, Event, PageData, Route};
+    use crate::ui::testing::{album, at, click, every_state, pass, tracks};
+    use tidal::Favorite;
+
+    fn data() -> PageData {
+        let mut list = tracks(2);
+        list[1].volume_number = 2;
+        PageData::Album {
+            album: album(1),
+            tracks: list,
+        }
+    }
+
+    /// The heart flips at once (the model applies `FavoriteSet`) and the backend writes it;
+    /// then it offers the way back.
+    #[test]
+    fn heart_favorites_at_once() {
+        let route = Route::Album(1);
+        let mut model = at(route.clone());
+        model.apply(Event::Page {
+            route,
+            data: data(),
+        });
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let heart = click(&out, "Add to favorites");
+        let (events, _) = pass(&egui, &tx, &model, super::show, vec![heart]);
+        let album = Favorite::Album(1);
+        let set = matches!(&events[..], [Event::FavoriteSet { item, on: true }] if *item == album);
+        assert!(set, "{events:?}");
+        let sent = std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|a| matches!(a, Action::SetFavorite { item, on: true } if item == album));
+        assert!(sent, "the write");
+        for ev in events {
+            model.apply(ev);
+        }
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        click(&out, "Remove from favorites"); // panics unless shown
+    }
 
     #[test]
     fn views_render_every_state() {
-        let mut list = tracks(2);
-        list[1].volume_number = 2;
-        let data = PageData::Album {
-            album: album(1),
-            tracks: list,
-        };
+        let data = data();
         let texts = [
             "Album 1",
             "Artist 1",

@@ -1,11 +1,12 @@
-//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9).
+//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9); and the
+//! favorite writes, which make a collection page stale.
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
 use crate::model::{CollectionTab, Event, PageData, Route};
 use crate::playback::Msg;
 use std::sync::Arc;
-use tidal::{Client, Item};
+use tidal::{Client, Favorite, Item};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// `route`'s page from `c` (a `cache_only` client reads the saved copy).
@@ -76,9 +77,34 @@ pub async fn open(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: Unboun
     }
 }
 
+/// Writes a favorite the UI shows already (`Event::FavoriteSet`). Done, its collection tab is
+/// stale; failed, the heart goes back and one error says why. The backend spawns it.
+// ponytail: two quick toggles of one item run concurrently and may land out of order; chain
+// the writes per item if that is ever seen.
+pub async fn set_favorite(
+    c: Arc<Client>,
+    item: Favorite,
+    on: bool,
+    emit: Arc<Emitter>,
+    msgs: UnboundedSender<Msg>,
+) {
+    match c.set_favorite(&item, on).await {
+        Ok(()) => emit.send(Event::Stale(Route::Collection(CollectionTab::of(&item)))),
+        Err(e) if session_expired(&e, &c, &msgs) => {}
+        Err(e) => {
+            emit.send(Event::FavoriteFailed { item, on });
+            emit.send(Event::Error(format!(
+                "{}: {e}",
+                tr("Could not update favorites")
+            )));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Model;
     use std::sync::mpsc::channel;
     use tidal::{ClientConfig, DiskCache, MemoryStore, Session};
     use tokio::sync::mpsc::unbounded_channel;
@@ -137,17 +163,96 @@ mod tests {
         assert!(closed, "{addr} still answers");
     }
 
-    /// The events of loading the explore page with `c`, and whether it found the session dead.
-    async fn load_explore(c: Arc<Client>) -> (Vec<Event>, bool) {
+    /// The events `task` sends, and whether it found the session dead.
+    async fn events_of<F: Future<Output = ()>>(
+        task: impl FnOnce(Arc<Emitter>, UnboundedSender<Msg>) -> F,
+    ) -> (Vec<Event>, bool) {
         let (tx, events) = channel();
         let emit = Arc::new(Emitter {
             tx,
             waker: Box::new(|| {}),
         });
         let (msgs, mut msg_rx) = unbounded_channel();
-        open(c, explore(), emit, msgs).await;
+        task(emit, msgs).await;
         let expired = matches!(msg_rx.try_recv(), Ok(Msg::SessionExpired(_)));
         (events.try_iter().collect(), expired)
+    }
+
+    /// The events of loading the explore page with `c`, and whether it found the session dead.
+    async fn load_explore(c: Arc<Client>) -> (Vec<Event>, bool) {
+        events_of(|emit, msgs| open(c, explore(), emit, msgs)).await
+    }
+
+    /// A model that shows `item`'s heart flipped to `on`, after `events` of its write.
+    fn after_write(item: &Favorite, on: bool, events: Vec<Event>) -> Model {
+        let mut m = Model::default();
+        m.apply(Event::LoggedIn);
+        m.apply(Event::Page {
+            route: Route::Collection(CollectionTab::Tracks),
+            data: PageData::Tracks(vec![]),
+        });
+        m.apply(Event::FavoriteSet {
+            item: item.clone(),
+            on,
+        });
+        for ev in events {
+            m.apply(ev);
+        }
+        m
+    }
+
+    /// The heart shows the change already: a refused write puts it back and says so once.
+    #[tokio::test]
+    async fn failed_write_reports_one_error_and_reverts() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/users/1/favorites/tracks"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+        let (c, item) = (
+            client(&server.uri(), &cache("fav-fail")),
+            Favorite::Track(7),
+        );
+        let write = |emit, msgs| set_favorite(c, item.clone(), true, emit, msgs);
+        let (events, expired) = events_of(write).await;
+        assert!(!expired);
+        assert!(
+            matches!(
+                &events[..],
+                [
+                    Event::FavoriteFailed {
+                        item: Favorite::Track(7),
+                        on: true
+                    },
+                    Event::Error(_)
+                ]
+            ),
+            "{events:?}"
+        );
+        let m = after_write(&item, true, events);
+        assert!(!m.favorites.contains(&item), "reverted");
+        assert_eq!(m.errors.len(), 1);
+    }
+
+    /// The next visit to the collection fetches it again, with the change.
+    #[tokio::test]
+    async fn successful_write_marks_collection_stale() {
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/v1/users/1/favorites/tracks/7"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (c, item) = (client(&server.uri(), &cache("fav-ok")), Favorite::Track(7));
+        let write = |emit, msgs| set_favorite(c, item.clone(), false, emit, msgs);
+        let (events, _) = events_of(write).await;
+        let m = after_write(&item, false, events);
+        let tracks = Route::Collection(CollectionTab::Tracks);
+        assert!(m.needs_load(&tracks, std::time::Instant::now()));
+        assert!(!m.favorites.contains(&item));
+        assert!(m.errors.is_empty());
     }
 
     fn title(ev: &Event) -> Option<&str> {

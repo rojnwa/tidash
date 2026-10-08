@@ -66,10 +66,12 @@ msgid "Search TIDAL"
 msgstr ""
 
 #: src/ui/search.rs
+#: src/ui/collection.rs
 msgid "Albums"
 msgstr ""
 
 #: src/ui/search.rs
+#: src/ui/collection.rs
 msgid "Tracks"
 msgstr ""
 
@@ -157,11 +159,8 @@ msgid "Explore"
 msgstr ""
 
 #: src/ui/sidebar.rs
+#: src/ui/collection.rs
 msgid "Collection"
-msgstr ""
-
-#: src/ui/mod.rs
-msgid "Coming soon"
 msgstr ""
 
 #: src/ui/mod.rs
@@ -169,10 +168,12 @@ msgid "Offline — showing saved pages"
 msgstr ""
 
 #: src/ui/search.rs
+#: src/ui/collection.rs
 msgid "Artists"
 msgstr ""
 
 #: src/ui/search.rs
+#: src/ui/collection.rs
 msgid "Playlists"
 msgstr ""
 
@@ -194,4 +195,20 @@ msgstr ""
 
 #: src/ui/tracks.rs
 msgid "Copy link"
+msgstr ""
+
+#: src/ui/collection.rs
+msgid "Mixes"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Add to favorites"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Remove from favorites"
+msgstr ""
+
+#: src/pages.rs
+msgid "Could not update favorites"
 msgstr ""

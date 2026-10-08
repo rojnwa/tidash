@@ -18,7 +18,15 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
                 ui.label(excerpt(bio, BIO));
             }
         };
-        header::header(ui, ctx, artist.image().as_ref(), &artist.name, bio, None);
+        header::header(
+            ui,
+            ctx,
+            artist.image().as_ref(),
+            &artist.name,
+            bio,
+            None,
+            Some(tidal::Favorite::Artist(artist.id)),
+        );
         shelf::shelves(ui, &page.shelves, ctx);
     });
 }

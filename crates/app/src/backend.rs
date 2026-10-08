@@ -343,6 +343,12 @@ impl Backend {
                     self.spawn(load);
                 }
             }
+            Action::SetFavorite { item, on } => {
+                if let Some(c) = self.client.clone() {
+                    let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+                    self.spawn(crate::pages::set_favorite(c, item, on, emit, msgs));
+                }
+            }
             Action::LoadImage { image, px } => {
                 let (base, emit) = (&self.cfg.image_base, self.emit.clone());
                 self.artwork.load(&self.http, base, &image, px, emit);

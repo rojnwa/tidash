@@ -173,6 +173,11 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
             ctx.go(Route::Artist(artist.id));
             ui.close();
         }
+        let fav = tidal::Favorite::Track(t.id);
+        if ui.button(ctx.favorite_label(&fav)).clicked() {
+            ctx.toggle_favorite(fav);
+            ui.close();
+        }
         if ui.button(tr("Copy link")).clicked() {
             ui.ctx()
                 .copy_text(format!("https://tidal.com/browse/track/{}", t.id));
@@ -185,8 +190,8 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
 mod tests {
     use crate::images::TextureCache;
     use crate::model::{Action, Event, Model, Route};
+    use crate::ui::testing::click;
     use crate::ui::{Ctx, page};
-    use egui::accesskit;
     use egui::{Key, PointerButton, Pos2, Rect, vec2};
     use tokio::sync::mpsc::UnboundedSender;
 
@@ -283,23 +288,8 @@ mod tests {
         pass(&ctx, &tx, &list, vec![right(false)]);
         pass(&ctx, &tx, &list, vec![]); // the menu lays itself out
         let (_, out) = pass(&ctx, &tx, &list, vec![]);
-        let tree = out
-            .platform_output
-            .accesskit_update
-            .expect("AccessKit is on");
-        let item = tree
-            .nodes
-            .iter()
-            .find(|(_, n)| n.label() == Some("Go to album"))
-            .map(|(id, _)| *id)
-            .expect("the menu shows Go to album");
-        let click = egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
-            action: accesskit::Action::Click,
-            target_tree: accesskit::TreeId::ROOT,
-            target_node: item,
-            data: None,
-        });
-        let (events, _) = pass(&ctx, &tx, &list, vec![click]);
+        click(&out, "Add to favorites"); // panics unless the menu offers it too
+        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Go to album")]);
         assert!(
             matches!(events[..], [Event::Navigate(Route::Album(2))]),
             "{events:?}"
