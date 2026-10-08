@@ -65,25 +65,23 @@ impl Client {
         url.query_pairs_mut()
             .extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())))
             .append_pair("countryCode", &self.session().country_code);
-        Ok(self.send(self.http.get(url)).await?.json().await?)
+        Ok(self
+            .send(|_| Ok(self.http.get(url.clone())))
+            .await?
+            .json()
+            .await?)
     }
 
-    /// Sends with auth, refresh-on-401 and 429/5xx retries. A non-cloneable request is sent once, unretried.
-    pub(crate) async fn send(&self, req: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+    /// Sends `req(token)` with `token` as bearer, with refresh-on-401 and 429/5xx retries. Each
+    /// try is built anew, so a retry carries the current token wherever the request has it.
+    pub(crate) async fn send(
+        &self,
+        req: impl Fn(&str) -> Result<reqwest::RequestBuilder>,
+    ) -> Result<reqwest::Response> {
         let (mut rate_retries, mut server_retried, mut refreshed) = (0, false, false);
-        let mut once = Some(req);
-        let template = once.as_ref().and_then(|r| r.try_clone());
         loop {
             let token = self.session().access_token;
-            let rb = match (&template, once.take()) {
-                (Some(t), _) => t.try_clone(),
-                (None, r) => r,
-            }
-            .ok_or_else(|| Error::Status {
-                status: 0,
-                sub_status: None,
-                message: "request cannot be retried".into(),
-            })?;
+            let rb = req(&token)?;
             let resp = {
                 let _permit = self.permits.acquire().await;
                 rb.bearer_auth(&token).send().await?
@@ -99,7 +97,6 @@ impl Client {
                 .and_then(|v| v.trim().parse::<u64>().ok())
                 .unwrap_or(2)
                 .min(30);
-            let retryable = template.is_some();
             let code = status.as_u16();
             let err = status_error(code, &resp.text().await?);
             let playback = matches!(
@@ -111,18 +108,18 @@ impl Client {
             );
             match code {
                 401 if playback => return Err(err),
-                401 if retryable && !refreshed => {
+                401 if !refreshed => {
                     self.refresh_after(&token).await?;
                     refreshed = true;
                 }
-                401 if refreshed => {
+                401 => {
                     return Err(Error::Auth("still unauthorized after token refresh".into()));
                 }
-                429 if retryable && rate_retries < MAX_RATE_RETRIES => {
+                429 if rate_retries < MAX_RATE_RETRIES => {
                     rate_retries += 1;
                     tokio::time::sleep(Duration::from_secs(retry_after)).await;
                 }
-                500..=599 if retryable && !server_retried => {
+                500..=599 if !server_retried => {
                     server_retried = true;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
@@ -132,7 +129,7 @@ impl Client {
     }
 
     /// Refresh unless another task already replaced `failed_token`.
-    async fn refresh_after(&self, failed_token: &str) -> Result<()> {
+    pub(crate) async fn refresh_after(&self, failed_token: &str) -> Result<()> {
         let _guard = self.refresh_lock.lock().await;
         let old = self.session();
         if old.access_token != failed_token {
