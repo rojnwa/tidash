@@ -71,14 +71,25 @@ impl Ctx<'_> {
         }
     }
 
-    /// Flips `item`'s heart now and has the backend write it; a failed write flips it back.
-    pub fn toggle_favorite(&mut self, item: tidal::Favorite) {
-        let on = !self.model.favorites.contains(&item);
-        self.events.push(Event::FavoriteSet {
-            item: item.clone(),
-            on,
-        });
-        self.send(Action::SetFavorite { item, on });
+    /// A button showing `text` that flips `item`'s heart now and has the backend write it (a
+    /// failed write flips it back); disabled while that item's write is under way (ruling R19).
+    pub fn favorite_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        item: tidal::Favorite,
+        text: &str,
+    ) -> egui::Response {
+        let pending = self.model.pending_favorites.contains(&item);
+        let resp = ui.add_enabled(!pending, egui::Button::new(text));
+        if resp.clicked() {
+            let on = !self.model.favorites.contains(&item);
+            self.events.push(Event::FavoriteSet {
+                item: item.clone(),
+                on,
+            });
+            self.send(Action::SetFavorite { item, on });
+        }
+        resp
     }
 }
 
@@ -331,10 +342,10 @@ mod testing {
         })
     }
 
-    /// Logged in, at `route`.
+    /// Logged in as user 1, at `route`.
     pub fn at(route: Route) -> Model {
         let mut m = Model::default();
-        m.apply(Event::LoggedIn);
+        m.apply(Event::LoggedIn(1));
         m.navigate(route);
         m
     }
@@ -445,13 +456,14 @@ mod testing {
         (1..=n).map(track).collect()
     }
 
-    /// TIDAL's own (no creator).
+    /// TIDAL's own (no creator name, creator id 0).
     pub fn playlist() -> tidal::Playlist {
         tidal::Playlist {
             uuid: "p-1".into(),
             title: "Playlist".into(),
             description: None,
             creator: None,
+            creator_id: Some(0),
             number_of_tracks: 3,
             duration: 600,
             square_image: None,
@@ -481,7 +493,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
         let mut model = Model::default();
-        model.apply(Event::LoggedIn);
+        model.apply(Event::LoggedIn(1));
         let mut pass = |model: &Model, events: Vec<egui::Event>| {
             let input = egui::RawInput {
                 events,

@@ -16,6 +16,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             ui.label(p.creator.as_deref().unwrap_or("TIDAL")); // a brand: not translated
             ui.label(tracks::summary(list));
         };
+        // Ruling R19: no heart on the user's own, whose folder remove could drop it.
+        let own = p.creator_id.is_some() && p.creator_id == ctx.model.user_id;
+        let fav = (!own).then(|| tidal::Favorite::Playlist(p.uuid.clone()));
         header::header(
             ui,
             ctx,
@@ -23,7 +26,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             &p.title,
             details,
             Some(list),
-            Some(tidal::Favorite::Playlist(p.uuid.clone())),
+            fav,
         );
         tracks::show(ui, ctx, "playlist-tracks", list, false);
     });
@@ -50,6 +53,37 @@ mod tests {
         let route = Route::Playlist("p-1".into());
         let texts = ["Playlist", "TIDAL", "3 tracks · 10:00", "Play"];
         every_state(super::show, route, data(), &texts);
+    }
+
+    /// Ruling R19: the user's own playlist (they are user 1) has no heart, whose remove could
+    /// take it out of their library; TIDAL's and other users' have one.
+    #[test]
+    fn no_heart_on_the_users_own_playlist() {
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        for (creator, heart) in [(Some(1), false), (Some(2), true), (Some(0), true)] {
+            let route = Route::Playlist("p-1".into());
+            let mut model = at(route.clone());
+            let data = PageData::Playlist {
+                playlist: tidal::Playlist {
+                    creator_id: creator,
+                    ..playlist()
+                },
+                tracks: tracks(1),
+            };
+            model.apply(Event::Page { route, data });
+            let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+            let tree = out
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit is on");
+            let shown = tree
+                .nodes
+                .iter()
+                .any(|(_, n)| n.label() == Some("Add to favorites"));
+            assert_eq!(shown, heart, "creator {creator:?}");
+        }
     }
 
     #[test]

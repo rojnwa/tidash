@@ -1,7 +1,7 @@
 //! Plain-data UI state and the messages that move between UI and backend.
 
 use crate::i18n::tr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 /// Entries kept for back and forward.
@@ -145,7 +145,8 @@ impl std::fmt::Debug for Action {
 #[derive(Clone, Debug)]
 pub enum Event {
     LoginUrl(String),
-    LoggedIn,
+    /// Logged in as this user id.
+    LoggedIn(u64),
     LoggedOut,
     /// The session is dead (its token refresh failed): log in again; the queue stays.
     SessionExpired,
@@ -163,14 +164,16 @@ pub enum Event {
         data: PageData,
     },
     PageFailed(Route),
-    /// The route's page changed on TIDAL: the next visit fetches it again.
-    Stale(Route),
     Offline(bool),
     Favorites(tidal::FavoriteIds),
-    /// The heart shows `on` at once, before the write (`Action::SetFavorite`) is done.
+    /// The heart shows `on` at once, and stays until the write (`Action::SetFavorite`) is done.
     FavoriteSet {
         item: tidal::Favorite,
         on: bool,
+    },
+    /// The write is done: the item's collection tab is fetched again on the next visit.
+    FavoriteSaved {
+        item: tidal::Favorite,
     },
     /// Setting the favorite to `on` failed: the heart goes back.
     FavoriteFailed {
@@ -226,8 +229,12 @@ pub struct Model {
     /// The current route was arrived at (or retried) since `open_current` last looked.
     arrived: bool,
     pub favorites: tidal::FavoriteIds,
+    /// Favorites whose write is under way; one at a time per item, so a failure reverts the
+    /// heart to what TIDAL holds (ruling R19).
+    pub pending_favorites: HashSet<tidal::Favorite>,
     pub offline: bool,
     pub logged_in: bool,
+    pub user_id: Option<u64>,
     pub login_url: Option<String>,
     pub search: Option<(String, tidal::SearchResults)>,
     pub latest_query: Option<String>,
@@ -245,8 +252,10 @@ impl Default for Model {
             clock: 0,
             arrived: false,
             favorites: tidal::FavoriteIds::default(),
+            pending_favorites: HashSet::new(),
             offline: false,
             logged_in: false,
+            user_id: None,
             login_url: None,
             search: None,
             latest_query: None,
@@ -264,9 +273,9 @@ impl Model {
             ev,
             Event::Page { .. }
                 | Event::PageFailed(_)
-                | Event::Stale(_)
                 | Event::Favorites(_)
                 | Event::FavoriteSet { .. }
+                | Event::FavoriteSaved { .. }
                 | Event::FavoriteFailed { .. }
                 | Event::Offline(_)
         );
@@ -275,8 +284,9 @@ impl Model {
         }
         match ev {
             Event::LoginUrl(u) => self.login_url = Some(u),
-            Event::LoggedIn => {
+            Event::LoggedIn(user) => {
                 self.logged_in = true;
+                self.user_id = Some(user);
                 self.login_url = None;
                 self.history = vec![Route::Home];
                 self.at = 0;
@@ -329,15 +339,31 @@ impl Model {
                 slot.loading = false;
                 slot.failed = true;
             }
-            Event::Stale(r) => {
-                if let Some(slot) = self.pages.get_mut(&r) {
-                    slot.fetched = None;
+            Event::Offline(o) => self.offline = o,
+            Event::Favorites(mut f) => {
+                // Loaded before these writes landed: their hearts stay as clicked.
+                for item in &self.pending_favorites {
+                    f.set(item, self.favorites.contains(item));
+                }
+                self.favorites = f;
+            }
+            Event::FavoriteSet { item, on } => {
+                if !self.pending_favorites.contains(&item) {
+                    self.favorites.set(&item, on);
+                    self.pending_favorites.insert(item);
                 }
             }
-            Event::Offline(o) => self.offline = o,
-            Event::Favorites(f) => self.favorites = f,
-            Event::FavoriteSet { item, on } => self.favorites.set(&item, on),
-            Event::FavoriteFailed { item, on } => self.favorites.set(&item, !on),
+            Event::FavoriteSaved { item } => {
+                let tab = Route::Collection(CollectionTab::of(&item));
+                if let Some(slot) = self.pages.get_mut(&tab) {
+                    slot.fetched = None;
+                }
+                self.pending_favorites.remove(&item);
+            }
+            Event::FavoriteFailed { item, on } => {
+                self.favorites.set(&item, !on);
+                self.pending_favorites.remove(&item);
+            }
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -453,7 +479,7 @@ mod tests {
 
     fn logged_in() -> Model {
         let mut m = Model::default();
-        m.apply(Event::LoggedIn);
+        m.apply(Event::LoggedIn(1));
         m
     }
 
@@ -464,14 +490,25 @@ mod tests {
         });
     }
 
+    fn set(item: &tidal::Favorite, on: bool) -> Event {
+        let item = item.clone();
+        Event::FavoriteSet { item, on }
+    }
+
+    fn failed(item: &tidal::Favorite, on: bool) -> Event {
+        let item = item.clone();
+        Event::FavoriteFailed { item, on }
+    }
+
     #[test]
     fn logged_in_starts_at_home() {
         let mut m = Model::default();
         assert_eq!(m.route(), &Route::Login);
-        m.apply(Event::LoggedIn);
+        m.apply(Event::LoggedIn(7));
         assert_eq!(m.route(), &Route::Home);
         assert_eq!(m.history, [Route::Home]);
         assert!(m.logged_in);
+        assert_eq!(m.user_id, Some(7));
     }
 
     #[test]
@@ -482,12 +519,15 @@ mod tests {
             m.navigate(Route::Album(2));
             m.back();
             loaded(&mut m, Route::Album(1));
+            m.apply(set(&tidal::Favorite::Album(1), true));
             m.apply(ev);
             assert_eq!(m.route(), &Route::Login);
             assert_eq!((m.history.as_slice(), m.at), ([Route::Login].as_slice(), 0));
             assert!(!m.logged_in);
             assert!(!m.back() && !m.forward(), "no way past the login");
             assert!(m.pages.is_empty());
+            assert!(m.pending_favorites.is_empty());
+            assert_eq!(m.user_id, None);
         }
     }
 
@@ -626,7 +666,7 @@ mod tests {
         let now = Instant::now();
         let mut m = Model::default();
         assert_eq!(m.open_current(now), None, "the login has no page");
-        m.apply(Event::LoggedIn);
+        m.apply(Event::LoggedIn(1));
         assert_eq!(m.open_current(now), Some(Route::Home));
         assert!(m.pages[&Route::Home].loading);
         let r = Route::Album(1);
@@ -658,14 +698,12 @@ mod tests {
             }));
             m.apply(Event::Offline(true));
             let item = tidal::Favorite::Track(1);
-            m.apply(Event::FavoriteSet {
-                item: item.clone(),
-                on: true,
-            });
-            m.apply(Event::FavoriteFailed { item, on: false });
-            m.apply(Event::Stale(Route::Home));
+            m.apply(set(&item, true));
+            m.apply(failed(&item, false));
+            m.apply(Event::FavoriteSaved { item });
             assert!(m.pages.is_empty());
             assert_eq!(m.favorites, tidal::FavoriteIds::default());
+            assert!(m.pending_favorites.is_empty());
             assert!(!m.offline);
         }
     }
@@ -676,17 +714,37 @@ mod tests {
         let mut m = logged_in();
         let item = tidal::Favorite::Mix("m1".into());
         for on in [true, false] {
-            m.apply(Event::FavoriteSet {
-                item: item.clone(),
-                on,
-            });
+            m.apply(set(&item, on));
             assert_eq!(m.favorites.contains(&item), on, "shown at once");
-            m.apply(Event::FavoriteFailed {
-                item: item.clone(),
-                on,
-            });
+            m.apply(failed(&item, on));
             assert_eq!(m.favorites.contains(&item), !on, "reverted");
+            assert!(m.pending_favorites.is_empty());
         }
+    }
+
+    /// Ruling R19: one write per item at a time, so a failure always reverts to what TIDAL
+    /// holds. A toggle while one is pending does nothing; saved, the item's tab is stale.
+    #[test]
+    fn one_favorite_write_per_item_at_a_time() {
+        let mut m = logged_in();
+        let tab = Route::Collection(CollectionTab::Albums);
+        loaded(&mut m, tab.clone());
+        let item = tidal::Favorite::Album(3);
+        m.apply(set(&item, true));
+        m.apply(set(&item, false)); // a second click while the first is pending
+        assert!(m.favorites.contains(&item), "the second toggle did nothing");
+        assert!(m.pending_favorites.contains(&item));
+        // The ids loaded meanwhile predate the write: the heart keeps what was clicked.
+        m.apply(Event::Favorites(tidal::FavoriteIds::default()));
+        assert!(m.favorites.contains(&item));
+        m.apply(failed(&item, true));
+        assert!(!m.favorites.contains(&item), "back to what TIDAL holds");
+        m.apply(set(&item, true));
+        let now = Instant::now();
+        assert!(!m.needs_load(&tab, now));
+        m.apply(Event::FavoriteSaved { item: item.clone() });
+        assert!(m.favorites.contains(&item) && m.pending_favorites.is_empty());
+        assert!(m.needs_load(&tab, now), "the albums tab is stale");
     }
 
     #[test]

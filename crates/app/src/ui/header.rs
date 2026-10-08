@@ -57,9 +57,8 @@ fn heart(ui: &mut egui::Ui, ctx: &mut Ctx, item: tidal::Favorite) {
     } else {
         "♡"
     };
-    let resp = ui.button(glyph).on_hover_text(label.as_ref());
-    resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, label.as_ref()));
-    if resp.clicked() {
-        ctx.toggle_favorite(item);
-    }
+    let resp = ctx.favorite_button(ui, item, glyph);
+    let enabled = resp.enabled();
+    let resp = resp.on_hover_text(label.as_ref());
+    resp.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, label.as_ref()));
 }

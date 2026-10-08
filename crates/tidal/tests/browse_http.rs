@@ -206,7 +206,7 @@ async fn genre_page_skips_videos_and_reads_creators() {
     let Item::Playlist(p) = &page.shelves[0].items[0] else {
         panic!("{:?}", page.shelves[0].items[0]);
     };
-    assert_eq!(p.creator, None); // `creators: []`
+    assert_eq!((&p.creator, p.creator_id), (&None, None)); // `creators: []`
     assert!(
         matches!(&page.shelves[0].more, Some(More::Page(p)) if p.starts_with("pages/single-module-page/"))
     );
@@ -371,7 +371,7 @@ async fn playlist_and_all_tracks() {
         (p.title.as_str(), p.number_of_tracks),
         ("Pop Classics", 235)
     );
-    assert_eq!(p.creator, None); // `creator: {id: 0}` is TIDAL
+    assert_eq!((&p.creator, p.creator_id), (&None, Some(0))); // `creator: {id: 0}` is TIDAL
     assert_eq!(
         p.image(),
         Some(Image::Tidal {

@@ -228,11 +228,11 @@ impl Backend {
     }
 
     fn log_in(&mut self, session: tidal::Session) {
-        let cache = self.api_cache.clone();
+        let (cache, user) = (self.api_cache.clone(), session.user_id);
         match Client::new(self.cfg.clone(), session, self.store.clone(), cache) {
             Ok(c) => {
                 self.client = Some(Arc::new(c));
-                self.emit.send(Event::LoggedIn);
+                self.emit.send(Event::LoggedIn(user));
             }
             Err(e) => self
                 .emit
@@ -686,7 +686,11 @@ mod tests {
         assert!(
             matches!(
                 events[..],
-                [Event::LoggedIn, Event::SessionExpired, Event::LoggedIn]
+                [
+                    Event::LoggedIn(1),
+                    Event::SessionExpired,
+                    Event::LoggedIn(1)
+                ]
             ),
             "{events:?}"
         );
@@ -759,7 +763,7 @@ mod tests {
     #[test]
     fn stored_session_logs_in_without_a_second_read() {
         let events = startup(Ok(Some(session("a"))));
-        assert!(matches!(events[..], [Event::LoggedIn]), "{events:?}");
+        assert!(matches!(events[..], [Event::LoggedIn(1)]), "{events:?}");
     }
 
     #[test]

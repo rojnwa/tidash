@@ -160,6 +160,7 @@ mod tests {
             title: "p".into(),
             description: None,
             creator: None,
+            creator_id: None,
             number_of_tracks: 0,
             duration: 0,
             square_image: None,

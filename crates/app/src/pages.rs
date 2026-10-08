@@ -1,5 +1,5 @@
 //! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9); and the
-//! favorite writes, which make a collection page stale.
+//! favorite writes, which make a collection tab stale.
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
@@ -77,10 +77,9 @@ pub async fn open(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: Unboun
     }
 }
 
-/// Writes a favorite the UI shows already (`Event::FavoriteSet`). Done, its collection tab is
-/// stale; failed, the heart goes back and one error says why. The backend spawns it.
-// ponytail: two quick toggles of one item run concurrently and may land out of order; chain
-// the writes per item if that is ever seen.
+/// Writes a favorite the UI shows already (`Event::FavoriteSet`), the item's only write under
+/// way. Done, its collection tab is stale; failed, the heart goes back and one error says why.
+/// The backend spawns it.
 pub async fn set_favorite(
     c: Arc<Client>,
     item: Favorite,
@@ -89,7 +88,7 @@ pub async fn set_favorite(
     msgs: UnboundedSender<Msg>,
 ) {
     match c.set_favorite(&item, on).await {
-        Ok(()) => emit.send(Event::Stale(Route::Collection(CollectionTab::of(&item)))),
+        Ok(()) => emit.send(Event::FavoriteSaved { item }),
         Err(e) if session_expired(&e, &c, &msgs) => {}
         Err(e) => {
             emit.send(Event::FavoriteFailed { item, on });
@@ -186,7 +185,7 @@ mod tests {
     /// A model that shows `item`'s heart flipped to `on`, after `events` of its write.
     fn after_write(item: &Favorite, on: bool, events: Vec<Event>) -> Model {
         let mut m = Model::default();
-        m.apply(Event::LoggedIn);
+        m.apply(Event::LoggedIn(1));
         m.apply(Event::Page {
             route: Route::Collection(CollectionTab::Tracks),
             data: PageData::Tracks(vec![]),
@@ -232,6 +231,7 @@ mod tests {
         );
         let m = after_write(&item, true, events);
         assert!(!m.favorites.contains(&item), "reverted");
+        assert!(m.pending_favorites.is_empty());
         assert_eq!(m.errors.len(), 1);
     }
 
@@ -248,10 +248,15 @@ mod tests {
         let (c, item) = (client(&server.uri(), &cache("fav-ok")), Favorite::Track(7));
         let write = |emit, msgs| set_favorite(c, item.clone(), false, emit, msgs);
         let (events, _) = events_of(write).await;
+        assert!(
+            matches!(&events[..], [Event::FavoriteSaved { item: i }] if *i == item),
+            "{events:?}"
+        );
         let m = after_write(&item, false, events);
         let tracks = Route::Collection(CollectionTab::Tracks);
         assert!(m.needs_load(&tracks, std::time::Instant::now()));
         assert!(!m.favorites.contains(&item));
+        assert!(m.pending_favorites.is_empty());
         assert!(m.errors.is_empty());
     }
 

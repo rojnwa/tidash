@@ -1,7 +1,7 @@
 //! Catalog models and endpoints: search, album, album tracks.
 
 use crate::{Client, Image, ImageKind, Result, browse::tracks};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -60,33 +60,65 @@ pub struct Track {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(from = "RawPlaylist")]
 pub struct Playlist {
     pub uuid: String,
     pub title: String,
-    #[serde(default)]
     pub description: Option<String>,
     /// The creator's name; `None` is TIDAL. Playlists in v1 page modules carry
     /// `creators: []` instead.
-    #[serde(default, deserialize_with = "creator_name")]
     pub creator: Option<String>,
-    #[serde(default)]
+    /// The creator's user id (0 is TIDAL): the user's own playlists have theirs (S4).
+    pub creator_id: Option<u64>,
     pub number_of_tracks: u32,
-    #[serde(default)]
     pub duration: u32,
-    #[serde(default)]
     pub square_image: Option<String>,
-    #[serde(default)]
     pub image: Option<String>,
 }
 
-fn creator_name<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<Option<String>, D::Error> {
-    #[derive(Deserialize)]
-    struct Creator {
-        #[serde(default)]
-        name: Option<String>,
+/// A playlist as sent: `creator` is `{id, name}`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawPlaylist {
+    uuid: String,
+    title: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    creator: Option<Creator>,
+    #[serde(default)]
+    number_of_tracks: u32,
+    #[serde(default)]
+    duration: u32,
+    #[serde(default)]
+    square_image: Option<String>,
+    #[serde(default)]
+    image: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Creator {
+    #[serde(default)]
+    id: Option<u64>,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+impl From<RawPlaylist> for Playlist {
+    fn from(r: RawPlaylist) -> Self {
+        let (creator_id, creator) = r.creator.map_or((None, None), |c| (c.id, c.name));
+        Self {
+            uuid: r.uuid,
+            title: r.title,
+            description: r.description,
+            creator,
+            creator_id,
+            number_of_tracks: r.number_of_tracks,
+            duration: r.duration,
+            square_image: r.square_image,
+            image: r.image,
+        }
     }
-    Ok(Option::<Creator>::deserialize(d)?.and_then(|c| c.name))
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]

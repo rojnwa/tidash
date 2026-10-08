@@ -45,7 +45,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{Action, Event, PageData, Route};
+    use crate::model::{Action, Event, Model, PageData, Route};
     use crate::ui::testing::{album, at, click, every_state, pass, tracks};
     use tidal::Favorite;
 
@@ -59,7 +59,7 @@ mod tests {
     }
 
     /// The heart flips at once (the model applies `FavoriteSet`) and the backend writes it;
-    /// then it offers the way back.
+    /// it then offers the way back, but only once that write is done (ruling R19).
     #[test]
     fn heart_favorites_at_once() {
         let route = Route::Album(1);
@@ -83,8 +83,18 @@ mod tests {
         for ev in events {
             model.apply(ev);
         }
-        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
-        click(&out, "Remove from favorites"); // panics unless shown
+        let mut unfavorite = |model: &Model| {
+            let (_, out) = pass(&egui, &tx, model, super::show, vec![]);
+            let heart = click(&out, "Remove from favorites");
+            let (events, _) = pass(&egui, &tx, model, super::show, vec![heart]);
+            let sent = std::iter::from_fn(|| rx.try_recv().ok())
+                .any(|a| matches!(a, Action::SetFavorite { on: false, .. }));
+            (events.len(), sent)
+        };
+        let pending = unfavorite(&model);
+        assert_eq!(pending, (0, false), "pending: the heart is disabled");
+        model.apply(Event::FavoriteSaved { item: album });
+        assert_eq!(unfavorite(&model), (1, true), "saved: it toggles again");
     }
 
     #[test]

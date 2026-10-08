@@ -174,8 +174,8 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
             ui.close();
         }
         let fav = tidal::Favorite::Track(t.id);
-        if ui.button(ctx.favorite_label(&fav)).clicked() {
-            ctx.toggle_favorite(fav);
+        let label = ctx.favorite_label(&fav);
+        if ctx.favorite_button(ui, fav, &label).clicked() {
             ui.close();
         }
         if ui.button(tr("Copy link")).clicked() {

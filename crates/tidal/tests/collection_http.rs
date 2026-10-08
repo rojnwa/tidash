@@ -142,6 +142,9 @@ async fn favorite_playlists_skip_folders() {
     let titles: Vec<&str> = playlists.iter().map(|p| p.title.as_str()).collect();
     assert_eq!(titles, ["Playlist A", "Playlist B", "Playlist C"]);
     assert_eq!(playlists[0].uuid, "00000000-0000-4000-8000-000000000001");
+    // The user's own: S4 says only `creator.id` tells them from favorited ones.
+    let creator = (playlists[0].creator.as_deref(), playlists[0].creator_id);
+    assert_eq!(creator, (Some("User"), Some(12345)));
 }
 
 #[tokio::test]
