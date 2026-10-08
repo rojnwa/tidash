@@ -10,8 +10,6 @@ use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 
 const COVER: f32 = 56.0;
-/// TIDAL serves fixed cover sizes; the smallest one above 56.
-const COVER_PX: u32 = 80;
 
 #[derive(Default)]
 pub struct State {
@@ -40,8 +38,8 @@ pub fn show(
     egui::Panel::bottom("player").show(ui, |ui| {
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(COVER, COVER), egui::Sense::hover());
-            let art = pb.track.as_ref().and_then(|t| t.album.cover.as_deref());
-            cover(ui, images, tx, art, COVER_PX, rect);
+            let art = pb.track.as_ref().and_then(|t| t.album.image());
+            cover(ui, images, tx, art.as_ref(), rect);
             ui.allocate_ui(vec2(220.0, COVER), |ui| {
                 ui.set_width(220.0); // fixed, so the controls do not move with the title
                 ui.vertical(|ui| {

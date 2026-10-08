@@ -5,10 +5,12 @@
 use crate::model::{Action, PlaybackSnapshot};
 use fastframe_now_playing::{App, Command, NowPlaying, Playback, State, Track};
 use player::PlayState;
-use std::path::{Path, PathBuf};
+use reqwest::Url;
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use tidal::DiskCache;
 
 const COVER_PX: u32 = 640;
 
@@ -18,36 +20,28 @@ pub struct MediaControls {
     controls: NowPlaying,
     cfg: tidal::ClientConfig,
     wake: Wake,
-    /// Where cover files go; `None` (no home directory) publishes only the cover URL.
-    dir: Option<PathBuf>,
-    /// The last cover whose file was asked for: one download per cover.
+    /// The images cache, shared with the backend; `None` publishes only the cover URL.
+    cache: Option<Arc<DiskCache>>,
+    /// The last cover URL whose file was asked for: one download per cover.
     requested: Option<String>,
     landed: (Sender<()>, Receiver<()>),
 }
 
 impl MediaControls {
-    /// `wake` repaints the window; the next frame's `poll` picks up what arrived.
-    pub fn start(wake: impl Fn() + Send + Sync + 'static) -> Self {
+    /// `wake` repaints the window; the next frame's `poll` picks up what arrived. Cover files
+    /// go into `cache` (`images::open_cache`).
+    pub fn start(wake: impl Fn() + Send + Sync + 'static, cache: Option<Arc<DiskCache>>) -> Self {
         let wake: Wake = Arc::new(wake);
         let mut app = App::new("tidash", "Tidash");
         // Nothing raises or quits the app from the panel (MPRIS) yet.
         app.can_raise = false;
         app.can_quit = false;
         let w = wake.clone();
-        // Last session's covers go; this one's are fetched again as they play. A second
-        // running instance wipes the first one's too (cosmetic; single instance comes in M4).
-        let dir = cover_dir();
-        if let Some(dir) = &dir {
-            let _ = std::fs::remove_dir_all(dir);
-            if let Err(e) = std::fs::create_dir_all(dir) {
-                log::debug!("cover dir {}: {e}", dir.display());
-            }
-        }
         Self {
             controls: NowPlaying::start(app, move || w()),
             cfg: tidal::ClientConfig::default(),
             wake,
-            dir,
+            cache,
             requested: None,
             landed: channel(),
         }
@@ -55,27 +49,15 @@ impl MediaControls {
 
     /// Shows a playback change; `position` is the player's, now.
     pub fn show(&mut self, pb: &PlaybackSnapshot, position: Duration) {
-        let cover = pb.track.as_ref().and_then(|t| t.album.cover.as_deref());
-        let art_url = cover.map(|c| {
-            let art = tidal::Image::Tidal {
-                id: c.to_owned(),
-                kind: tidal::ImageKind::Album,
-            };
-            art.url(&self.cfg.image_base, COVER_PX)
-        });
-        let file = cover.and_then(|c| cover_file(self.dir.as_deref(), c));
+        let (art_url, file) = art(pb, &self.cfg.image_base, self.cache.as_deref());
         let on_disk = file.as_ref().is_some_and(|f| f.is_file());
-        if let (Some(f), Some(url)) = (&file, &art_url)
+        if let (Some(cache), Some(url)) = (&self.cache, &art_url)
             && !on_disk
-            && self.requested.as_deref() != cover
+            && self.requested.as_ref() != Some(url)
         {
-            self.requested = cover.map(str::to_owned);
-            fetch(
-                url.clone(),
-                f.clone(),
-                self.landed.0.clone(),
-                self.wake.clone(),
-            );
+            self.requested = Some(url.clone());
+            let (done, wake) = (self.landed.0.clone(), self.wake.clone());
+            fetch(url.clone(), cache.clone(), done, wake);
         }
         let art_file = file.filter(|_| on_disk);
         self.controls
@@ -101,26 +83,24 @@ impl MediaControls {
     }
 }
 
-/// The per-user cache directory for cover files; never a shared temp dir.
-// ponytail: covers pile up for one session (~50 KB per album played) and are wiped on the
-// next start; an evicting cache once the app keeps more than covers there.
-fn cover_dir() -> Option<PathBuf> {
-    crate::backend::cache_dir().map(|d| d.join("covers"))
-}
-
-/// Where a cover's file goes: none without a cache dir. Cover ids are UUIDs; anything else
-/// gets no file.
-fn cover_file(dir: Option<&Path>, cover: &str) -> Option<PathBuf> {
-    let safe = !cover.is_empty() && cover.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-    dir.filter(|_| safe).map(|d| d.join(format!("{cover}.jpg")))
+/// The current track's album cover URL at `COVER_PX`, and its file in `cache`, present or not.
+fn art(
+    pb: &PlaybackSnapshot,
+    base: &Url,
+    cache: Option<&DiskCache>,
+) -> (Option<String>, Option<PathBuf>) {
+    let image = pb.track.as_ref().and_then(|t| t.album.image());
+    let url = image.map(|i| i.url(base, COVER_PX));
+    let file = url.as_deref().zip(cache).map(|(u, c)| c.path(u));
+    (url, file)
 }
 
 /// Cover downloads, shared by the cover threads. Blocking, so used only there; a static is
 /// never dropped, so never on a runtime thread either.
 static COVERS: OnceLock<reqwest::blocking::Client> = OnceLock::new();
 
-/// Downloads `url` to `path` on a thread of its own; `done` and `wake` once it is there.
-fn fetch(url: String, path: PathBuf, done: Sender<()>, wake: Wake) {
+/// Downloads `url` into `cache` on a thread of its own; `done` and `wake` once it is there.
+fn fetch(url: String, cache: Arc<DiskCache>, done: Sender<()>, wake: Wake) {
     let run = move || {
         let save = || -> Result<(), Box<dyn std::error::Error>> {
             let http = match COVERS.get() {
@@ -133,13 +113,12 @@ fn fetch(url: String, path: PathBuf, done: Sender<()>, wake: Wake) {
                 }
             };
             let bytes = http.get(&url).send()?.error_for_status()?.bytes()?;
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
             // Whole or not at all: the controls never get a half-written file.
-            let part = path.with_extension(format!("{:?}.part", std::thread::current().id()));
-            std::fs::write(&part, &bytes)?;
-            std::fs::rename(&part, &path)?;
+            let entry = tidal::Entry {
+                etag: None,
+                body: bytes.to_vec(),
+            };
+            cache.write(&url, &entry)?;
             Ok(())
         };
         match save() {
@@ -288,20 +267,45 @@ mod tests {
         );
     }
 
+    /// The OS gets the images cache's file for the 640 px rendition, downloaded through it.
     #[test]
-    fn covers_go_only_into_the_cache_dir() {
-        let cache = directories::ProjectDirs::from("", "", "tidash").expect("a home dir");
-        let dir = cover_dir().expect("a cache dir");
-        assert!(dir.starts_with(cache.cache_dir()));
-        assert_eq!(
-            cover_file(Some(&dir), "ab12-cd34"),
-            Some(dir.join("ab12-cd34.jpg"))
-        );
-        assert!(
-            cover_file(None, "ab12-cd34").is_none(),
-            "no cache dir, no file"
-        );
-        assert!(cover_file(Some(&dir), "../evil").is_none());
-        assert!(cover_file(Some(&dir), "").is_none());
+    fn now_playing_cover_path_is_in_images_cache() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        rt.block_on(async {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/ab12/cd34/640x640.jpg"))
+                .respond_with(ResponseTemplate::new(200).set_body_raw("jpeg", "image/jpeg"))
+                .expect(1)
+                .mount(&server)
+                .await;
+            let dir = std::env::temp_dir().join("tidash-now-playing");
+            let _ = std::fs::remove_dir_all(&dir);
+            let cache = Arc::new(DiskCache::open(dir.clone(), 1 << 20, "jpg").expect("a cache"));
+            let mut pb = snapshot(PlayState::Playing);
+            if let Some(t) = &mut pb.track {
+                t.album.cover = Some("ab12-cd34".into());
+            }
+            let base = format!("{}/", server.uri()).parse().expect("a URL");
+            let (url, file) = art(&pb, &base, Some(&cache));
+            let url = url.expect("a cover URL");
+            let file = file.expect("a cover file");
+            assert_eq!(file, cache.path(&url));
+            assert!(file.starts_with(&dir));
+            let (done, landed) = channel();
+            fetch(url.clone(), cache.clone(), done, Arc::new(|| {}));
+            // The server runs on a thread of its own: blocking here does not stall it.
+            landed
+                .recv_timeout(Duration::from_secs(5))
+                .expect("downloaded");
+            assert_eq!(cache.read(&url).map(|e| e.body), Some(b"jpeg".to_vec()));
+            assert!(file.is_file());
+            server.verify().await;
+        });
     }
 }

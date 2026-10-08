@@ -81,7 +81,7 @@ pub fn show(
                             rect.min + vec2(6.0, 4.0),
                             vec2(COVER, COVER),
                         );
-                        cover(ui, images, tx, a.cover.as_deref(), COVER as u32, img);
+                        cover(ui, images, tx, a.image().as_ref(), img);
                         let font = FontId::proportional(13.0);
                         let clip = ui.painter_at(egui::Rect::from_min_max(
                             rect.min + vec2(6.0, COVER + 6.0),

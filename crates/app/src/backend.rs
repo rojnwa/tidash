@@ -1,6 +1,7 @@
 //! Tokio backend on its own thread: receives `Action`s, sends `Event`s.
 
 use crate::i18n::tr;
+use crate::images::Artwork;
 use crate::model::{Action, Event};
 use crate::playback::{Msg, Playback};
 use std::path::PathBuf;
@@ -14,8 +15,10 @@ use tokio::task::JoinSet;
 /// Spawns the backend. Before it handles actions it opens the audio output and reads the
 /// stored session, off the UI thread: both can take a while. Every event sent is followed by
 /// `waker()`. Without an audio device the app runs, and play actions report the missing output.
+/// Artwork goes through `images` (`images::open_cache`).
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
+    images: Option<Arc<DiskCache>>,
 ) -> (UnboundedSender<Action>, Receiver<Event>) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
@@ -46,6 +49,7 @@ pub fn start(
                 tidal::default_store(),
                 open_api_cache(),
             );
+            backend.artwork = Artwork::new(images);
             backend.playback = open_player(&msg_tx).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx)
@@ -121,29 +125,6 @@ pub(crate) fn session_expired(
     dead
 }
 
-/// How long a cover that failed to load keeps its placeholder.
-const IMAGE_RETRY: Duration = Duration::from_secs(30);
-
-/// Downloads a JPEG and decodes it off the async workers.
-async fn fetch_image(
-    http: &reqwest::Client,
-    url: &str,
-) -> Result<egui::ColorImage, Box<dyn std::error::Error + Send + Sync>> {
-    let bytes = http
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes()
-        .await?;
-    tokio::task::spawn_blocking(move || {
-        let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)?.to_rgba8();
-        let size = [img.width() as usize, img.height() as usize];
-        Ok(egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()))
-    })
-    .await?
-}
-
 struct Backend {
     emit: Arc<Emitter>,
     /// For the tasks it spawns.
@@ -161,6 +142,7 @@ struct Backend {
     tasks: JoinSet<()>,
     /// The saved API bodies; `None` without a cache dir.
     api_cache: Option<Arc<DiskCache>>,
+    artwork: Artwork,
     /// `None` without an audio device.
     playback: Option<Playback>,
 }
@@ -191,6 +173,7 @@ impl Backend {
             client: None,
             tasks: JoinSet::new(),
             api_cache,
+            artwork: Artwork::new(None),
             playback: None,
         };
         backend.resume(stored);
@@ -360,25 +343,9 @@ impl Backend {
                     self.spawn(load);
                 }
             }
-            Action::LoadImage { cover, size } => {
-                let art = tidal::Image::Tidal {
-                    id: cover.clone(),
-                    kind: tidal::ImageKind::Album,
-                };
-                let url = art.url(&self.cfg.image_base, size);
-                let (http, emit) = (self.http.clone(), self.emit.clone());
-                tokio::spawn(async move {
-                    match fetch_image(&http, &url).await {
-                        Ok(image) => emit.send(Event::Image { cover, size, image }),
-                        Err(e) => {
-                            log::debug!("image {url}: {e}"); // the placeholder stays
-                            // Then it is asked for again when drawn: not every frame, should
-                            // the cover stay unavailable.
-                            tokio::time::sleep(IMAGE_RETRY).await;
-                            emit.send(Event::ImageFailed { cover, size });
-                        }
-                    }
-                });
+            Action::LoadImage { image, px } => {
+                let (base, emit) = (&self.cfg.image_base, self.emit.clone());
+                self.artwork.load(&self.http, base, &image, px, emit);
             }
             Action::PlayTracks { .. }
             | Action::Play

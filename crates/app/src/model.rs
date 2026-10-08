@@ -86,9 +86,10 @@ pub enum Action {
     Previous,
     Seek(Duration),
     SetVolume(f32),
+    /// `image` at most `px` wide.
     LoadImage {
-        cover: String,
-        size: u32,
+        image: tidal::Image,
+        px: u32,
     },
 }
 
@@ -112,10 +113,10 @@ impl std::fmt::Debug for Action {
             Self::Previous => f.write_str("Previous"),
             Self::Seek(d) => f.debug_tuple("Seek").field(d).finish(),
             Self::SetVolume(v) => f.debug_tuple("SetVolume").field(v).finish(),
-            Self::LoadImage { cover, size } => f
+            Self::LoadImage { image, px } => f
                 .debug_struct("LoadImage")
-                .field("cover", cover)
-                .field("size", size)
+                .field("image", image)
+                .field("px", px)
                 .finish(),
         }
     }
@@ -148,15 +149,16 @@ pub enum Event {
     Playback(PlaybackSnapshot),
     /// Playback jumped to this position (for the OS media controls).
     Seeked(Duration),
+    /// The artwork of `tidal::Image::key` `key`, at most `px` wide.
     Image {
-        cover: String,
-        size: u32,
+        key: String,
+        px: u32,
         image: egui::ColorImage,
     },
-    /// The cover could not be loaded; it may be requested again.
+    /// The artwork could not be loaded; it may be requested again.
     ImageFailed {
-        cover: String,
-        size: u32,
+        key: String,
+        px: u32,
     },
     /// The audio output is open; the UI reads the position from it.
     Player(player::Player),

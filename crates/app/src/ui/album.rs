@@ -35,7 +35,7 @@ pub fn show(
     };
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(COVER, COVER), egui::Sense::hover());
-        cover(ui, images, tx, album.cover.as_deref(), COVER as u32, rect);
+        cover(ui, images, tx, album.image().as_ref(), rect);
         ui.vertical(|ui| {
             ui.heading(&album.title);
             ui.label(

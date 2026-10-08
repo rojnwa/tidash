@@ -27,26 +27,26 @@ impl Default for UiState {
             login: Default::default(),
             search: Default::default(),
             bar: Default::default(),
-            images: TextureCache::new(512),
+            images: TextureCache::new(64 << 20),
             player: None,
         }
     }
 }
 
-/// Paints a square cover at `size` points (requested at `size` pixels), or a flat placeholder.
+/// Paints `image` over `rect`, requested as wide as `rect` is in pixels; or a flat placeholder.
 fn cover(
     ui: &egui::Ui,
     images: &mut TextureCache,
     tx: &UnboundedSender<Action>,
-    cover: Option<&str>,
-    size: u32,
+    image: Option<&tidal::Image>,
     rect: egui::Rect,
 ) {
-    let tex = cover.and_then(|c| {
-        images.get(ui.ctx(), c, size, || {
+    let px = (rect.width() * ui.ctx().pixels_per_point()).ceil().max(1.0) as u32;
+    let tex = image.and_then(|img| {
+        images.get(ui.ctx(), img.key(), px, || {
             let _ = tx.send(Action::LoadImage {
-                cover: c.to_string(),
-                size,
+                image: img.clone(),
+                px,
             });
         })
     });

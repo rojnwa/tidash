@@ -28,10 +28,11 @@ struct App {
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, started: Instant) -> Self {
         setup_look(&cc.egui_ctx);
+        let artwork = images::open_cache();
         let ctx = cc.egui_ctx.clone();
-        let (actions, events) = backend::start(move || ctx.request_repaint());
+        let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
         let ctx = cc.egui_ctx.clone();
-        let media = now_playing::MediaControls::start(move || ctx.request_repaint());
+        let media = now_playing::MediaControls::start(move || ctx.request_repaint(), artwork);
         Self {
             model: Model::default(),
             actions,
@@ -84,10 +85,8 @@ impl eframe::App for App {
             .map_or(Duration::ZERO, player::Player::position);
         while let Ok(ev) = self.events.try_recv() {
             match ev {
-                Event::Image { cover, size, image } => {
-                    self.ui.images.insert(ctx, cover, size, image)
-                }
-                Event::ImageFailed { cover, size } => self.ui.images.forget(cover, size),
+                Event::Image { key, px, image } => self.ui.images.insert(ctx, key, px, image),
+                Event::ImageFailed { key, px } => self.ui.images.forget(key, px),
                 Event::Player(p) => self.ui.player = Some(p),
                 Event::Seeked(at) => self.media.seeked(at),
                 Event::Playback(p) => {
