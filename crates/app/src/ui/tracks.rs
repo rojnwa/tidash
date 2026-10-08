@@ -7,6 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 const ROW_H: f32 = 26.0;
 
+#[derive(Clone, Copy)]
 enum Row {
     Disc(u32),
     Track(usize),
@@ -35,20 +36,26 @@ pub fn show(
     tx: &UnboundedSender<Action>,
 ) {
     let multi = discs && tracks.iter().any(|t| t.volume_number > 1);
-    let mut rows = Vec::with_capacity(tracks.len() + 4);
-    let mut disc = 0;
-    for (i, t) in tracks.iter().enumerate() {
-        if multi && t.volume_number != disc {
-            disc = t.volume_number;
-            rows.push(Row::Disc(disc));
+    // Only a multi-disc album (short) needs a row list, for its disc headers; in any other
+    // list row i is track i, and nothing is built per frame.
+    let mut rows = Vec::new();
+    if multi {
+        let mut disc = 0;
+        for (i, t) in tracks.iter().enumerate() {
+            if t.volume_number != disc {
+                disc = t.volume_number;
+                rows.push(Row::Disc(disc));
+            }
+            rows.push(Row::Track(i));
         }
-        rows.push(Row::Track(i));
     }
+    let n = if multi { rows.len() } else { tracks.len() };
     egui::ScrollArea::vertical()
         .id_salt(id)
         .auto_shrink([false, false])
-        .show_rows(ui, ROW_H, rows.len(), |ui, range| {
-            for row in &rows[range] {
+        .show_rows(ui, ROW_H, n, |ui, range| {
+            for r in range {
+                let row = if multi { rows[r] } else { Row::Track(r) };
                 let sense = match row {
                     Row::Disc(_) => Sense::hover(),
                     Row::Track(_) => Sense::click(),
@@ -56,7 +63,7 @@ pub fn show(
                 let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
                 let p = ui.painter_at(rect);
                 let font = FontId::proportional(14.0);
-                match *row {
+                match row {
                     Row::Disc(n) => {
                         let label = format!("{} {n}", tr("Disc"));
                         resp.widget_info(|| WidgetInfo::labeled(WidgetType::Label, true, &label));
