@@ -4568,6 +4568,7 @@ dependencies = [
 name = "tidash"
 version = "0.1.0"
 dependencies = [
+ "directories",
  "eframe",
  "egui",
  "fastframe-audio",
