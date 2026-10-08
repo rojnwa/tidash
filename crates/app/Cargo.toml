@@ -26,5 +26,8 @@ fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 directories = "6"
 
+[dev-dependencies]
+wiremock = "0.6"
+
 [build-dependencies]
 fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1", features = ["build"] }
