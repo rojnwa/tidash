@@ -26,16 +26,14 @@ impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_look(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
-        let (actions, events, player) = backend::start(move || ctx.request_repaint());
-        let mut ui = ui::UiState::default();
-        ui.player = player;
+        let (actions, events) = backend::start(move || ctx.request_repaint());
         let ctx = cc.egui_ctx.clone();
         let media = now_playing::MediaControls::start(move || ctx.request_repaint());
         Self {
             model: Model::default(),
             actions,
             events,
-            ui,
+            ui: ui::UiState::default(),
             media,
         }
     }
@@ -78,6 +76,7 @@ impl eframe::App for App {
                 Event::Image { cover, size, image } => {
                     self.ui.images.insert(ctx, cover, size, image)
                 }
+                Event::Player(p) => self.ui.player = Some(p),
                 Event::Seeked(at) => self.media.seeked(at),
                 Event::Playback(p) => {
                     self.model.apply(Event::Playback(p));

@@ -9,42 +9,18 @@ use std::time::Duration;
 use tidal::{Client, ClientConfig, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-/// Opens the audio output, then spawns the backend. Every event sent is followed by `waker()`.
-/// Without an audio device (`None`) the app runs, and play actions report the missing output.
+/// Spawns the backend. Before it handles actions it opens the audio output and reads the
+/// stored session, off the UI thread: both can take a while. Every event sent is followed by
+/// `waker()`. Without an audio device the app runs, and play actions report the missing output.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
-) -> (
-    UnboundedSender<Action>,
-    Receiver<Event>,
-    Option<player::Player>,
-) {
+) -> (UnboundedSender<Action>, Receiver<Event>) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
-    let (msg_tx, msg_rx) = unbounded_channel();
-    let player = match player::Player::spawn(fastframe_audio::OutputOptions::default()) {
-        Ok((player, events)) => {
-            let tx = msg_tx.clone();
-            let forward = move || {
-                for ev in events {
-                    if tx.send(Msg::Player(ev)).is_err() {
-                        return; // backend gone
-                    }
-                }
-            };
-            if let Err(e) = std::thread::Builder::new()
-                .name("player-events".into())
-                .spawn(forward)
-            {
-                log::error!("player event thread failed: {e}");
-            }
-            Some(player)
-        }
-        Err(e) => {
-            log::warn!("no audio output: {e}");
-            None
-        }
-    };
-    let backend_player = player.clone();
+    let emit = Arc::new(Emitter {
+        tx: event_tx,
+        waker: Box::new(waker),
+    });
     let spawned = std::thread::Builder::new()
         .name("backend".into())
         .spawn(move || {
@@ -59,22 +35,41 @@ pub fn start(
                     return;
                 }
             };
-            let emit = Arc::new(Emitter {
-                tx: event_tx,
-                waker: Box::new(waker),
+            let (msg_tx, msg_rx) = unbounded_channel();
+            let playback = open_player(&msg_tx).map(|p| {
+                emit.send(Event::Player(p.clone()));
+                Playback::new(p, emit.clone(), msg_tx)
             });
-            let store = tidal::default_store(); // blocks: before the runtime runs on this thread
-            rt.block_on(async move {
-                let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
-                Backend::new(emit, playback, store)
-                    .run(action_rx, msg_rx)
-                    .await;
-            });
+            // The store blocks: read it before the runtime runs on this thread.
+            let backend = Backend::new(emit, playback, tidal::default_store());
+            rt.block_on(backend.run(action_rx, msg_rx));
         });
     if let Err(e) = spawned {
         log::error!("backend thread failed: {e}");
     }
-    (action_tx, event_rx, player)
+    (action_tx, event_rx)
+}
+
+/// The audio output, its events forwarded to `msgs`; `None` without a device.
+fn open_player(msgs: &UnboundedSender<Msg>) -> Option<player::Player> {
+    let (player, events) = player::Player::spawn(fastframe_audio::OutputOptions::default())
+        .inspect_err(|e| log::warn!("no audio output: {e}"))
+        .ok()?;
+    let tx = msgs.clone();
+    let forward = move || {
+        for ev in events {
+            if tx.send(Msg::Player(ev)).is_err() {
+                return; // backend gone
+            }
+        }
+    };
+    if let Err(e) = std::thread::Builder::new()
+        .name("player-events".into())
+        .spawn(forward)
+    {
+        log::error!("player event thread failed: {e}");
+    }
+    Some(player)
 }
 
 pub(crate) struct Emitter {

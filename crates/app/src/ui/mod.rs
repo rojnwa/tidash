@@ -17,7 +17,7 @@ pub struct UiState {
     search: search::State,
     bar: player_bar::State,
     pub images: TextureCache,
-    /// Read only for the position; `None` without an audio device.
+    /// Read only for the position; `None` until the output opened, or without a device.
     pub player: Option<player::Player>,
 }
 
