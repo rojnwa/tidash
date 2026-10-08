@@ -204,10 +204,11 @@ impl Backend {
                 let pkce = Pkce::new();
                 let url = tidal::authorize_url(&self.cfg, &pkce).to_string();
                 self.pkce = Some(pkce);
-                if let Err(e) = open::that(&url) {
+                self.emit.send(Event::LoginUrl(url.clone()));
+                // Some launchers (xdg-open) would block the backend until the browser exits.
+                if let Err(e) = open::that_detached(&url) {
                     log::warn!("could not open the browser: {e}");
                 }
-                self.emit.send(Event::LoginUrl(url));
             }
             Action::FinishLogin(redirect) => self.finish_login(&redirect).await,
             Action::Logout => {
