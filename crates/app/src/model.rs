@@ -20,14 +20,20 @@ pub enum Action {
     Logout,
     Search(String),
     OpenAlbum(u64),
-    PlayTracks { tracks: Vec<tidal::Track>, start: usize },
+    PlayTracks {
+        tracks: Vec<tidal::Track>,
+        start: usize,
+    },
     Play,
     Pause,
     Next,
     Previous,
     Seek(Duration),
     SetVolume(f32),
-    LoadImage { cover: String, size: u32 },
+    LoadImage {
+        cover: String,
+        size: u32,
+    },
 }
 
 // Debug is manual: `FinishLogin` carries the redirect URL with the authorization code.
@@ -39,18 +45,22 @@ impl std::fmt::Debug for Action {
             Self::Logout => f.write_str("Logout"),
             Self::Search(q) => f.debug_tuple("Search").field(q).finish(),
             Self::OpenAlbum(id) => f.debug_tuple("OpenAlbum").field(id).finish(),
-            Self::PlayTracks { tracks, start } => {
-                f.debug_struct("PlayTracks").field("tracks", tracks).field("start", start).finish()
-            }
+            Self::PlayTracks { tracks, start } => f
+                .debug_struct("PlayTracks")
+                .field("tracks", tracks)
+                .field("start", start)
+                .finish(),
             Self::Play => f.write_str("Play"),
             Self::Pause => f.write_str("Pause"),
             Self::Next => f.write_str("Next"),
             Self::Previous => f.write_str("Previous"),
             Self::Seek(d) => f.debug_tuple("Seek").field(d).finish(),
             Self::SetVolume(v) => f.debug_tuple("SetVolume").field(v).finish(),
-            Self::LoadImage { cover, size } => {
-                f.debug_struct("LoadImage").field("cover", cover).field("size", size).finish()
-            }
+            Self::LoadImage { cover, size } => f
+                .debug_struct("LoadImage")
+                .field("cover", cover)
+                .field("size", size)
+                .finish(),
         }
     }
 }
@@ -63,15 +73,25 @@ pub enum Event {
     CredentialsNotPersistent,
     /// A search was submitted; results for any other query are stale.
     SearchStarted(String),
-    SearchResults { query: String, results: tidal::SearchResults },
+    SearchResults {
+        query: String,
+        results: tidal::SearchResults,
+    },
     AlbumLoading(u64),
     AlbumFailed(u64),
-    Album { album: tidal::Album, tracks: Vec<tidal::Track> },
+    Album {
+        album: tidal::Album,
+        tracks: Vec<tidal::Track>,
+    },
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
     /// Playback jumped to this position (for the OS media controls).
     Seeked(Duration),
-    Image { cover: String, size: u32, image: egui::ColorImage },
+    Image {
+        cover: String,
+        size: u32,
+        image: egui::ColorImage,
+    },
     Error(String),
     /// Dismiss the error at this index (out of range is ignored).
     DismissError(usize),
@@ -135,11 +155,15 @@ impl Model {
                 self.route = Route::Search;
             }
             Event::LoggedOut => {
-                *self = Self { errors: std::mem::take(&mut self.errors), ..Self::default() };
+                *self = Self {
+                    errors: std::mem::take(&mut self.errors),
+                    ..Self::default()
+                };
             }
-            Event::CredentialsNotPersistent => self
-                .errors
-                .push(tr("Login will not be remembered: no system credential store available").into_owned()),
+            Event::CredentialsNotPersistent => self.errors.push(
+                tr("Login will not be remembered: no system credential store available")
+                    .into_owned(),
+            ),
             Event::SearchStarted(q) => self.latest_query = Some(q),
             Event::SearchResults { query, results } => {
                 if self.latest_query.as_deref() == Some(query.as_str()) {
@@ -238,7 +262,10 @@ mod tests {
     #[test]
     fn stale_search_results_are_ignored() {
         let mut m = Model::default();
-        let res = |q: &str| Event::SearchResults { query: q.into(), results: Default::default() };
+        let res = |q: &str| Event::SearchResults {
+            query: q.into(),
+            results: Default::default(),
+        };
         m.apply(Event::SearchStarted("a".into()));
         m.apply(Event::SearchStarted("b".into()));
         m.apply(res("a"));
@@ -266,7 +293,10 @@ mod tests {
             duration: 0,
             release_date: None,
         };
-        m.apply(Event::Album { album, tracks: vec![] });
+        m.apply(Event::Album {
+            album,
+            tracks: vec![],
+        });
         assert!(m.album_errors.is_empty());
     }
 
@@ -290,7 +320,9 @@ mod tests {
 
     #[test]
     fn finish_login_debug_hides_the_code() {
-        let a = Action::FinishLogin("https://tidal.com/android/login/auth?code=SECRET123&state=s".into());
+        let a = Action::FinishLogin(
+            "https://tidal.com/android/login/auth?code=SECRET123&state=s".into(),
+        );
         assert!(!format!("{a:?}").contains("SECRET123"));
     }
 }

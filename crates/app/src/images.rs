@@ -14,7 +14,12 @@ pub struct TextureCache {
 
 impl TextureCache {
     pub fn new(capacity: usize) -> TextureCache {
-        TextureCache { capacity, tick: 0, textures: HashMap::new(), requested: HashSet::new() }
+        TextureCache {
+            capacity,
+            tick: 0,
+            textures: HashMap::new(),
+            requested: HashSet::new(),
+        }
     }
 
     /// The texture if cached; otherwise calls `request` once per key and returns `None`.
@@ -45,7 +50,11 @@ impl TextureCache {
         self.textures.insert(key, (tex, self.tick));
         while self.textures.len() > self.capacity {
             // ponytail: O(n) scan per eviction; fine at capacity 512.
-            let Some(oldest) = self.textures.iter().min_by_key(|(_, (_, used))| *used).map(|(k, _)| k.clone())
+            let Some(oldest) = self
+                .textures
+                .iter()
+                .min_by_key(|(_, (_, used))| *used)
+                .map(|(k, _)| k.clone())
             else {
                 break;
             };

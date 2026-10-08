@@ -13,7 +13,11 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 /// Without an audio device (`None`) the app runs, and play actions report the missing output.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
-) -> (UnboundedSender<Action>, Receiver<Event>, Option<player::Player>) {
+) -> (
+    UnboundedSender<Action>,
+    Receiver<Event>,
+    Option<player::Player>,
+) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
     let (msg_tx, msg_rx) = unbounded_channel();
@@ -27,7 +31,10 @@ pub fn start(
                     }
                 }
             };
-            if let Err(e) = std::thread::Builder::new().name("player-events".into()).spawn(forward) {
+            if let Err(e) = std::thread::Builder::new()
+                .name("player-events".into())
+                .spawn(forward)
+            {
                 log::error!("player event thread failed: {e}");
             }
             Some(player)
@@ -38,24 +45,29 @@ pub fn start(
         }
     };
     let backend_player = player.clone();
-    let spawned = std::thread::Builder::new().name("backend".into()).spawn(move || {
-        let rt = match tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::error!("tokio runtime failed: {e}");
-                return;
-            }
-        };
-        let emit = Arc::new(Emitter { tx: event_tx, waker: Box::new(waker) });
-        rt.block_on(async move {
-            let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
-            Backend::new(emit, playback).run(action_rx, msg_rx).await;
+    let spawned = std::thread::Builder::new()
+        .name("backend".into())
+        .spawn(move || {
+            let rt = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
+                Ok(rt) => rt,
+                Err(e) => {
+                    log::error!("tokio runtime failed: {e}");
+                    return;
+                }
+            };
+            let emit = Arc::new(Emitter {
+                tx: event_tx,
+                waker: Box::new(waker),
+            });
+            rt.block_on(async move {
+                let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
+                Backend::new(emit, playback).run(action_rx, msg_rx).await;
+            });
         });
-    });
     if let Err(e) = spawned {
         log::error!("backend thread failed: {e}");
     }
@@ -75,8 +87,17 @@ impl Emitter {
 }
 
 /// Downloads a JPEG and decodes it off the async workers.
-async fn fetch_image(http: &reqwest::Client, url: &str) -> Result<egui::ColorImage, Box<dyn std::error::Error + Send + Sync>> {
-    let bytes = http.get(url).send().await?.error_for_status()?.bytes().await?;
+async fn fetch_image(
+    http: &reqwest::Client,
+    url: &str,
+) -> Result<egui::ColorImage, Box<dyn std::error::Error + Send + Sync>> {
+    let bytes = http
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
     tokio::task::spawn_blocking(move || {
         let img = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)?.to_rgba8();
         let size = [img.width() as usize, img.height() as usize];
@@ -173,7 +194,9 @@ impl Backend {
                 self.client = Some(Arc::new(c));
                 self.emit.send(Event::LoggedIn);
             }
-            Err(e) => self.emit.send(Event::Error(format!("{}: {e}", tr("Login failed")))),
+            Err(e) => self
+                .emit
+                .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
     }
 
@@ -194,7 +217,8 @@ impl Backend {
                 self.pkce = None;
                 // The user asked to log out: do so even if the stored copy could not be removed.
                 if let Err(e) = self.store.clear() {
-                    self.emit.send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
+                    self.emit
+                        .send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
                 }
                 self.emit.send(Event::LoggedOut);
                 // After LoggedOut, whose model reset the playback snapshots then refill.
@@ -250,7 +274,8 @@ impl Backend {
             | Action::SetVolume(_) => match &mut self.playback {
                 Some(p) => p.handle(self.client.as_ref(), action),
                 None if matches!(action, Action::PlayTracks { .. } | Action::Play) => {
-                    self.emit.send(Event::Error(tr("No audio output device").into_owned()));
+                    self.emit
+                        .send(Event::Error(tr("No audio output device").into_owned()));
                 }
                 None => {}
             },
@@ -259,7 +284,9 @@ impl Backend {
 
     async fn finish_login(&mut self, redirect: &str) {
         let Some(pkce) = self.pkce.clone() else {
-            self.emit.send(Event::Error(tr("Login failed: start with \"Log in with TIDAL\" first").into_owned()));
+            self.emit.send(Event::Error(
+                tr("Login failed: start with \"Log in with TIDAL\" first").into_owned(),
+            ));
             return;
         };
         let session = match tidal::code_from_redirect(redirect, &pkce.state) {
@@ -269,12 +296,17 @@ impl Backend {
         match session {
             Ok(session) => {
                 if let Err(e) = self.store.save(&session) {
-                    self.emit.send(Event::Error(format!("{}: {e}", tr("Login will not be remembered"))));
+                    self.emit.send(Event::Error(format!(
+                        "{}: {e}",
+                        tr("Login will not be remembered")
+                    )));
                 }
                 self.pkce = None;
                 self.log_in(session);
             }
-            Err(e) => self.emit.send(Event::Error(format!("{}: {e}", tr("Login failed")))),
+            Err(e) => self
+                .emit
+                .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
     }
 }

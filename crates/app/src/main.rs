@@ -31,7 +31,13 @@ impl App {
         ui.player = player;
         let ctx = cc.egui_ctx.clone();
         let media = now_playing::MediaControls::start(move || ctx.request_repaint());
-        Self { model: Model::default(), actions, events, ui, media }
+        Self {
+            model: Model::default(),
+            actions,
+            events,
+            ui,
+            media,
+        }
     }
 }
 
@@ -62,10 +68,16 @@ fn setup_look(ctx: &egui::Context) {
 impl eframe::App for App {
     /// Backend events and media commands; also runs while the window is hidden or minimized.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let position = self.ui.player.as_ref().map_or(Duration::ZERO, player::Player::position);
+        let position = self
+            .ui
+            .player
+            .as_ref()
+            .map_or(Duration::ZERO, player::Player::position);
         while let Ok(ev) = self.events.try_recv() {
             match ev {
-                Event::Image { cover, size, image } => self.ui.images.insert(ctx, cover, size, image),
+                Event::Image { cover, size, image } => {
+                    self.ui.images.insert(ctx, cover, size, image)
+                }
                 Event::Seeked(at) => self.media.seeked(at),
                 Event::Playback(p) => {
                     self.model.apply(Event::Playback(p));

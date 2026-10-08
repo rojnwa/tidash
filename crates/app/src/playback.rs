@@ -23,8 +23,15 @@ pub struct SegmentReader {
 }
 
 impl SegmentReader {
-    pub fn new(urls: Vec<String>, open: impl FnMut(&str) -> io::Result<Body> + Send + 'static) -> SegmentReader {
-        SegmentReader { urls: urls.into_iter(), open: Box::new(open), body: None }
+    pub fn new(
+        urls: Vec<String>,
+        open: impl FnMut(&str) -> io::Result<Body> + Send + 'static,
+    ) -> SegmentReader {
+        SegmentReader {
+            urls: urls.into_iter(),
+            open: Box::new(open),
+            body: None,
+        }
     }
 }
 
@@ -41,7 +48,9 @@ impl Read for SegmentReader {
                 }
                 self.body = None;
             }
-            let Some(url) = self.urls.next() else { return Ok(0) };
+            let Some(url) = self.urls.next() else {
+                return Ok(0);
+            };
             self.body = Some((self.open)(&url)?);
         }
     }
@@ -75,7 +84,11 @@ fn segment_source(id: u64, urls: Vec<String>) -> io::Result<Source> {
             .map_err(|e| io::Error::other(e.without_url()))?;
         Ok(Box::new(resp))
     };
-    Ok(Source { id, reader: Box::new(SegmentReader::new(urls, open)), len: None })
+    Ok(Source {
+        id,
+        reader: Box::new(SegmentReader::new(urls, open)),
+        len: None,
+    })
 }
 
 /// How a play ended.
@@ -102,7 +115,12 @@ pub struct PlayAccounting {
 }
 
 impl PlayAccounting {
-    pub fn new(track: &tidal::Track, quality: String, start_position: Duration, now_ms: u64) -> PlayAccounting {
+    pub fn new(
+        track: &tidal::Track,
+        quality: String,
+        start_position: Duration,
+        now_ms: u64,
+    ) -> PlayAccounting {
         PlayAccounting {
             track_id: track.id,
             album_id: track.album.id,
@@ -129,14 +147,22 @@ impl PlayAccounting {
     }
 
     fn played(&self, now: Instant) -> Duration {
-        self.played + self.playing_since.map_or(Duration::ZERO, |since| now.saturating_duration_since(since))
+        self.played
+            + self
+                .playing_since
+                .map_or(Duration::ZERO, |since| now.saturating_duration_since(since))
     }
 }
 
 const MIN_REPORTED: Duration = Duration::from_secs(30);
 
 /// The report for a play ending now, or `None` under 30 s of playing (S1 `## Play events`).
-pub fn report_for(play: &PlayAccounting, end: End, now: Instant, now_ms: u64) -> Option<PlaybackReport> {
+pub fn report_for(
+    play: &PlayAccounting,
+    end: End,
+    now: Instant,
+    now_ms: u64,
+) -> Option<PlaybackReport> {
     if play.played(now) < MIN_REPORTED {
         return None;
     }
@@ -159,14 +185,19 @@ pub fn report_for(play: &PlayAccounting, end: End, now: Instant, now_ms: u64) ->
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// What reaches the backend besides actions.
 pub enum Msg {
     Player(PlayerEvent),
     /// A `start_current` resolved its stream (source and quality) or failed.
-    Loaded { seq: u64, result: Result<(Source, String), String> },
+    Loaded {
+        seq: u64,
+        result: Result<(Source, String), String>,
+    },
 }
 
 /// `stream_info`, retried once after 2 s unless the failure is terminal.
@@ -292,7 +323,11 @@ impl Playback {
 
     pub fn on_msg(&mut self, c: Option<&Arc<Client>>, msg: Msg) {
         match &msg {
-            Msg::Player(ev) => log::debug!("player {ev:?} at {:?} (current load {})", self.player.position(), self.seq),
+            Msg::Player(ev) => log::debug!(
+                "player {ev:?} at {:?} (current load {})",
+                self.player.position(),
+                self.seq
+            ),
             Msg::Loaded { seq, result } => log::debug!("stream {seq} resolved: {}", result.is_ok()),
         }
         match msg {
@@ -330,7 +365,12 @@ impl Playback {
                 if self.play.is_none()
                     && let Some(t) = self.queue.current()
                 {
-                    self.play = Some(PlayAccounting::new(t, self.quality.clone(), self.player.position(), now_ms()));
+                    self.play = Some(PlayAccounting::new(
+                        t,
+                        self.quality.clone(),
+                        self.player.position(),
+                        now_ms(),
+                    ));
                 }
             }
             Msg::Player(PlayerEvent::TrackEnded(id)) if id == self.seq => {
@@ -415,7 +455,8 @@ impl Playback {
             let result = match stream_info(&c, id).await {
                 Ok(info) => {
                     let quality = info.quality;
-                    match tokio::task::spawn_blocking(move || segment_source(seq, info.urls)).await {
+                    match tokio::task::spawn_blocking(move || segment_source(seq, info.urls)).await
+                    {
                         Ok(Ok(source)) => Ok((source, quality)),
                         Ok(Err(e)) => Err(e.to_string()),
                         Err(e) => Err(e.to_string()),
@@ -430,14 +471,22 @@ impl Playback {
 
     /// The current track cannot play: tell the user and go on, or stop after three in a row.
     fn fail_track(&mut self, c: Option<&Arc<Client>>) {
-        let title = self.queue.current().map(|t| t.title.clone()).unwrap_or_default();
-        self.emit.send(Event::Error(tr("{title} is unavailable").replace("{title}", &title)));
+        let title = self
+            .queue
+            .current()
+            .map(|t| t.title.clone())
+            .unwrap_or_default();
+        self.emit.send(Event::Error(
+            tr("{title} is unavailable").replace("{title}", &title),
+        ));
         self.end_play(c, End::At(self.last_pos));
         self.failures += 1;
         if self.failures >= 3 {
             self.failures = 0;
             self.stop();
-            self.emit.send(Event::Error(tr("Playback stopped after repeated errors").into_owned()));
+            self.emit.send(Event::Error(
+                tr("Playback stopped after repeated errors").into_owned(),
+            ));
         } else if self.queue.next().is_some() {
             self.publish_queue();
             self.start_current(c, None);
@@ -460,7 +509,11 @@ impl Playback {
     }
 
     /// Ends the current play; sends its report (fire-and-forget) if it qualifies.
-    fn end_play(&mut self, c: Option<&Arc<Client>>, end: End) -> Option<tokio::task::JoinHandle<()>> {
+    fn end_play(
+        &mut self,
+        c: Option<&Arc<Client>>,
+        end: End,
+    ) -> Option<tokio::task::JoinHandle<()>> {
         let report = report_for(&self.play.take()?, end, Instant::now(), now_ms())?;
         let c = c?.clone();
         Some(tokio::spawn(async move {
@@ -474,7 +527,11 @@ impl Playback {
     fn publish(&self) {
         self.emit.send(Event::Playback(PlaybackSnapshot {
             // A resolving stream shows as buffering, not as the Stop that silenced the old track.
-            state: Some(if self.loading { PlayState::Buffering } else { self.state }),
+            state: Some(if self.loading {
+                PlayState::Buffering
+            } else {
+                self.state
+            }),
             track: self.queue.current().cloned(),
             volume: self.volume,
         }));
@@ -492,9 +549,15 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     /// A reader over `segments` (url -> bytes) whose `open` logs each URL and fails on `bad`.
-    fn reader(segments: &[(&str, &[u8])], bad: Option<&'static str>) -> (SegmentReader, Arc<Mutex<Vec<String>>>) {
+    fn reader(
+        segments: &[(&str, &[u8])],
+        bad: Option<&'static str>,
+    ) -> (SegmentReader, Arc<Mutex<Vec<String>>>) {
         let log = Arc::new(Mutex::new(Vec::new()));
-        let data: Vec<(String, Vec<u8>)> = segments.iter().map(|(u, b)| (u.to_string(), b.to_vec())).collect();
+        let data: Vec<(String, Vec<u8>)> = segments
+            .iter()
+            .map(|(u, b)| (u.to_string(), b.to_vec()))
+            .collect();
         let urls = data.iter().map(|(u, _)| u.clone()).collect();
         let opened = log.clone();
         let r = SegmentReader::new(urls, move |url| {
@@ -502,7 +565,11 @@ mod tests {
             if Some(url) == bad {
                 return Err(io::Error::other("403"));
             }
-            let bytes = data.iter().find(|(u, _)| u == url).map(|(_, b)| b.clone()).unwrap_or_default();
+            let bytes = data
+                .iter()
+                .find(|(u, _)| u == url)
+                .map(|(_, b)| b.clone())
+                .unwrap_or_default();
             Ok(Box::new(Cursor::new(bytes)) as Body)
         });
         (r, log)
@@ -511,7 +578,10 @@ mod tests {
     #[test]
     fn segment_reader_concatenates_in_order() {
         let (mut r, log) = reader(&[("init", b"ab"), ("1", b"cde"), ("2", b"f")], None);
-        assert!(log.lock().expect("log").is_empty(), "nothing opened before the first read");
+        assert!(
+            log.lock().expect("log").is_empty(),
+            "nothing opened before the first read"
+        );
         let mut first = [0u8; 1];
         assert_eq!(r.read(&mut first).expect("read"), 1);
         assert_eq!(*log.lock().expect("log"), ["init"], "opened lazily");
@@ -526,7 +596,10 @@ mod tests {
         let (mut r, _) = reader(&[("init", b"ab"), ("1", b"cd"), ("2", b"ef")], Some("1"));
         let mut got = Vec::new();
         assert!(r.read_to_end(&mut got).is_err());
-        assert_eq!(got, b"ab", "the first segment's bytes come before the error");
+        assert_eq!(
+            got, b"ab",
+            "the first segment's bytes come before the error"
+        );
     }
 
     fn track() -> tidal::Track {
@@ -537,7 +610,11 @@ mod tests {
             track_number: 1,
             volume_number: 1,
             artists: vec![],
-            album: tidal::AlbumRef { id: 42, title: "a".into(), cover: None },
+            album: tidal::AlbumRef {
+                id: 42,
+                title: "a".into(),
+                cover: None,
+            },
             stream_ready: true,
         }
     }
@@ -563,8 +640,23 @@ mod tests {
         let t0 = Instant::now();
         let r = report_for(&played(t0, 199), End::Natural, t0 + S * 199, 200_000).expect("report");
         assert_eq!(r.end_position_s, 200.0);
-        assert_eq!((r.track_id, r.start_position_s, r.started_at_ms, r.ended_at_ms), (7, 0.0, 1_000, 200_000));
-        assert_eq!((r.source_type.as_str(), r.source_id.as_str(), r.quality.as_str()), ("ALBUM", "42", "LOSSLESS"));
+        assert_eq!(
+            (
+                r.track_id,
+                r.start_position_s,
+                r.started_at_ms,
+                r.ended_at_ms
+            ),
+            (7, 0.0, 1_000, 200_000)
+        );
+        assert_eq!(
+            (
+                r.source_type.as_str(),
+                r.source_id.as_str(),
+                r.quality.as_str()
+            ),
+            ("ALBUM", "42", "LOSSLESS")
+        );
         assert_eq!(r.streaming_session_id.len(), 36);
     }
 
@@ -572,7 +664,11 @@ mod tests {
     fn skip_reports_the_position_clamped_to_the_duration() {
         let t0 = Instant::now();
         let p = played(t0, 95);
-        let at = |secs| report_for(&p, End::At(S * secs), t0 + S * 95, 2).expect("report").end_position_s;
+        let at = |secs| {
+            report_for(&p, End::At(S * secs), t0 + S * 95, 2)
+                .expect("report")
+                .end_position_s
+        };
         assert_eq!(at(95), 95.0);
         assert_eq!(at(250), 200.0);
     }
@@ -581,26 +677,55 @@ mod tests {
     fn playback() -> (Playback, std::sync::mpsc::Receiver<Event>) {
         let (player, _events, _renderer) = Player::spawn_manual();
         let (tx, rx) = std::sync::mpsc::channel();
-        let emit = Arc::new(Emitter { tx, waker: Box::new(|| {}) });
+        let emit = Arc::new(Emitter {
+            tx,
+            waker: Box::new(|| {}),
+        });
         let (msgs, _) = tokio::sync::mpsc::unbounded_channel();
         (Playback::new(player, emit, msgs), rx)
     }
 
     fn tracks(n: u64) -> Vec<tidal::Track> {
-        (0..n).map(|id| tidal::Track { id, title: format!("t{id}"), ..track() }).collect()
+        (0..n)
+            .map(|id| tidal::Track {
+                id,
+                title: format!("t{id}"),
+                ..track()
+            })
+            .collect()
     }
 
     fn errors(rx: &std::sync::mpsc::Receiver<Event>) -> Vec<String> {
-        rx.try_iter().filter_map(|e| if let Event::Error(e) = e { Some(e) } else { None }).collect()
+        rx.try_iter()
+            .filter_map(|e| {
+                if let Event::Error(e) = e {
+                    Some(e)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     #[test]
     fn three_failures_in_a_row_stop_and_a_new_queue_starts_over() {
         let (mut p, rx) = playback();
-        p.handle(None, Action::PlayTracks { tracks: tracks(9), start: 0 });
+        p.handle(
+            None,
+            Action::PlayTracks {
+                tracks: tracks(9),
+                start: 0,
+            },
+        );
         p.fail_track(None);
         p.fail_track(None);
-        p.handle(None, Action::PlayTracks { tracks: tracks(9), start: 0 });
+        p.handle(
+            None,
+            Action::PlayTracks {
+                tracks: tracks(9),
+                start: 0,
+            },
+        );
         assert_eq!(p.failures, 0, "a new queue starts over");
         for _ in 0..3 {
             p.fail_track(None);
@@ -646,7 +771,13 @@ mod tests {
         p.set_playing(true, t0);
         p.set_playing(false, t0 + S * 20); // paused for 100 s
         p.set_playing(true, t0 + S * 120);
-        assert!(report_for(&p, End::At(S * 25), t0 + S * 125, 0).is_none(), "25 s played");
-        assert!(report_for(&p, End::At(S * 30), t0 + S * 130, 0).is_some(), "30 s played, still running");
+        assert!(
+            report_for(&p, End::At(S * 25), t0 + S * 125, 0).is_none(),
+            "25 s played"
+        );
+        assert!(
+            report_for(&p, End::At(S * 30), t0 + S * 130, 0).is_some(),
+            "30 s played, still running"
+        );
     }
 }
