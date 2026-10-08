@@ -92,6 +92,8 @@ pub enum Event {
         size: u32,
         image: egui::ColorImage,
     },
+    /// The audio output is open; the UI reads the position from it.
+    Player(player::Player),
     Error(String),
     /// Dismiss the error at this index (out of range is ignored).
     DismissError(usize),
@@ -183,6 +185,7 @@ impl Model {
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } => {} // handled by the UI's texture cache
+            Event::Player(_) => {}    // kept by the UI
             Event::Seeked(_) => {}    // handled by the media controls
             Event::Error(e) => self.errors.push(e),
             Event::Navigate(r) => self.navigate(r),
