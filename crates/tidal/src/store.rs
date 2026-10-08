@@ -81,6 +81,11 @@ impl KeyringStore {
         }
     }
 
+    fn discard(&self) -> Result<Option<Session>> {
+        self.clear()?;
+        Ok(None)
+    }
+
     fn count(&self) -> Result<Option<usize>> {
         self.get("session")?
             .map(|n| {
@@ -98,20 +103,27 @@ impl Default for KeyringStore {
 }
 
 impl TokenStore for KeyringStore {
+    /// A corrupt or incomplete session is removed and reads as none, so the next login
+    /// persists. A store that cannot be read (locked, access denied) is an error, and what it
+    /// holds stays for the next try.
     fn load(&self) -> Result<Option<Session>> {
-        let Some(n) = self.count()? else {
+        let Some(count) = self.get("session")? else {
             return Ok(None);
+        };
+        let Ok(n) = count.parse::<usize>() else {
+            return self.discard();
         };
         let mut json = String::new();
         for i in 0..n {
-            let part = self
-                .get(&format!("session.{i}"))?
-                .ok_or_else(|| Error::Store("stored session is incomplete".into()))?;
+            let Some(part) = self.get(&format!("session.{i}"))? else {
+                return self.discard();
+            };
             json.push_str(&part);
         }
-        serde_json::from_str(&json)
-            .map(Some)
-            .map_err(|_| Error::Store("stored session is corrupt".into()))
+        match serde_json::from_str(&json) {
+            Ok(s) => Ok(Some(s)),
+            Err(_) => self.discard(),
+        }
     }
 
     fn save(&self, s: &Session) -> Result<()> {
@@ -211,6 +223,33 @@ mod tests {
         let _ = s.clear();
         let r = std::panic::catch_unwind(|| round_trip(&s));
         let _ = s.clear();
+        if let Err(e) = r {
+            std::panic::resume_unwind(e);
+        }
+    }
+
+    #[test]
+    #[ignore = "touches the real OS credential store"]
+    fn corrupt_session_reads_as_none_and_is_removed() {
+        let s = KeyringStore::with_service("tidalfast-test-corrupt");
+        let corrupt: [&[(&str, &str)]; 3] = [
+            &[("session", "two")],
+            &[("session", "2"), ("session.0", "{")],
+            &[("session", "1"), ("session.0", "{oops")],
+        ];
+        let r = std::panic::catch_unwind(|| {
+            for items in corrupt {
+                for (user, value) in items {
+                    s.entry(user).unwrap().set_password(value).unwrap();
+                }
+                assert!(s.load().unwrap().is_none(), "{items:?}");
+                assert!(s.get("session").unwrap().is_none(), "{items:?}");
+                assert!(s.get("session.0").unwrap().is_none(), "{items:?}");
+            }
+        });
+        for user in ["session", "session.0", "session.1"] {
+            let _ = s.delete(user);
+        }
         if let Err(e) = r {
             std::panic::resume_unwind(e);
         }
