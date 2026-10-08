@@ -219,8 +219,13 @@ M1 on macOS (M2 Pro, release build, idle at the start screen; the app's `first f
 `footprint`): first frame after 179–213 ms (368 ms on the first launch of a new build), 0% CPU, a
 13.1 MB binary, and a physical footprint of 158 MB, already over the RAM budget. About 78 MB of that
 is the 24 system fallback faces (CJK, Arabic, Indic, ...) that fastframe-fonts reads whole into
-memory; mapping them instead (upstream) would bring it near 80 MB. Still to measure: Windows, and
-RAM after an album page (plan Task 21).
+memory; mapping them instead (upstream) would bring it near 80 MB.
+
+M1 on Windows 11 (Ryzen 7 7800X3D, release build, three launches): first frame after 136–145 ms
+(window handle after ~80 ms, 435 ms on the first launch of a new build), 0–0.3% CPU idle at the
+start screen, a 16.8 MB binary, a 146 MB working set (262 MB private) at the start screen and
+162 MB (257 MB private) on an album page after playing a dozen tracks, 0% CPU there while paused.
+RAM is over budget on both OSes for the same font reason. Linux: build and tests in CI only.
 
 ## 11. Shipping
 
