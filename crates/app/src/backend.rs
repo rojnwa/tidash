@@ -84,6 +84,9 @@ impl Emitter {
     }
 }
 
+/// How long a cover that failed to load keeps its placeholder.
+const IMAGE_RETRY: Duration = Duration::from_secs(30);
+
 /// Downloads a JPEG and decodes it off the async workers.
 async fn fetch_image(
     http: &reqwest::Client,
@@ -261,7 +264,13 @@ impl Backend {
                 tokio::spawn(async move {
                     match fetch_image(&http, &url).await {
                         Ok(image) => emit.send(Event::Image { cover, size, image }),
-                        Err(e) => log::debug!("image {url}: {e}"), // placeholder stays
+                        Err(e) => {
+                            log::debug!("image {url}: {e}"); // the placeholder stays
+                            // Then it is asked for again when drawn: not every frame, should
+                            // the cover stay unavailable.
+                            tokio::time::sleep(IMAGE_RETRY).await;
+                            emit.send(Event::ImageFailed { cover, size });
+                        }
                     }
                 });
             }
