@@ -238,6 +238,13 @@ pinned to crmne/fastframe#17 (fallback faces memory-mapped), 93 MB (202–204 MB
 private bytes for reference), Windows now meets the 150 MB budget; macOS is to be re-measured with
 the pin.
 
+M2 renderer check on Windows (same machine, release build `0b7975e` with both renderers, Home
+loaded, 10 s idle, `TIDASH_REPAINT_LOG=1`): glow 0 repaint passes, 0.0% CPU, 94 MB working set;
+wgpu on Vulkan 0 egui passes but 100.2% CPU (a full core spinning) and 232 MB; wgpu on DX12 0
+passes, 99.8% CPU, 205 MB. Glow is kept and wgpu dropped: wgpu breaks the 0% idle budget on both
+backends, costs 111–138 MB more RAM, and adds 6.8 MB to the binary (25.8 MB with both renderers,
+19.0 MB with glow alone). PresentMon frame-pacing numbers for glow: pending (M2 acceptance).
+
 ## 11. Shipping
 
 - **CI (GitHub Actions):** matrix Windows / macOS / Linux: `cargo fmt --check`, `cargo clippy -- -D warnings`,
@@ -293,6 +300,9 @@ Implementation plans are written one milestone at a time; the first plan covers 
 
 - LOSSLESS/HI_RES_LOSSLESS arrive as unencrypted MPEG-DASH (FLAC in fMP4), not BTS: approved; the plan is amended (DASH segment URLs, fMP4 decoding); continue to M1.
 - 144 Hz frame pacing not demonstrated in S3: keep egui; M2 gets a task to measure the real grid with PresentMon and compare eframe's glow vs wgpu renderer, picking the one that paces; also no repaint while idle and textures uploaded at display size.
+  M2 outcome (2026-10-09): glow kept, wgpu dropped. Idle on Home, wgpu spun a full core (99.8–100.2%
+  CPU on DX12 and Vulkan, glow 0.0%) and used 111–138 MB more RAM (§10). PresentMon frame-pacing
+  numbers for glow: pending (M2 acceptance).
 
 ## 15. Dependencies (latest stable, verified on crates.io 2026-10-07)
 

@@ -26,8 +26,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 thiserror = "2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "form"] }
 egui = { version = "0.36", default-features = false }
-# ponytail: both renderers only until Task 16 measures which paces; then drop the other
-eframe = { version = "0.36", default-features = false, features = ["glow", "wgpu", "accesskit", "wayland", "x11", "default_fonts"] }
+eframe = { version = "0.36", default-features = false, features = ["glow", "accesskit", "wayland", "x11", "default_fonts"] }
 
 # egui and winit forks required by fastframe (fastframe v0.4.1 getting-started guide)
 [patch.crates-io]

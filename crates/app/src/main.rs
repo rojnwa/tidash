@@ -1,13 +1,12 @@
 //! Tidash desktop app.
 //!
-//! Debug switches for measuring frame pacing (spec §14), read once at start:
-//! - `TIDASH_RENDERER=wgpu|glow`: eframe's renderer; anything but `wgpu` (or unset) is glow.
+//! Debug switches for measuring frame pacing (spec §10, §14), read once at start:
 //! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page this many points a second, every
 //!   pass, repainting without pause; it starts down (up if negative) and bounces at either end.
 //!   Unset, 0 or not a number is off.
 //! - `TIDASH_REPAINT_LOG=1`: logs each pass's repaint causes at info.
 //!
-//! The renderer in use is logged at start either way.
+//! The OpenGL renderer in use is logged at start either way.
 
 mod backend;
 mod i18n;
@@ -29,7 +28,6 @@ use tokio::sync::mpsc::UnboundedSender;
 /// The debug switches the crate docs list.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Switches {
-    renderer: eframe::Renderer,
     autoscroll: Option<f32>,
     repaint_log: bool,
 }
@@ -37,13 +35,7 @@ struct Switches {
 impl Switches {
     /// From `var`, which reads an environment variable.
     fn parse(var: impl Fn(&str) -> Option<String>) -> Self {
-        let wgpu = var("TIDASH_RENDERER").is_some_and(|v| v.trim() == "wgpu");
         Self {
-            renderer: if wgpu {
-                eframe::Renderer::Wgpu
-            } else {
-                eframe::Renderer::Glow
-            },
             autoscroll: var("TIDASH_AUTOSCROLL")
                 .and_then(|v| v.trim().parse().ok())
                 .filter(|v: &f32| v.is_normal()),
@@ -63,12 +55,10 @@ struct App {
     repaint_log: bool,
 }
 
-/// Which renderer eframe started, and on what adapter.
+/// Which OpenGL renderer eframe's glow painter runs on.
 #[expect(unsafe_code)]
 fn log_renderer(cc: &eframe::CreationContext<'_>) {
-    if let Some(wgpu) = &cc.wgpu_render_state {
-        log::info!("renderer: wgpu, {:?}", wgpu.adapter.get_info());
-    } else if let Some(gl) = &cc.gl {
+    if let Some(gl) = &cc.gl {
         use eframe::glow::{self, HasContext as _};
         // SAFETY: eframe creates the app on this thread with this context current (its painter
         // has just used it); these are read-only queries of strings every OpenGL version has.
@@ -194,8 +184,10 @@ fn main() -> eframe::Result {
         .filter("warn,tidash=info,symphonia_core::formats::probe=error")
         .init();
     let switches = Switches::parse(|k| std::env::var(k).ok());
+    // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu whenever
+    // anything in the graph turns on its `wgpu` feature.
     let options = eframe::NativeOptions {
-        renderer: switches.renderer,
+        renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
     eframe::run_native(
@@ -208,7 +200,6 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::Switches;
-    use eframe::Renderer;
 
     #[test]
     fn switches_parse_and_default_off() {
@@ -219,18 +210,12 @@ mod tests {
             })
         };
         let off = Switches {
-            renderer: Renderer::Glow,
             autoscroll: None,
             repaint_log: false,
         };
         assert_eq!(parse(&[]), off);
-        let on = [
-            ("TIDASH_RENDERER", "wgpu"),
-            ("TIDASH_AUTOSCROLL", "1500"),
-            ("TIDASH_REPAINT_LOG", "1"),
-        ];
+        let on = [("TIDASH_AUTOSCROLL", "1500"), ("TIDASH_REPAINT_LOG", "1")];
         let want = Switches {
-            renderer: Renderer::Wgpu,
             autoscroll: Some(1500.0),
             repaint_log: true,
         };
@@ -239,9 +224,6 @@ mod tests {
             parse(&[("TIDASH_AUTOSCROLL", "-200.5")]).autoscroll,
             Some(-200.5)
         );
-        for junk in ["glow", "WGPU2", "vulkan", ""] {
-            assert_eq!(parse(&[("TIDASH_RENDERER", junk)]), off, "{junk:?}");
-        }
         for junk in ["0", "fast", "", "NaN", "inf"] {
             assert_eq!(parse(&[("TIDASH_AUTOSCROLL", junk)]), off, "{junk:?}");
         }
