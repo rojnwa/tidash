@@ -222,6 +222,7 @@ impl Mix {
 pub struct SearchResults {
     pub artists: Vec<Artist>,
     pub albums: Vec<Album>,
+    pub playlists: Vec<Playlist>,
     pub tracks: Vec<Track>,
 }
 
@@ -235,6 +236,7 @@ struct Section<T> {
 struct RawSearch {
     artists: Option<Section<Artist>>,
     albums: Option<Section<Album>>,
+    playlists: Option<Section<Playlist>>,
     tracks: Option<Section<Track>>,
 }
 
@@ -247,7 +249,7 @@ impl Client {
                 "search",
                 &[
                     ("query", query.to_string()),
-                    ("types", "ARTISTS,ALBUMS,TRACKS".into()),
+                    ("types", "ARTISTS,ALBUMS,PLAYLISTS,TRACKS".into()),
                     ("limit", limit.to_string()),
                 ],
             )
@@ -255,6 +257,7 @@ impl Client {
         Ok(SearchResults {
             artists: raw.artists.map(|s| s.items).unwrap_or_default(),
             albums: raw.albums.map(|s| s.items).unwrap_or_default(),
+            playlists: raw.playlists.map(|s| s.items).unwrap_or_default(),
             tracks: raw.tracks.map(|s| s.items).unwrap_or_default(),
         })
     }

@@ -35,13 +35,15 @@ async fn search_parses_fixture() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/v1/search"))
-        .and(query_param("types", "ARTISTS,ALBUMS,TRACKS"))
+        .and(query_param("types", "ARTISTS,ALBUMS,PLAYLISTS,TRACKS"))
         .respond_with(json(SEARCH))
         .mount(&server)
         .await;
     let r = setup(&server).search("radiohead", 5).await.unwrap();
     assert!(!r.albums.is_empty() && !r.tracks.is_empty());
     assert!(r.tracks[0].id > 0 && !r.tracks[0].title.is_empty());
+    assert_eq!(r.playlists.len(), 1);
+    assert_eq!(r.playlists[0].uuid, "edb69697-fc65-4580-b938-55f0f4bd7c54");
 }
 
 #[tokio::test]
@@ -55,7 +57,8 @@ async fn search_query_is_url_encoded() {
         .mount(&server)
         .await;
     let r = setup(&server).search("AC/DC & Björk", 5).await.unwrap();
-    assert!(r.artists.is_empty() && r.albums.is_empty() && r.tracks.is_empty());
+    assert!(r.artists.is_empty() && r.albums.is_empty() && r.playlists.is_empty());
+    assert!(r.tracks.is_empty());
 }
 
 #[tokio::test]

@@ -1,15 +1,11 @@
-//! Search view: query box, virtualized album grid, virtualized track list.
+//! Search view: the query box, then one page scroll of shelves (artists, albums, playlists)
+//! and every track found.
 
-use super::{cover, tracks};
+use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
-use crate::images::TextureCache;
-use crate::model::{Action, Event, Model, Route};
-use egui::{Align2, FontId, Sense, WidgetInfo, WidgetType, vec2};
-use tokio::sync::mpsc::UnboundedSender;
-
-const COVER: f32 = 160.0;
-const CELL_W: f32 = COVER + 12.0;
-const CELL_H: f32 = COVER + 44.0;
+use crate::model::{Action, Route};
+use std::borrow::Cow;
+use tidal::{Item, Layout, Shelf};
 
 #[derive(Default)]
 pub struct State {
@@ -21,14 +17,7 @@ pub fn query_id() -> egui::Id {
     egui::Id::new("search-query")
 }
 
-pub fn show(
-    ui: &mut egui::Ui,
-    model: &Model,
-    tx: &UnboundedSender<Action>,
-    state: &mut State,
-    images: &mut TextureCache,
-    events: &mut Vec<Event>,
-) {
+pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     let edit = ui.add(
         egui::TextEdit::singleline(&mut state.query)
             .id(query_id())
@@ -37,79 +26,38 @@ pub fn show(
     );
     let q = state.query.trim();
     if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !q.is_empty() {
-        let _ = tx.send(Action::Search(q.to_string()));
+        ctx.send(Action::Search(q.to_string()));
     }
+    let model = ctx.model;
     let Some((_, results)) = &model.search else {
         return;
     };
+    super::page(ui, &Route::Search, |ui| {
+        let shelves: Vec<Shelf> = [
+            cards(tr("Artists"), &results.artists, Item::Artist),
+            cards(tr("Albums"), &results.albums, Item::Album),
+            cards(tr("Playlists"), &results.playlists, Item::Playlist),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        shelf::shelves(ui, &shelves, ctx);
+        if !results.tracks.is_empty() {
+            ui.add_space(16.0);
+            ui.heading(tr("Tracks"));
+            tracks::show(ui, ctx, "search-tracks", &results.tracks, false);
+        }
+    });
+}
 
-    ui.add_space(6.0);
-    ui.heading(tr("Albums"));
-    let cols = ((ui.available_width() / CELL_W) as usize).max(1);
-    let n_rows = results.albums.len().div_ceil(cols);
-    let grid_h = (ui.available_height() * 0.5).max(CELL_H);
-    egui::ScrollArea::vertical()
-        .id_salt("albums")
-        .max_height(grid_h)
-        .show_rows(ui, CELL_H, n_rows, |ui, range| {
-            for r in range {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    for a in results.albums.iter().skip(r * cols).take(cols) {
-                        let (rect, resp) =
-                            ui.allocate_exact_size(vec2(CELL_W, CELL_H), Sense::click());
-                        let by = a
-                            .artists
-                            .first()
-                            .map(|x| x.name.as_str())
-                            .unwrap_or_default();
-                        resp.widget_info(|| {
-                            WidgetInfo::labeled(
-                                WidgetType::Button,
-                                true,
-                                format!("{}, {by}", a.title),
-                            )
-                        });
-                        if resp.hovered() || resp.has_focus() {
-                            ui.painter().rect_filled(
-                                rect,
-                                4.0,
-                                ui.visuals().widgets.hovered.bg_fill,
-                            );
-                        }
-                        let img = egui::Rect::from_min_size(
-                            rect.min + vec2(6.0, 4.0),
-                            vec2(COVER, COVER),
-                        );
-                        cover(ui, images, tx, a.image().as_ref(), img);
-                        let font = FontId::proportional(13.0);
-                        let clip = ui.painter_at(egui::Rect::from_min_max(
-                            rect.min + vec2(6.0, COVER + 6.0),
-                            rect.max - vec2(6.0, 0.0),
-                        ));
-                        clip.text(
-                            img.left_bottom() + vec2(0.0, 4.0),
-                            Align2::LEFT_TOP,
-                            &a.title,
-                            font.clone(),
-                            ui.visuals().text_color(),
-                        );
-                        clip.text(
-                            img.left_bottom() + vec2(0.0, 22.0),
-                            Align2::LEFT_TOP,
-                            by,
-                            font,
-                            ui.visuals().weak_text_color(),
-                        );
-                        if resp.clicked() {
-                            events.push(Event::Navigate(Route::Album(a.id)));
-                        }
-                    }
-                });
-            }
-        });
-
-    ui.add_space(6.0);
-    ui.heading(tr("Tracks"));
-    tracks::show(ui, "search-tracks", &results.tracks, false, tx);
+/// A shelf of cards for `list`, or none when it is empty.
+// ponytail: up to 90 results are cloned into items each frame; convert them once on arrival
+// if this ever shows in a profile.
+fn cards<T: Clone>(title: Cow<'_, str>, list: &[T], item: fn(T) -> Item) -> Option<Shelf> {
+    (!list.is_empty()).then(|| Shelf {
+        title: title.into_owned(),
+        layout: Layout::Cards,
+        items: list.iter().cloned().map(item).collect(),
+        more: None,
+    })
 }

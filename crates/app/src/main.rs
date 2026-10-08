@@ -67,14 +67,18 @@ impl Drop for App {
     }
 }
 
-/// Fonts, text rendering and the dark theme, as fastframe's getting-started guide shows.
+/// Fonts, text rendering and the dark theme, as fastframe's getting-started guide shows;
+/// scroll bars that keep their place beside the content.
 fn setup_look(ctx: &egui::Context) {
     let mut fonts = fastframe_fonts::FontSetup::default().definitions();
     let rendering = fastframe_text::detect();
     rendering.apply_to(&mut fonts);
     ctx.set_fonts(fonts);
     ctx.set_theme(egui::Theme::Dark);
-    ctx.all_styles_mut(|style| rendering.apply_to_visuals(&mut style.visuals));
+    ctx.all_styles_mut(|style| {
+        rendering.apply_to_visuals(&mut style.visuals);
+        style.spacing.scroll = egui::style::ScrollStyle::solid();
+    });
 }
 
 impl eframe::App for App {

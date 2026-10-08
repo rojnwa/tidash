@@ -73,7 +73,7 @@ msgstr ""
 msgid "Tracks"
 msgstr ""
 
-#: src/ui/album.rs
+#: src/ui/header.rs
 msgid "Play"
 msgstr ""
 
@@ -165,4 +165,32 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid "Offline — showing saved pages"
+msgstr ""
+
+#: src/ui/search.rs
+msgid "Artists"
+msgstr ""
+
+#: src/ui/search.rs
+msgid "Playlists"
+msgstr ""
+
+#: src/ui/shelf.rs
+msgid "View all"
+msgstr ""
+
+#: src/ui/shelf.rs
+msgid "Artist"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Go to album"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Go to artist"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Copy link"
 msgstr ""

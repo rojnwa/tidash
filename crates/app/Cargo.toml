@@ -24,6 +24,7 @@ fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 directories = "6"
 
 [dev-dependencies]

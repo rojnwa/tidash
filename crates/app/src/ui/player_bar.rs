@@ -39,7 +39,7 @@ pub fn show(
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(vec2(COVER, COVER), egui::Sense::hover());
             let art = pb.track.as_ref().and_then(|t| t.album.image());
-            cover(ui, images, tx, art.as_ref(), rect);
+            cover(ui, images, tx, art.as_ref(), rect, 4.0);
             ui.allocate_ui(vec2(220.0, COVER), |ui| {
                 ui.set_width(220.0); // fixed, so the controls do not move with the title
                 ui.vertical(|ui| {
