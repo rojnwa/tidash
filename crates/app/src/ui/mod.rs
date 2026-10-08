@@ -247,11 +247,11 @@ pub fn draw(
                 let warn = ui.visuals().warn_fg_color;
                 ui.colored_label(warn, tr("Offline — showing saved pages"));
             }
-            for (i, e) in model.errors.iter().enumerate() {
+            for (id, e) in &model.errors {
                 ui.horizontal(|ui| {
                     ui.colored_label(ui.visuals().warn_fg_color, e);
                     if ui.small_button(tr("Dismiss")).clicked() {
-                        events.push(Event::DismissError(i));
+                        events.push(Event::DismissError(*id));
                     }
                 });
             }
@@ -325,23 +325,30 @@ mod testing {
 
     /// A screen reader's click on the node labelled `label` in `out`.
     pub fn click(out: &egui::FullOutput, label: &str) -> egui::Event {
+        clicks(out, label)
+            .next()
+            .unwrap_or_else(|| panic!("no {label:?} shown"))
+    }
+
+    /// A screen reader's click on each node labelled `label` in `out`.
+    pub fn clicks(out: &egui::FullOutput, label: &str) -> impl Iterator<Item = egui::Event> {
         use egui::accesskit;
         let tree = out
             .platform_output
             .accesskit_update
             .as_ref()
             .expect("AccessKit is on");
-        let node = tree
+        let nodes = tree
             .nodes
             .iter()
-            .find(|(_, n)| n.label() == Some(label))
-            .map(|(id, _)| *id)
-            .unwrap_or_else(|| panic!("no {label:?} shown"));
-        egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
-            action: accesskit::Action::Click,
-            target_tree: accesskit::TreeId::ROOT,
-            target_node: node,
-            data: None,
+            .filter(move |(_, n)| n.label() == Some(label));
+        nodes.map(|(id, _)| {
+            egui::Event::AccessKitActionRequest(accesskit::ActionRequest {
+                action: accesskit::Action::Click,
+                target_tree: accesskit::TreeId::ROOT,
+                target_node: *id,
+                data: None,
+            })
         })
     }
 
@@ -579,6 +586,35 @@ mod tests {
         assert_eq!(sent(), ["SetShuffle(true)"]);
         pass(&model, vec![testing::click(&out, "Queue")]);
         assert!(state.queue_open);
+    }
+
+    /// Both errors' Dismiss clicked in one frame: both go, not one and then nothing.
+    #[test]
+    fn two_dismissals_in_one_frame_remove_both() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = Model::default();
+        for e in ["a", "b"] {
+            model.apply(Event::Error(e.into()));
+        }
+        let mut pass = |model: &Model, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut events = Vec::new();
+            let mut out = ctx.run_ui(input, |ui| events = draw(ui, model, &tx, &mut state));
+            out.textures_delta.clear(); // nothing renders them
+            (events, out)
+        };
+        let (_, out) = pass(&model, vec![]);
+        let (events, _) = pass(&model, testing::clicks(&out, "Dismiss").collect());
+        for ev in events {
+            model.apply(ev);
+        }
+        assert!(model.errors.is_empty(), "{:?}", model.errors);
     }
 
     /// A 3:2 image in a square keeps its middle two thirds; a square one is shown whole.

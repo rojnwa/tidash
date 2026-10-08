@@ -141,6 +141,10 @@ fn playback() -> (Playback, std::sync::mpsc::Receiver<Event>) {
 
 /// Only for tests that never let it reach TIDAL.
 fn client() -> Arc<Client> {
+    client_with(Default::default())
+}
+
+fn client_with(cfg: tidal::ClientConfig) -> Arc<Client> {
     let session = tidal::Session {
         access_token: "a".into(),
         refresh_token: "r".into(),
@@ -149,7 +153,7 @@ fn client() -> Arc<Client> {
         country_code: "US".into(),
     };
     let store = Arc::new(tidal::MemoryStore::default());
-    Arc::new(Client::new(Default::default(), session, store, None).expect("a client"))
+    Arc::new(Client::new(cfg, session, store, None).expect("a client"))
 }
 
 fn tracks(n: u64) -> Vec<tidal::Track> {
@@ -286,6 +290,58 @@ fn a_dead_session_stops_the_load_but_fails_no_track() {
     fail_load(&mut p, offline);
     assert!(sent.try_recv().is_err(), "the session is fine");
     assert_eq!(errors(&rx), ["t0 is unavailable"]);
+}
+
+/// A load superseded by the next one stops, instead of fetching a stream nobody plays.
+#[test]
+fn a_superseded_load_task_is_aborted() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(async {
+        let server = MockServer::start().await;
+        let gated = ResponseTemplate::new(200).set_delay(Duration::from_secs(600)); // never opens
+        Mock::given(method("GET"))
+            .respond_with(gated)
+            .mount(&server)
+            .await;
+        let api_base = format!("{}/v1/", server.uri()).parse().expect("a URL");
+        let c = client_with(tidal::ClientConfig {
+            api_base,
+            ..Default::default()
+        });
+        let c = Some(&c);
+        let (mut p, _rx) = playback();
+        let (tracks, start) = (tracks(2), 0);
+        p.handle(c, Action::PlayTracks { tracks, start });
+        let first = p.load.as_ref().expect("loading").abort_handle();
+        let sent = async {
+            while server
+                .received_requests()
+                .await
+                .is_none_or(|r| r.is_empty())
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        };
+        let s5 = Duration::from_secs(5);
+        tokio::time::timeout(s5, sent)
+            .await
+            .expect("the first stream request is sent");
+        p.handle(c, Action::Next);
+        let stopped = async {
+            while !first.is_finished() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        };
+        tokio::time::timeout(s5, stopped)
+            .await
+            .expect("the first load was aborted");
+        let second = p.load.as_ref().expect("loading");
+        assert!(!second.is_finished(), "the second load runs");
+    });
 }
 
 #[test]

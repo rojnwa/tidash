@@ -118,7 +118,10 @@ pub struct Model {
     pub latest_query: Option<String>,
     pub queue: QueueSnapshot,
     pub playback: PlaybackSnapshot,
-    pub errors: Vec<String>,
+    /// Shown until dismissed by id, so dismissals in one frame each find theirs.
+    pub errors: Vec<(u64, String)>,
+    /// The last id given to an error; kept across logout, as the errors are.
+    error_id: u64,
 }
 
 impl Default for Model {
@@ -140,6 +143,7 @@ impl Default for Model {
             queue: QueueSnapshot::default(),
             playback: PlaybackSnapshot::default(),
             errors: Vec::new(),
+            error_id: 0,
         }
     }
 }
@@ -173,6 +177,7 @@ impl Model {
             Event::LoggedOut => {
                 *self = Self {
                     errors: std::mem::take(&mut self.errors),
+                    error_id: self.error_id,
                     ..Self::default()
                 };
             }
@@ -181,12 +186,12 @@ impl Model {
                     queue: std::mem::take(&mut self.queue),
                     playback: std::mem::take(&mut self.playback),
                     errors: std::mem::take(&mut self.errors),
+                    error_id: self.error_id,
                     ..Self::default()
                 };
-                self.errors
-                    .push(tr("Your TIDAL session has expired; please log in again").into_owned());
+                self.error(tr("Your TIDAL session has expired; please log in again").into_owned());
             }
-            Event::CredentialsNotPersistent => self.errors.push(
+            Event::CredentialsNotPersistent => self.error(
                 tr("Login will not be remembered: no system credential store available")
                     .into_owned(),
             ),
@@ -247,7 +252,7 @@ impl Model {
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
             Event::Player(_) => {}                                // kept by the UI
             Event::Seeked(_) => {}                                // handled by the media controls
-            Event::Error(e) => self.errors.push(e),
+            Event::Error(e) => self.error(e),
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {
                 self.back();
@@ -255,12 +260,13 @@ impl Model {
             Event::Forward => {
                 self.forward();
             }
-            Event::DismissError(i) => {
-                if i < self.errors.len() {
-                    self.errors.remove(i);
-                }
-            }
+            Event::DismissError(id) => self.errors.retain(|(e, _)| *e != id),
         }
+    }
+
+    fn error(&mut self, e: String) {
+        self.error_id += 1;
+        self.errors.push((self.error_id, e));
     }
 
     pub fn route(&self) -> &Route {
@@ -368,6 +374,10 @@ mod tests {
         });
     }
 
+    fn errors(m: &Model) -> Vec<&str> {
+        m.errors.iter().map(|(_, e)| e.as_str()).collect()
+    }
+
     fn set(item: &tidal::Favorite, on: bool) -> Event {
         let item = item.clone();
         Event::FavoriteSet { item, on }
@@ -423,7 +433,7 @@ mod tests {
         m.apply(Event::SessionExpired);
         assert_eq!((m.queue.current, m.playback.volume), (Some(4), 0.5));
         assert_eq!(
-            m.errors,
+            errors(&m),
             ["Your TIDAL session has expired; please log in again"]
         );
     }
@@ -655,17 +665,21 @@ mod tests {
     fn errors_are_collected() {
         let mut m = Model::default();
         m.apply(Event::Error("x".into()));
-        assert_eq!(m.errors, vec!["x".to_string()]);
+        assert_eq!(errors(&m), ["x"]);
     }
 
+    /// Ids stay unique across logout, which keeps the errors shown.
     #[test]
     fn dismiss_error_removes_only_that_error() {
         let mut m = Model::default();
-        for e in ["a", "b", "c"] {
+        for e in ["a", "b"] {
             m.apply(Event::Error(e.into()));
         }
-        m.apply(Event::DismissError(1));
-        m.apply(Event::DismissError(9));
-        assert_eq!(m.errors, vec!["a".to_string(), "c".to_string()]);
+        m.apply(Event::LoggedOut);
+        m.apply(Event::Error("c".into()));
+        let a = m.errors[0].0;
+        m.apply(Event::DismissError(a));
+        m.apply(Event::DismissError(a)); // gone already: nothing else goes
+        assert_eq!(errors(&m), ["b", "c"]);
     }
 }

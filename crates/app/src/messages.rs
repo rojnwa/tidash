@@ -114,8 +114,8 @@ pub enum Event {
     /// The audio output is open; the UI reads the position from it.
     Player(player::Player),
     Error(String),
-    /// Dismiss the error at this index (out of range is ignored).
-    DismissError(usize),
+    /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
+    DismissError(u64),
     Navigate(Route),
     Back,
     Forward,

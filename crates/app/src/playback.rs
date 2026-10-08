@@ -229,6 +229,8 @@ pub struct Playback {
     seq: u64,
     /// The current track's stream info is being fetched.
     loading: bool,
+    /// The latest load's task; a superseded one is aborted.
+    load: Option<tokio::task::JoinHandle<()>>,
     /// Play, not pause, once the current track is loaded.
     want_play: bool,
     /// Where the current track was last restarted after a player error, if it was.
@@ -253,6 +255,7 @@ impl Playback {
             queue: Queue::default(),
             seq: 0,
             loading: false,
+            load: None,
             want_play: false,
             restarted_at: None,
             resume_at: None,
@@ -497,14 +500,15 @@ impl Playback {
         let (Some(c), Some(track)) = (c, self.queue.current()) else {
             return self.stop();
         };
-        self.seq += 1;
-        let (seq, id, c, msgs) = (self.seq, track.id, c.clone(), self.msgs.clone());
+        let (id, c, msgs) = (track.id, c.clone(), self.msgs.clone());
+        self.supersede();
+        let seq = self.seq;
         self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
         self.loading = true;
         self.restarted_at = resume_at;
         self.resume_at = resume_at;
         self.last_pos = resume_at.unwrap_or_default();
-        tokio::spawn(async move {
+        self.load = Some(tokio::spawn(async move {
             // Typed: a dead session (`tidal::Error::Auth`) is told apart from a failed track.
             let result = async {
                 let info = stream_info(&c, id).await?;
@@ -520,7 +524,7 @@ impl Playback {
                 result,
             };
             let _ = msgs.send(loaded); // backend gone = app closing
-        });
+        }));
         self.publish();
     }
 
@@ -551,10 +555,19 @@ impl Playback {
     }
 
     fn stop(&mut self) {
-        self.seq += 1; // drops in-flight loads and the old track's events
+        self.supersede();
         self.loading = false;
         self.player.send(PlayerCmd::Stop);
         self.publish();
+    }
+
+    /// A new load generation: older load results and the old track's events are dropped, and
+    /// the load still running stops spending network and CPU on them.
+    fn supersede(&mut self) {
+        self.seq += 1;
+        if let Some(load) = self.load.take() {
+            load.abort();
+        }
     }
 
     /// Ends the current play where the player is now.
