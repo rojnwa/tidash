@@ -10,7 +10,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use tokio::task::JoinSet;
+use tokio::task::{AbortHandle, JoinSet};
 
 /// Spawns the backend. Before it handles actions it opens the audio output and reads the
 /// stored session, off the UI thread: both can take a while. Every event sent is followed by
@@ -133,10 +133,11 @@ struct Backend {
     http: reqwest::Client,
     store: Arc<dyn TokenStore>,
     pkce: Option<Pkce>,
-    search_task: Option<tokio::task::JoinHandle<()>>,
+    /// The search in flight, one of `tasks`: a newer search aborts it.
+    search_task: Option<AbortHandle>,
     client: Option<Arc<Client>>,
-    /// The session's page and favorites requests. Logout and expiry abort them and wait, so
-    /// none of their replies or cache writes come after.
+    /// The session's page, search and favorites requests. Logout and expiry abort them and
+    /// wait, so none of their replies or cache writes come after.
     // ponytail: a cache write already inside its `spawn_blocking` still lands (sub-ms window);
     // have `DiskCache::clear` take the write lock and refuse later writes if that ever matters.
     tasks: JoinSet<()>,
@@ -241,9 +242,9 @@ impl Backend {
     }
 
     /// Runs `task` for this session: logout and expiry abort it.
-    fn spawn(&mut self, task: impl Future<Output = ()> + Send + 'static) {
+    fn spawn(&mut self, task: impl Future<Output = ()> + Send + 'static) -> AbortHandle {
         while self.tasks.try_join_next().is_some() {} // drop the finished ones
-        self.tasks.spawn(task);
+        self.tasks.spawn(task)
     }
 
     /// The favorite ids for the hearts. A failure is logged, not shown: they stay empty.
@@ -292,9 +293,6 @@ impl Backend {
             }
             Action::FinishLogin(Redirect(redirect)) => self.finish_login(&redirect).await,
             Action::Logout => {
-                if let Some(t) = self.search_task.take() {
-                    t.abort();
-                }
                 let client = self.client.take();
                 self.tasks.shutdown().await; // before the cache is cleared
                 // What the old session still sends (the play report below, a request in flight)
@@ -329,7 +327,7 @@ impl Backend {
                     old.abort();
                 }
                 emit.send(Event::SearchStarted(q.clone()));
-                self.search_task = Some(tokio::spawn(async move {
+                self.search_task = Some(self.spawn(async move {
                     match c.search(&q, 30).await {
                         Ok(results) => emit.send(Event::SearchResults { query: q, results }),
                         Err(e) if session_expired(&e, &c, &msgs) => {}
@@ -570,62 +568,66 @@ mod tests {
         tidal::Error::Auth("invalid_grant: revoked".into())
     }
 
-    /// The next user must not find this one's pages, even offline: the saved ones go, and a
-    /// page request still in flight at logout neither refills the cache nor reaches the model.
+    /// The next user must not find this one's pages, even offline: logout clears the saved
+    /// ones. A page or a search in flight when the session ends, by logout or expiry (ruling
+    /// R13), neither refills the cache nor reaches the model.
     #[test]
-    fn logout_clears_api_cache() {
+    fn session_end_stops_requests_in_flight() {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("a runtime");
-        rt.block_on(async {
-            let server = MockServer::start().await;
-            let slow = ResponseTemplate::new(200)
-                .set_body_raw(r#"{"title":"A's","rows":[]}"#, "application/json")
-                .set_delay(Duration::from_millis(300));
-            Mock::given(method("GET"))
-                .and(path("/v1/pages/explore"))
-                .respond_with(slow)
-                .mount(&server)
-                .await;
-            let dir = std::env::temp_dir().join("tidash-backend-logout");
-            let _ = std::fs::remove_dir_all(&dir);
-            let cache = DiskCache::open(dir.clone(), 1 << 20, "json").expect("a cache");
-            let saved = tidal::Entry {
-                etag: None,
-                body: b"{}".to_vec(),
-            };
-            cache.write("k", &saved).expect("written");
-            let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
-            b.api_cache = Some(Arc::new(cache));
-            b.cfg = ClientConfig {
-                api_base: format!("{}/v1/", server.uri()).parse().expect("a URL"),
-                ..ClientConfig::default()
-            };
-            b.log_in(session("a"));
-            b.handle(Action::Open(Route::Page("pages/explore".into())))
-                .await;
-            let sent = async {
-                while server
-                    .received_requests()
-                    .await
-                    .is_none_or(|r| r.is_empty())
-                {
-                    tokio::time::sleep(Duration::from_millis(5)).await;
+        for logout in [true, false] {
+            rt.block_on(async {
+                let server = MockServer::start().await;
+                let page = r#"{"title":"A's","rows":[]}"#;
+                for (at, body) in [("/v1/pages/explore", page), ("/v1/search", "{}")] {
+                    let slow = ResponseTemplate::new(200)
+                        .set_body_raw(body, "application/json")
+                        .set_delay(Duration::from_millis(300));
+                    let mock = Mock::given(method("GET")).and(path(at));
+                    mock.respond_with(slow).mount(&server).await;
                 }
-            };
-            tokio::time::timeout(Duration::from_secs(5), sent)
-                .await
-                .expect("the request is in flight");
-            b.handle(Action::Logout).await;
-            tokio::time::sleep(Duration::from_millis(600)).await; // past its reply
-            let left = std::fs::read_dir(&dir).expect("the cache dir").count();
-            assert_eq!(left, 0, "files left in the cache");
-            let pages = events
-                .try_iter()
-                .filter(|e| matches!(e, Event::Page { .. }));
-            assert_eq!(pages.count(), 0, "a page reached the model");
-        });
+                let dir = std::env::temp_dir().join(format!("tidash-backend-end-{logout}"));
+                let _ = std::fs::remove_dir_all(&dir);
+                let cache = DiskCache::open(dir.clone(), 1 << 20, "json").expect("a cache");
+                let saved = tidal::Entry {
+                    etag: None,
+                    body: b"{}".to_vec(),
+                };
+                cache.write("k", &saved).expect("written");
+                let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+                b.api_cache = Some(Arc::new(cache));
+                b.cfg = ClientConfig {
+                    api_base: format!("{}/v1/", server.uri()).parse().expect("a URL"),
+                    ..ClientConfig::default()
+                };
+                b.log_in(session("a"));
+                b.handle(Action::Open(Route::Page("pages/explore".into())))
+                    .await;
+                b.handle(Action::Search("q".into())).await;
+                let sent = async {
+                    while server.received_requests().await.is_none_or(|r| r.len() < 2) {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                    }
+                };
+                tokio::time::timeout(Duration::from_secs(5), sent)
+                    .await
+                    .expect("both requests are in flight");
+                match b.client.clone() {
+                    Some(dead) if !logout => b.expire(dead).await,
+                    _ => b.handle(Action::Logout).await,
+                }
+                tokio::time::sleep(Duration::from_millis(600)).await; // past their replies
+                let left = std::fs::read_dir(&dir).expect("the cache dir").count();
+                // Expiry keeps the saved page for the next login.
+                assert_eq!(left, usize::from(!logout), "cache files, logout: {logout}");
+                let reply =
+                    |e: &Event| matches!(e, Event::Page { .. } | Event::SearchResults { .. });
+                let late: Vec<_> = events.try_iter().filter(reply).collect();
+                assert!(late.is_empty(), "logout: {logout}, {late:?}");
+            });
+        }
     }
 
     #[test]

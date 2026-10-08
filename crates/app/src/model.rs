@@ -160,6 +160,8 @@ impl Model {
                 | Event::FavoriteSaved { .. }
                 | Event::FavoriteFailed { .. }
                 | Event::Offline(_)
+                | Event::SearchStarted(_)
+                | Event::SearchResults { .. }
         );
         if reply && !self.logged_in {
             return;
@@ -589,6 +591,13 @@ mod tests {
             m.apply(set(&item, true));
             m.apply(failed(&item, false));
             m.apply(Event::FavoriteSaved { item });
+            m.apply(Event::SearchStarted("q".into()));
+            let results = Default::default();
+            m.apply(Event::SearchResults {
+                query: "q".into(),
+                results,
+            });
+            assert!(m.latest_query.is_none() && m.search.is_none());
             assert!(m.pages.is_empty());
             assert_eq!(m.favorites, tidal::FavoriteIds::default());
             assert!(m.pending_favorites.is_empty());
@@ -646,7 +655,7 @@ mod tests {
 
     #[test]
     fn stale_search_results_are_ignored() {
-        let mut m = Model::default();
+        let mut m = logged_in();
         let res = |q: &str| Event::SearchResults {
             query: q.into(),
             results: Default::default(),
