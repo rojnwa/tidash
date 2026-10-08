@@ -20,10 +20,12 @@ struct App {
     events: Receiver<Event>,
     ui: ui::UiState,
     media: now_playing::MediaControls,
+    /// Process start, until the first frame logs the cold-start time (spec §10).
+    started: Option<Instant>,
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, started: Instant) -> Self {
         setup_look(&cc.egui_ctx);
         let ctx = cc.egui_ctx.clone();
         let (actions, events) = backend::start(move || ctx.request_repaint());
@@ -35,6 +37,7 @@ impl App {
             events,
             ui: ui::UiState::default(),
             media,
+            started: Some(started),
         }
     }
 }
@@ -92,6 +95,9 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if let Some(t) = self.started.take() {
+            log::info!("first frame {} ms after start", t.elapsed().as_millis());
+        }
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.model.apply(ev);
         }
@@ -99,6 +105,7 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result {
+    let started = Instant::now();
     let _ = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
         // symphonia's MP4 probe matches `ftyp` and reports every file's leading box size as
         // "4 bytes of junk".
@@ -107,6 +114,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "tidash",
         eframe::NativeOptions::default(),
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(move |cc| Ok(Box::new(App::new(cc, started)))),
     )
 }
