@@ -70,7 +70,7 @@ impl Interrupt {
         let _ = self
             .0
             .pending
-            .fetch_update(SeqCst, SeqCst, |n| n.checked_sub(1));
+            .try_update(SeqCst, SeqCst, |n| n.checked_sub(1));
     }
 
     pub(crate) fn raised(&self) -> bool {
