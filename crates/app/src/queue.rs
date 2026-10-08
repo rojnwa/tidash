@@ -32,7 +32,7 @@ pub struct Queue {
 
 impl Queue {
     /// Replaces the list; the first playable track at or after `start` becomes current. With
-    /// shuffle on, the tracks after it are shuffled.
+    /// shuffle on, it goes first and the whole rest after it, shuffled.
     pub fn replace(&mut self, tracks: Vec<Track>, start: usize) -> Option<&Track> {
         self.entries = tracks
             .into_iter()
@@ -40,7 +40,7 @@ impl Queue {
             .collect();
         self.current = self.ready_from(start);
         if self.shuffle {
-            self.shuffle_rest();
+            self.shuffle_rest(true);
         }
         self.current()
     }
@@ -137,7 +137,7 @@ impl Queue {
         }
         self.shuffle = on;
         if on {
-            return self.shuffle_rest();
+            return self.shuffle_rest(false);
         }
         let mut entries: Vec<_> = std::mem::take(&mut self.entries)
             .into_iter()
@@ -163,10 +163,15 @@ impl Queue {
         }
     }
 
-    /// Ranks the play order as it is, then shuffles what comes after the current track.
-    fn shuffle_rest(&mut self) {
+    /// Ranks the play order as it is, then shuffles what comes after the current track. With
+    /// `all`, the current track first moves to the front, so nothing is left before it.
+    fn shuffle_rest(&mut self, all: bool) {
         for (rank, e) in self.entries.iter_mut().enumerate() {
             e.rank = rank;
+        }
+        if all && let Some(c) = self.current {
+            self.entries[..=c].rotate_right(1);
+            self.current = Some(0);
         }
         let after = self.current.map_or(0, |c| c + 1);
         self.entries[after..].shuffle(&mut rand::rng());
@@ -339,10 +344,38 @@ mod tests {
         want.splice(after..after, [100, 101]);
         want.push(200);
         assert_eq!(ids(&q), want);
+    }
+
+    /// Shuffle on, a track clicked mid-list: it plays first, then the whole rest, shuffled.
+    #[test]
+    fn shuffled_replace_starts_with_the_chosen_track_and_keeps_the_rest() {
+        let list = || {
+            let mut ready = [true; 30];
+            ready[3] = false;
+            tracks(&ready)
+        };
+        let mut q = Queue::default();
         q.set_shuffle(true);
-        q.replace(tracks(&[true; 50]), 0);
-        assert_eq!(ids(&q)[0], 0);
-        assert_ne!(ids(&q), (0..50).collect::<Vec<_>>(), "a new list, shuffled");
+        q.replace(list(), 20);
+        assert_eq!((q.snapshot().current, id(q.current())), (Some(0), Some(20)));
+        let in_order: Vec<u64> = std::iter::once(20)
+            .chain((0..30).filter(|&i| i != 20))
+            .collect();
+        assert_ne!(ids(&q), in_order, "the rest shuffled");
+        let mut played = vec![20];
+        while let Some(t) = q.next() {
+            played.push(t.id);
+        }
+        played.sort();
+        let playable: Vec<u64> = (0..30).filter(|&i| i != 3).collect();
+        assert_eq!(played, playable, "repeat off: every playable track plays");
+        q.replace(list(), 20);
+        q.set_shuffle(false);
+        assert_eq!(ids(&q), (0..30).collect::<Vec<_>>(), "the list's order");
+        assert_eq!(
+            (q.snapshot().current, id(q.current())),
+            (Some(20), Some(20))
+        );
     }
 
     #[test]
