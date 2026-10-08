@@ -39,7 +39,7 @@ async fn run(
     session: tidal::Session,
 ) -> Result<(), BoxError> {
     let uid = session.user_id;
-    let client = tidal::Client::new(tidal::ClientConfig::default(), session, store)?;
+    let client = tidal::Client::new(tidal::ClientConfig::default(), session, store, None)?;
     // Refreshes (and saves) an expired token before the raw request.
     let _: serde_json::Value = client.get(&format!("users/{uid}"), &[]).await?;
     let session = client.session();

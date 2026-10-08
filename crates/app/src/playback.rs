@@ -725,7 +725,7 @@ mod tests {
             country_code: "US".into(),
         };
         let store = Arc::new(tidal::MemoryStore::default());
-        Arc::new(Client::new(Default::default(), session, store).expect("a client"))
+        Arc::new(Client::new(Default::default(), session, store, None).expect("a client"))
     }
 
     fn tracks(n: u64) -> Vec<tidal::Track> {

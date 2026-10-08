@@ -28,7 +28,7 @@ fn setup(server: &MockServer, token: String) -> Client {
         user_id: 12345,
         country_code: "US".into(),
     };
-    Client::new(cfg, session, Arc::new(MemoryStore::default())).unwrap()
+    Client::new(cfg, session, Arc::new(MemoryStore::default()), None).unwrap()
 }
 
 fn report() -> PlaybackReport {

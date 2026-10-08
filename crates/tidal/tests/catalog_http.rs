@@ -23,7 +23,7 @@ fn setup(server: &MockServer) -> Client {
         user_id: 1,
         country_code: "US".into(),
     };
-    Client::new(cfg, session, Arc::new(MemoryStore::default())).unwrap()
+    Client::new(cfg, session, Arc::new(MemoryStore::default()), None).unwrap()
 }
 
 fn json(body: &str) -> ResponseTemplate {

@@ -18,6 +18,9 @@ pub enum Error {
     Manifest(String),
     #[error("token store error: {0}")]
     Store(String),
+    /// A cache-only GET found no cached copy.
+    #[error("not in the cache")]
+    NotCached,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

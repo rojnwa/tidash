@@ -215,7 +215,7 @@ impl Backend {
     }
 
     fn log_in(&mut self, session: tidal::Session) {
-        match Client::new(self.cfg.clone(), session, self.store.clone()) {
+        match Client::new(self.cfg.clone(), session, self.store.clone(), None) {
             Ok(c) => {
                 self.client = Some(Arc::new(c));
                 self.emit.send(Event::LoggedIn);

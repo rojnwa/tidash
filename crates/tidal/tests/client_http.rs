@@ -29,7 +29,7 @@ fn setup(server: &MockServer, access: &str) -> (Client, Arc<MemoryStore>) {
         ..ClientConfig::default()
     };
     let store = Arc::new(MemoryStore::default());
-    let client = Client::new(cfg, session(access), store.clone()).unwrap();
+    let client = Client::new(cfg, session(access), store.clone(), None).unwrap();
     (client, store)
 }
 
