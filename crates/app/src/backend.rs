@@ -121,14 +121,7 @@ struct Backend {
 
 impl Backend {
     fn new(emit: Arc<Emitter>, playback: Option<Playback>) -> Self {
-        let (mut store, mut persistent) = tidal::default_store();
-        if !persistent {
-            // A corrupt stored session makes the probe fail and drops us to memory-only,
-            // so no later login would persist. Clear it best-effort and probe again.
-            if tidal::KeyringStore::new().clear().is_ok() {
-                (store, persistent) = tidal::default_store();
-            }
-        }
+        let (store, persistent) = tidal::default_store();
         Self {
             emit,
             cfg: ClientConfig::default(),
@@ -181,10 +174,8 @@ impl Backend {
         match self.store.load() {
             Ok(Some(session)) => self.log_in(session),
             Ok(None) => {}
-            Err(e) => {
-                log::warn!("stored session unusable: {e}");
-                let _ = self.store.clear(); // best effort, so the next login persists
-            }
+            // Left in place: a denied or locked store may read fine next launch.
+            Err(e) => log::warn!("stored session unreadable: {e}"),
         }
     }
 
