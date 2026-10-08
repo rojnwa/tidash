@@ -315,7 +315,11 @@ impl Backend {
                 });
             }
             Action::LoadImage { cover, size } => {
-                let url = tidal::image_url(&self.cfg, &cover, size);
+                let art = tidal::Image::Tidal {
+                    id: cover.clone(),
+                    kind: tidal::ImageKind::Album,
+                };
+                let url = art.url(&self.cfg.image_base, size);
                 let (http, emit) = (self.http.clone(), self.emit.clone());
                 tokio::spawn(async move {
                     match fetch_image(&http, &url).await {

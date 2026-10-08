@@ -1,6 +1,6 @@
-//! Catalog models and endpoints: search, album, album tracks, cover URLs.
+//! Catalog models and endpoints: search, album, album tracks.
 
-use crate::{Client, ClientConfig, Result};
+use crate::{Client, Result};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -139,13 +139,4 @@ impl Client {
         }
         Ok(tracks)
     }
-}
-
-/// `image_base` + cover with `-` as `/` + `/{size}x{size}.jpg`.
-pub fn image_url(cfg: &ClientConfig, cover: &str, size: u32) -> String {
-    format!(
-        "{}{}/{size}x{size}.jpg",
-        cfg.image_base,
-        cover.replace('-', "/")
-    )
 }

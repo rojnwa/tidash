@@ -56,7 +56,13 @@ impl MediaControls {
     /// Shows a playback change; `position` is the player's, now.
     pub fn show(&mut self, pb: &PlaybackSnapshot, position: Duration) {
         let cover = pb.track.as_ref().and_then(|t| t.album.cover.as_deref());
-        let art_url = cover.map(|c| tidal::image_url(&self.cfg, c, COVER_PX));
+        let art_url = cover.map(|c| {
+            let art = tidal::Image::Tidal {
+                id: c.to_owned(),
+                kind: tidal::ImageKind::Album,
+            };
+            art.url(&self.cfg.image_base, COVER_PX)
+        });
         let file = cover.and_then(|c| cover_file(self.dir.as_deref(), c));
         let on_disk = file.as_ref().is_some_and(|f| f.is_file());
         if let (Some(f), Some(url)) = (&file, &art_url)

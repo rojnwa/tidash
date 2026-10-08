@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::sync::Arc;
-use tidal::{Client, ClientConfig, MemoryStore, Session, image_url};
+use tidal::{Client, ClientConfig, MemoryStore, Session};
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -96,12 +96,4 @@ async fn album_parses_fixture() {
     let a = setup(&server).album(283039787).await.unwrap();
     assert_eq!(a.number_of_tracks, 63);
     assert_eq!(a.artists.len(), 3);
-}
-
-#[test]
-fn image_url_format() {
-    assert_eq!(
-        image_url(&ClientConfig::default(), "ab12-cd34", 320),
-        "https://resources.tidal.com/images/ab12/cd34/320x320.jpg"
-    );
 }

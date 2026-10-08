@@ -1,6 +1,8 @@
-//! Authenticated HTTP client: bearer auth, countryCode, single-flight refresh, concurrency cap, retries.
+//! Authenticated HTTP client: v1/v2 requests with the standard params, bearer auth,
+//! single-flight refresh, concurrency cap, retries.
 
 use crate::{ClientConfig, Error, Result, Session, TokenStore, refresh};
+use reqwest::Method;
 use serde::de::DeserializeOwned;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -67,21 +69,82 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
-        let mut url = self
-            .cfg
-            .api_base
+        let resp = self.request(Method::GET, path, query, None, false).await?;
+        Ok(resp.json().await?)
+    }
+
+    /// `path` may carry its own query (a module's `viewAll`); `query` is appended to it.
+    pub async fn get_v2<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<T> {
+        let resp = self.request(Method::GET, path, query, None, true).await?;
+        Ok(resp.json().await?)
+    }
+
+    /// Writes succeed on any 2xx (TIDAL answers 200 with a body or 204); the body is ignored.
+    pub async fn post_form(&self, path: &str, form: &[(&str, String)]) -> Result<()> {
+        self.request(Method::POST, path, &[], Some(form), false)
+            .await
+            .map(drop)
+    }
+
+    pub async fn delete(&self, path: &str) -> Result<()> {
+        self.request(Method::DELETE, path, &[], None, false)
+            .await
+            .map(drop)
+    }
+
+    pub async fn put_v2(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+        form: Option<&[(&str, String)]>,
+    ) -> Result<()> {
+        self.request(Method::PUT, path, query, form, true)
+            .await
+            .map(drop)
+    }
+
+    /// Every API request: `path` (its own query kept) joined onto the v1 or v2 base, refused
+    /// off the base's origin, then `query` and the standard params, the v2 header and `form`.
+    async fn request(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        form: Option<&[(&str, String)]>,
+        v2: bool,
+    ) -> Result<reqwest::Response> {
+        let cfg = &self.cfg;
+        let base = if v2 { &cfg.api_v2_base } else { &cfg.api_base };
+        let mut url = base
             .join(path)
             .ok()
-            .filter(|u| u.origin() == self.cfg.api_base.origin())
+            .filter(|u| u.origin() == base.origin())
             .ok_or_else(invalid_path)?;
-        url.query_pairs_mut()
-            .extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())))
-            .append_pair("countryCode", &self.session().country_code);
-        Ok(self
-            .send(|_| Ok(self.http.get(url.clone())))
-            .await?
-            .json()
-            .await?)
+        {
+            let mut q = url.query_pairs_mut();
+            q.extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())))
+                .append_pair("countryCode", &self.session().country_code)
+                .append_pair("locale", &cfg.locale)
+                .append_pair("deviceType", &cfg.device_type);
+            if v2 {
+                q.append_pair("platform", &cfg.platform);
+            }
+        }
+        self.send(|_| {
+            let mut rb = self.http.request(method.clone(), url.clone());
+            if v2 {
+                rb = rb.header("x-tidal-client-version", &cfg.client_version);
+            }
+            if let Some(form) = form {
+                rb = rb.form(form);
+            }
+            Ok(rb)
+        })
+        .await
     }
 
     /// Sends `req(token)` with `token` as bearer, with refresh-on-401 and 429/5xx retries. Each
