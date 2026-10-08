@@ -410,7 +410,7 @@ fn paged_items(module: &mut Value) -> Vec<Value> {
 }
 
 /// `v[key]` taken out as a list; empty when absent or not a list.
-fn take_list(v: &mut Value, key: &str) -> Vec<Value> {
+pub(crate) fn take_list(v: &mut Value, key: &str) -> Vec<Value> {
     match v.get_mut(key).map(Value::take) {
         Some(Value::Array(list)) => list,
         _ => Vec::new(),
