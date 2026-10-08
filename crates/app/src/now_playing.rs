@@ -20,8 +20,9 @@ pub struct MediaControls {
     controls: NowPlaying,
     cfg: tidal::ClientConfig,
     wake: Wake,
-    /// The images cache, shared with the backend; `None` publishes only the cover URL.
-    cache: Option<Arc<DiskCache>>,
+    /// The images cache, once the backend opened it; until then (or without one) the controls
+    /// get only the cover URL.
+    cache: Arc<OnceLock<Arc<DiskCache>>>,
     /// The last cover URL whose file was asked for: one download per cover.
     requested: Option<String>,
     landed: (Sender<()>, Receiver<()>),
@@ -29,8 +30,11 @@ pub struct MediaControls {
 
 impl MediaControls {
     /// `wake` repaints the window; the next frame's `poll` picks up what arrived. Cover files
-    /// go into `cache` (`images::open_cache`).
-    pub fn start(wake: impl Fn() + Send + Sync + 'static, cache: Option<Arc<DiskCache>>) -> Self {
+    /// go into `cache` once the backend sets it (`images::open_cache`).
+    pub fn start(
+        wake: impl Fn() + Send + Sync + 'static,
+        cache: Arc<OnceLock<Arc<DiskCache>>>,
+    ) -> Self {
         let wake: Wake = Arc::new(wake);
         let mut app = App::new("tidash", "Tidash");
         // Nothing raises or quits the app from the panel (MPRIS) yet.
@@ -49,9 +53,10 @@ impl MediaControls {
 
     /// Shows a playback change; `position` is the player's, now.
     pub fn show(&mut self, pb: &PlaybackSnapshot, position: Duration) {
-        let (art_url, file) = art(pb, &self.cfg.image_base, self.cache.as_deref());
+        let cache = self.cache.get();
+        let (art_url, file) = art(pb, &self.cfg.image_base, cache.map(Arc::as_ref));
         let on_disk = file.as_ref().is_some_and(|f| f.is_file());
-        if let (Some(cache), Some(url)) = (&self.cache, &art_url)
+        if let (Some(cache), Some(url)) = (cache, &art_url)
             && !on_disk
             && self.requested.as_ref() != Some(url)
         {
@@ -295,6 +300,12 @@ mod tests {
             let (url, file) = art(&pb, &base, Some(&cache));
             let url = url.expect("a cover URL");
             let file = file.expect("a cover file");
+            let unopened = art(&pb, &base, None);
+            assert_eq!(
+                unopened,
+                (Some(url.clone()), None),
+                "no cache yet: the URL only"
+            );
             assert_eq!(file, cache.path(&url));
             assert!(file.starts_with(&dir));
             let (done, landed) = channel();

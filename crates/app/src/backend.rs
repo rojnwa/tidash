@@ -5,8 +5,8 @@ use crate::images::Artwork;
 use crate::model::{Action, Event};
 use crate::playback::{Msg, Playback};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -15,10 +15,10 @@ use tokio::task::JoinSet;
 /// Spawns the backend. Before it handles actions it opens the audio output and reads the
 /// stored session, off the UI thread: both can take a while. Every event sent is followed by
 /// `waker()`. Without an audio device the app runs, and play actions report the missing output.
-/// Artwork goes through `images` (`images::open_cache`).
+/// It also opens the images cache, set in `images` for the media controls before any track.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
-    images: Option<Arc<DiskCache>>,
+    images: Arc<OnceLock<Arc<DiskCache>>>,
 ) -> (UnboundedSender<Action>, Receiver<Event>) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
@@ -49,7 +49,7 @@ pub fn start(
                 tidal::default_store(),
                 open_api_cache(),
             );
-            backend.artwork = Artwork::new(images);
+            backend.artwork = Artwork::new(crate::images::open_cache(&images));
             backend.playback = open_player(&msg_tx).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx)

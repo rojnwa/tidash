@@ -12,6 +12,7 @@ mod ui;
 
 use model::{Action, Event, Model};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -28,7 +29,8 @@ struct App {
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, started: Instant) -> Self {
         setup_look(&cc.egui_ctx);
-        let artwork = images::open_cache();
+        // The images cache: the backend opens it off this thread, for both.
+        let artwork = Arc::new(OnceLock::new());
         let ctx = cc.egui_ctx.clone();
         let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
         let ctx = cc.egui_ctx.clone();

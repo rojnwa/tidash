@@ -8,7 +8,7 @@ use egui::{ColorImage, Context, TextureHandle, TextureOptions};
 use image::imageops::{self, FilterType};
 use reqwest::Url;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tidal::{DiskCache, Entry};
 use tokio::sync::Semaphore;
@@ -19,15 +19,16 @@ const RETRY: Duration = Duration::from_secs(30);
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 /// TIDAL's renditions as downloaded, keyed by URL; kept across logouts (artwork is public).
-/// `None` without a cache dir, or if it fails to open.
-// ponytail: opened (and swept) on the UI thread before the first frame; open it on the
-// backend thread and hand it to the media controls if cold start ever shows it.
-pub fn open_cache() -> Option<Arc<DiskCache>> {
+/// Opening sweeps the directory, so the backend thread does it; `shared` then hands it to the
+/// media controls. `None` without a cache dir, or if it fails to open.
+pub fn open_cache(shared: &OnceLock<Arc<DiskCache>>) -> Option<Arc<DiskCache>> {
     let dir = crate::backend::cache_dir()?.join("images");
-    DiskCache::open(dir, 256 << 20, "jpg")
+    let cache = DiskCache::open(dir, 256 << 20, "jpg")
         .inspect_err(|e| log::warn!("no image cache: {e}"))
         .ok()
-        .map(Arc::new)
+        .map(Arc::new)?;
+    let _ = shared.set(Arc::clone(&cache)); // opened once
+    Some(cache)
 }
 
 /// The backend's artwork loads: at most 6 fetch or decode at once.
@@ -172,7 +173,9 @@ impl TextureCache {
     }
 
     /// Adds a texture, then drops the least recently drawn beyond the budget, never one drawn
-    /// in this pass: a screenful larger than the budget stays over it until scrolled away.
+    /// in this pass or the last: the app inserts in `logic`, before this pass draws, so the
+    /// last pass's are what is on screen. A screenful larger than the budget stays over it
+    /// until scrolled away.
     pub fn insert(&mut self, ctx: &Context, key: String, px: u32, image: ColorImage) {
         let size = image.size[0] * image.size[1] * 4;
         let tex = ctx.load_texture(format!("{key}@{px}"), image, TextureOptions::LINEAR);
@@ -188,7 +191,7 @@ impl TextureCache {
             let oldest = self
                 .textures
                 .iter()
-                .filter(|(_, (_, _, used))| *used < now)
+                .filter(|(_, (_, _, used))| *used + 1 < now)
                 .min_by_key(|(_, (_, _, used))| *used)
                 .map(|(k, _)| k.clone());
             let Some(oldest) = oldest else { break };
@@ -255,9 +258,32 @@ mod tests {
         for k in ["a", "b", "c", "d"] {
             assert!(c.get(&ctx, k, 160, || {}).is_some(), "{k}");
         }
-        next_pass(&ctx);
+        next_pass(&ctx); // still on screen from that pass
+        next_pass(&ctx); // not drawn in it
         c.insert(&ctx, "e".into(), 160, img());
-        assert_eq!(c.bytes, 3 * 16, "within budget once they are not");
+        assert_eq!(c.bytes, 3 * 16, "within budget once off screen");
+    }
+
+    /// As in the app: `insert` runs in `logic`, before this pass draws; what the last pass drew
+    /// is still on screen.
+    #[test]
+    fn textures_drawn_last_pass_are_kept() {
+        let ctx = Context::default();
+        let mut c = TextureCache::new(3 * 16);
+        for k in ["a", "b", "c"] {
+            c.insert(&ctx, k.into(), 160, img());
+        }
+        next_pass(&ctx);
+        for k in ["a", "b", "c"] {
+            assert!(c.get(&ctx, k, 160, || {}).is_some(), "{k}");
+        }
+        next_pass(&ctx);
+        c.insert(&ctx, "d".into(), 160, img());
+        assert_eq!(
+            c.bytes,
+            4 * 16,
+            "the last pass's are on screen: over budget"
+        );
     }
 
     #[test]
