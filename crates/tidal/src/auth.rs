@@ -90,6 +90,7 @@ pub fn code_from_redirect(redirect: &str, expected_state: &str) -> Result<String
     }
     Ok(code)
 }
+
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Session {
     pub access_token: String,

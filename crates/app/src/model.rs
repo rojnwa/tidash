@@ -1,6 +1,4 @@
 //! Plain-data UI state and the messages that move between UI and backend.
-// ponytail: the search/album/queue/playback parts are consumed by tasks 18-20.
-#![allow(dead_code)]
 
 use crate::i18n::tr;
 use std::collections::HashMap;
@@ -107,6 +105,7 @@ pub enum Event {
 }
 
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code, reason = "the queue panel (M2) reads it")]
 pub struct QueueSnapshot {
     pub tracks: Vec<tidal::Track>,
     pub current: Option<usize>,
