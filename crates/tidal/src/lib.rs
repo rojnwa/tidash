@@ -1,6 +1,7 @@
-//! TIDAL service client: auth, catalog and playback manifests.
+//! TIDAL service client: auth, catalog, browse pages and playback manifests.
 
 mod auth;
+mod browse;
 mod cache;
 mod catalog;
 mod client;
@@ -12,8 +13,9 @@ mod playback;
 mod store;
 
 pub use auth::{Pkce, Session, authorize_url, code_from_redirect, exchange_code, refresh};
+pub use browse::{ArtistPage, Item, Layout, More, Page, Paged, Shelf};
 pub use cache::{DiskCache, Entry};
-pub use catalog::{Album, AlbumRef, Artist, SearchResults, Track};
+pub use catalog::{Album, AlbumRef, Artist, Mix, Playlist, SearchResults, Track};
 pub use client::Client;
 pub use config::ClientConfig;
 pub use error::{Error, Result};

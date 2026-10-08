@@ -21,6 +21,8 @@ sha2 = "0.11"
 base64 = "0.23"
 roxmltree = "0.21"
 keyring-core = "1"
+# The local UTC offset for the home feed; already in the tree via env_logger.
+jiff = "0.2"
 
 [dev-dependencies]
 wiremock = "0.6"

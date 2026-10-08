@@ -4549,6 +4549,7 @@ version = "0.1.0"
 dependencies = [
  "apple-native-keyring-store",
  "base64 0.23.1",
+ "jiff",
  "keyring-core",
  "rand",
  "reqwest",
