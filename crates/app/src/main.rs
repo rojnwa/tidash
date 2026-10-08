@@ -5,6 +5,7 @@ mod i18n;
 mod images;
 mod model;
 mod now_playing;
+mod pages;
 mod playback;
 mod queue;
 mod ui;
@@ -41,12 +42,10 @@ impl App {
         }
     }
 
-    /// Asks the backend for the current route's page if it has none, failed or is stale.
+    /// Asks the backend for the current route's page when the model says to.
     fn open_current(&mut self) {
-        let route = self.model.route().clone();
-        if self.model.needs_load(&route, Instant::now()) {
-            let _ = self.actions.send(Action::Open(route.clone()));
-            self.model.apply(Event::Loading(route));
+        if let Some(route) = self.model.open_current(Instant::now()) {
+            let _ = self.actions.send(Action::Open(route));
         }
     }
 }
@@ -95,13 +94,10 @@ impl eframe::App for App {
                     self.model.apply(Event::Playback(p));
                     self.media.show(&self.model.playback, position);
                 }
-                Event::LoggedIn => {
-                    self.model.apply(Event::LoggedIn);
-                    self.open_current();
-                }
                 ev => self.model.apply(ev),
             }
         }
+        self.open_current(); // Home after `LoggedIn`
         for action in self.media.poll(&self.model.playback, position) {
             let _ = self.actions.send(action);
         }
@@ -111,14 +107,10 @@ impl eframe::App for App {
         if let Some(t) = self.started.take() {
             log::info!("first frame {} ms after start", t.elapsed().as_millis());
         }
-        let shown = self.model.route().clone();
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.model.apply(ev);
         }
-        // On arrival only: a failed page waits for its Retry instead of refetching every pass.
-        if *self.model.route() != shown {
-            self.open_current();
-        }
+        self.open_current();
     }
 }
 

@@ -1,12 +1,13 @@
 //! Tokio backend on its own thread: receives `Action`s, sends `Event`s.
 
 use crate::i18n::tr;
-use crate::model::{Action, Event, PageData, Route};
+use crate::model::{Action, Event};
 use crate::playback::{Msg, Playback};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
-use tidal::{Client, ClientConfig, Pkce, TokenStore};
+use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 /// Spawns the backend. Before it handles actions it opens the audio output and reads the
@@ -38,8 +39,12 @@ pub fn start(
             // The store blocks: read it before the runtime runs on this thread. Logging in
             // first lets the UI leave the login page before the device is open.
             let (msg_tx, msg_rx) = unbounded_channel();
-            let mut backend =
-                Backend::new(Arc::clone(&emit), msg_tx.clone(), tidal::default_store());
+            let mut backend = Backend::new(
+                Arc::clone(&emit),
+                msg_tx.clone(),
+                tidal::default_store(),
+                open_api_cache(),
+            );
             backend.playback = open_player(&msg_tx).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx)
@@ -50,6 +55,19 @@ pub fn start(
         log::error!("backend thread failed: {e}");
     }
     (action_tx, event_rx)
+}
+
+/// The per-user cache directory; `None` without a home directory.
+pub(crate) fn cache_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "tidash").map(|p| p.cache_dir().to_path_buf())
+}
+
+/// The saved API bodies (spec §6); without a cache dir, or if it fails to open, none.
+fn open_api_cache() -> Option<Arc<DiskCache>> {
+    DiskCache::open(cache_dir()?.join("api"), 64 << 20, "json")
+        .inspect_err(|e| log::warn!("no API cache: {e}"))
+        .ok()
+        .map(Arc::new)
 }
 
 /// The audio output, its events forwarded to `msgs`; `None` without a device.
@@ -135,6 +153,8 @@ struct Backend {
     pkce: Option<Pkce>,
     search_task: Option<tokio::task::JoinHandle<()>>,
     client: Option<Arc<Client>>,
+    /// The saved API bodies; `None` without a cache dir.
+    api_cache: Option<Arc<DiskCache>>,
     /// `None` without an audio device.
     playback: Option<Playback>,
 }
@@ -146,6 +166,7 @@ impl Backend {
         emit: Arc<Emitter>,
         msgs: UnboundedSender<Msg>,
         (store, stored): (Arc<dyn TokenStore>, tidal::Result<Option<tidal::Session>>),
+        api_cache: Option<Arc<DiskCache>>,
     ) -> Self {
         let mut backend = Self {
             emit,
@@ -162,6 +183,7 @@ impl Backend {
             pkce: None,
             search_task: None,
             client: None,
+            api_cache,
             playback: None,
         };
         backend.resume(stored);
@@ -173,6 +195,7 @@ impl Backend {
         // Samples the position for a resume after a player error; only ticks while playing.
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        self.load_favorites(); // the stored session's
         loop {
             let playing = self.playback.as_ref().is_some_and(Playback::is_playing);
             tokio::select! {
@@ -215,7 +238,8 @@ impl Backend {
     }
 
     fn log_in(&mut self, session: tidal::Session) {
-        match Client::new(self.cfg.clone(), session, self.store.clone(), None) {
+        let cache = self.api_cache.clone();
+        match Client::new(self.cfg.clone(), session, self.store.clone(), cache) {
             Ok(c) => {
                 self.client = Some(Arc::new(c));
                 self.emit.send(Event::LoggedIn);
@@ -224,6 +248,19 @@ impl Backend {
                 .emit
                 .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
+    }
+
+    /// The favorite ids for the hearts. A failure is logged, not shown: they stay empty.
+    fn load_favorites(&self) {
+        let Some(c) = self.client.clone() else { return };
+        let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+        tokio::spawn(async move {
+            match c.favorite_ids().await {
+                Ok(ids) => emit.send(Event::Favorites(ids)),
+                Err(e) if session_expired(&e, &c, &msgs) => {}
+                Err(e) => log::warn!("favorite ids: {e}"),
+            }
+        });
     }
 
     /// `dead`'s session is gone (see `session_expired`): back to the login screen, playback
@@ -267,6 +304,13 @@ impl Backend {
                 if let Some(c) = &client {
                     c.detach_store().await;
                 }
+                // The next user must not find this one's pages, even offline.
+                if let Some(cache) = self.api_cache.clone() {
+                    let cleared = tokio::task::spawn_blocking(move || cache.clear()).await;
+                    if !matches!(cleared, Ok(Ok(()))) {
+                        log::warn!("could not clear the API cache: {cleared:?}");
+                    }
+                }
                 self.pkce = None;
                 // The user asked to log out: do so even if the stored copy could not be removed.
                 if let Err(e) = self.with_store(|s| s.clear()).await {
@@ -295,28 +339,11 @@ impl Backend {
                     }
                 }));
             }
-            Action::Open(route @ Route::Album(id)) => {
-                let Some(c) = self.client.clone() else { return };
-                let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
-                tokio::spawn(async move {
-                    match tokio::try_join!(c.album(id), c.album_tracks(id)) {
-                        Ok((album, tracks)) => emit.send(Event::Page {
-                            route,
-                            data: PageData::Album { album, tracks },
-                        }),
-                        Err(e) => {
-                            emit.send(Event::PageFailed(route));
-                            if !session_expired(&e, &c, &msgs) {
-                                emit.send(Event::Error(format!(
-                                    "{}: {e}",
-                                    tr("Could not open album")
-                                )));
-                            }
-                        }
-                    }
-                });
+            Action::Open(route) => {
+                if let Some(c) = self.client.clone() {
+                    crate::pages::open(c, route, self.emit.clone(), self.msgs.clone());
+                }
             }
-            Action::Open(_) => {} // ponytail: the page loader (Task 7) fetches the other routes
             Action::LoadImage { cover, size } => {
                 let art = tidal::Image::Tidal {
                     id: cover.clone(),
@@ -376,6 +403,7 @@ impl Backend {
                 }
                 self.pkce = None;
                 self.log_in(session);
+                self.load_favorites();
             }
             Err(e) => self
                 .emit
@@ -492,7 +520,11 @@ mod tests {
             waker: Box::new(|| {}),
         });
         let (msg_tx, msgs) = unbounded_channel();
-        (Backend::new(emit, msg_tx, (store, stored)), events, msgs)
+        (
+            Backend::new(emit, msg_tx, (store, stored), None),
+            events,
+            msgs,
+        )
     }
 
     /// The events of a run with `store`, whose startup probe read `stored`, that handles
@@ -534,6 +566,29 @@ mod tests {
 
     fn revoked() -> tidal::Error {
         tidal::Error::Auth("invalid_grant: revoked".into())
+    }
+
+    /// The next user must not find this one's pages, even offline.
+    #[test]
+    fn logout_clears_api_cache() {
+        let dir = std::env::temp_dir()
+            .join("tidash-backend")
+            .join("logout");
+        let _ = std::fs::remove_dir_all(&dir);
+        let cache = Arc::new(DiskCache::open(dir, 1 << 20, "json").expect("a cache"));
+        let saved = tidal::Entry {
+            etag: None,
+            body: b"{}".to_vec(),
+        };
+        cache.write("k", &saved).expect("written");
+        let (mut b, _events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+        b.api_cache = Some(Arc::clone(&cache));
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        rt.block_on(b.handle(Action::Logout));
+        assert!(cache.read("k").is_none());
     }
 
     #[test]
@@ -653,7 +708,8 @@ mod tests {
                 tx,
                 waker: Box::new(|| {}),
             });
-            let mut backend = Backend::new(emit, unbounded_channel().0, (store.clone(), Ok(None)));
+            let mut backend =
+                Backend::new(emit, unbounded_channel().0, (store.clone(), Ok(None)), None);
             backend.cfg = ClientConfig {
                 events_url: format!("{}/events", server.uri()).parse().expect("a URL"),
                 auth_base: format!("{}/", server.uri()).parse().expect("a URL"),

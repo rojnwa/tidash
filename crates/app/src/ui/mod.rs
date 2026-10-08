@@ -122,6 +122,10 @@ pub fn draw(
     let mut logout = false;
     if !model.errors.is_empty() || model.logged_in {
         egui::Panel::top("top").show(ui, |ui| {
+            if model.offline {
+                let warn = ui.visuals().warn_fg_color;
+                ui.colored_label(warn, tr("Offline — showing saved pages"));
+            }
             for (i, e) in model.errors.iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.colored_label(ui.visuals().warn_fg_color, e);

@@ -85,8 +85,8 @@ msgstr ""
 msgid "Search failed"
 msgstr ""
 
-#: src/backend.rs
-msgid "Could not open album"
+#: src/pages.rs
+msgid "Could not load the page"
 msgstr ""
 
 #: src/ui/album.rs
@@ -157,4 +157,8 @@ msgstr ""
 
 #: src/ui/mod.rs
 msgid "Coming soon"
+msgstr ""
+
+#: src/ui/mod.rs
+msgid "Offline — showing saved pages"
 msgstr ""

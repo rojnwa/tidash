@@ -105,7 +105,7 @@ impl MediaControls {
 // ponytail: covers pile up for one session (~50 KB per album played) and are wiped on the
 // next start; an evicting cache once the app keeps more than covers there.
 fn cover_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("", "", "tidash").map(|p| p.cache_dir().join("covers"))
+    crate::backend::cache_dir().map(|d| d.join("covers"))
 }
 
 /// Where a cover's file goes: none without a cache dir. Cover ids are UUIDs; anything else

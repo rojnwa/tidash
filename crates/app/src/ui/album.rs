@@ -26,8 +26,7 @@ pub fn show(
         if slot.is_some_and(|s| s.failed) {
             ui.label(tr("Couldn't load this album"));
             if ui.button(tr("Retry")).clicked() {
-                let _ = tx.send(Action::Open(route.clone()));
-                events.push(Event::Loading(route.clone()));
+                events.push(Event::Navigate(route.clone())); // asks for it again
             }
         } else if slot.is_some_and(|s| s.loading) {
             ui.spinner();

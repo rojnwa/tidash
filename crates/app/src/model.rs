@@ -37,7 +37,7 @@ pub enum CollectionTab {
     Mixes,
 }
 
-#[allow(dead_code, reason = "the page loader (Task 7) fills the other kinds")]
+#[allow(dead_code, reason = "the views of Tasks 9–11 read the other kinds")]
 #[derive(Clone, Debug)]
 pub enum PageData {
     Shelves(tidal::Page),
@@ -142,8 +142,8 @@ pub enum Event {
         data: PageData,
     },
     PageFailed(Route),
-    #[allow(dead_code, reason = "the page loader (Task 7) reports it")]
     Offline(bool),
+    Favorites(tidal::FavoriteIds),
     Queue(QueueSnapshot),
     Playback(PlaybackSnapshot),
     /// Playback jumped to this position (for the OS media controls).
@@ -189,6 +189,8 @@ pub struct Model {
     pub pages: HashMap<Route, Slot>,
     /// Ticks on every visit or fill, for `Slot::used`.
     clock: u64,
+    /// The current route was arrived at (or retried) since `open_current` last looked.
+    arrived: bool,
     #[allow(dead_code, reason = "the favorite hearts (Task 11) read it")]
     pub favorites: tidal::FavoriteIds,
     pub offline: bool,
@@ -208,6 +210,7 @@ impl Default for Model {
             at: 0,
             pages: HashMap::new(),
             clock: 0,
+            arrived: false,
             favorites: tidal::FavoriteIds::default(),
             offline: false,
             logged_in: false,
@@ -223,6 +226,14 @@ impl Default for Model {
 
 impl Model {
     pub fn apply(&mut self, ev: Event) {
+        // A reply that lands after logout must not refill the store with that user's pages.
+        let reply = matches!(
+            ev,
+            Event::Page { .. } | Event::PageFailed(_) | Event::Favorites(_) | Event::Offline(_)
+        );
+        if reply && !self.logged_in {
+            return;
+        }
         match ev {
             Event::LoginUrl(u) => self.login_url = Some(u),
             Event::LoggedIn => {
@@ -230,6 +241,7 @@ impl Model {
                 self.login_url = None;
                 self.history = vec![Route::Home];
                 self.at = 0;
+                self.touch();
             }
             Event::LoggedOut => {
                 *self = Self {
@@ -279,6 +291,7 @@ impl Model {
                 slot.failed = true;
             }
             Event::Offline(o) => self.offline = o,
+            Event::Favorites(f) => self.favorites = f,
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -305,8 +318,10 @@ impl Model {
     }
 
     /// Goes to `r`, dropping the forward entries; the oldest entry goes past `HISTORY`.
+    /// Going to the current route asks for its page again (`open_current`): Retry does that.
     pub fn navigate(&mut self, r: Route) {
         if r == *self.route() {
+            self.arrived = true;
             return;
         }
         self.history.truncate(self.at + 1);
@@ -350,20 +365,34 @@ impl Model {
         })
     }
 
-    /// Marks the current route's page as just used.
+    /// The route the app must send `Action::Open` for, now marked loading: the current one,
+    /// once per arrival or Retry, if it `needs_load`. Between them nothing is asked for, so a
+    /// failed page waits for its Retry instead of failing again every pass (ruling R8).
+    pub fn open_current(&mut self, now: Instant) -> Option<Route> {
+        let r = self.route().clone();
+        if !std::mem::take(&mut self.arrived) || !self.needs_load(&r, now) {
+            return None;
+        }
+        self.apply(Event::Loading(r.clone()));
+        Some(r)
+    }
+
+    /// Arrived at the current route: its page is just used, and opened if need be.
     fn touch(&mut self) {
+        self.arrived = true;
         self.clock += 1;
         let r = self.route().clone();
         self.pages.entry(r).or_default().used = self.clock;
     }
 
-    /// Drops the least recently used pages beyond `PAGES`, never the current one.
+    /// Drops the least recently used pages beyond `PAGES`, never the current one nor one
+    /// whose reload is in flight.
     fn evict(&mut self) {
         while self.pages.values().filter(|s| s.data.is_some()).count() > PAGES {
             let oldest = self
                 .pages
                 .iter()
-                .filter(|(r, s)| s.data.is_some() && *r != self.route())
+                .filter(|(r, s)| s.data.is_some() && !s.loading && *r != self.route())
                 .min_by_key(|(_, s)| s.used)
                 .map(|(r, _)| r.clone());
             let Some(r) = oldest else { break };
@@ -530,8 +559,67 @@ mod tests {
     }
 
     #[test]
-    fn offline_flag_follows_events() {
+    fn eviction_skips_pages_being_reloaded() {
+        let mut m = logged_in();
+        loaded(&mut m, Route::Album(0));
+        m.apply(Event::Loading(Route::Album(0))); // stale: reloading
+        for i in 1..=24 {
+            loaded(&mut m, Route::Album(i));
+        }
+        assert!(
+            m.pages.contains_key(&Route::Album(0)),
+            "its reload is in flight"
+        );
+        assert!(!m.pages.contains_key(&Route::Album(1)));
+    }
+
+    /// Ruling R8: a page is asked for on arrival (a route change, `LoggedIn`) and on Retry;
+    /// a failed one is not asked for again on the next pass.
+    #[test]
+    fn open_current_on_arrival_and_retry_only() {
+        let now = Instant::now();
         let mut m = Model::default();
+        assert_eq!(m.open_current(now), None, "the login has no page");
+        m.apply(Event::LoggedIn);
+        assert_eq!(m.open_current(now), Some(Route::Home));
+        assert!(m.pages[&Route::Home].loading);
+        let r = Route::Album(1);
+        m.apply(Event::Navigate(r.clone()));
+        assert_eq!(m.open_current(now), Some(r.clone()));
+        assert_eq!(m.open_current(now), None, "next pass: asked already");
+        m.apply(Event::PageFailed(r.clone()));
+        assert_eq!(
+            m.open_current(now),
+            None,
+            "a failed page waits for its Retry"
+        );
+        m.apply(Event::Navigate(r.clone())); // Retry
+        assert_eq!(m.open_current(now), Some(r.clone()));
+        assert!(m.pages[&r].loading && !m.pages[&r].failed);
+    }
+
+    /// A reply that lands after logout must not refill the store with that user's pages.
+    #[test]
+    fn replies_after_logout_are_dropped() {
+        for out in [Event::LoggedOut, Event::SessionExpired] {
+            let mut m = logged_in();
+            m.apply(out);
+            loaded(&mut m, Route::Collection(CollectionTab::Tracks));
+            m.apply(Event::PageFailed(Route::Home));
+            m.apply(Event::Favorites(tidal::FavoriteIds {
+                tracks: [1].into(),
+                ..Default::default()
+            }));
+            m.apply(Event::Offline(true));
+            assert!(m.pages.is_empty());
+            assert_eq!(m.favorites, tidal::FavoriteIds::default());
+            assert!(!m.offline);
+        }
+    }
+
+    #[test]
+    fn offline_flag_follows_events() {
+        let mut m = logged_in();
         m.apply(Event::Offline(true));
         assert!(m.offline);
         m.apply(Event::Offline(false));
