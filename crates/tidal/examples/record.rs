@@ -58,7 +58,12 @@ async fn run(
         "openapi" => ("https://openapi.tidal.com/v2/", &[]),
         _ => return Err("api must be v1, v2 or openapi".into()),
     };
-    let mut url = url::Url::parse(base)?.join(&path.replace("{uid}", &uid.to_string()))?;
+    let base = url::Url::parse(base)?;
+    let mut url = base.join(&path.replace("{uid}", &uid.to_string()))?;
+    // An absolute path would take the bearer token to another host.
+    if url.origin() != base.origin() {
+        return Err("the path must stay on the API host".into());
+    }
     let present: HashSet<String> = url.query_pairs().map(|(k, _)| k.into_owned()).collect();
     let cc = [("countryCode", session.country_code.as_str())];
     for (k, v) in cc.iter().chain(std) {
