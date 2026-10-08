@@ -20,7 +20,7 @@ struct App {
     events: Receiver<Event>,
     ui: ui::UiState,
     media: now_playing::MediaControls,
-    /// Process start, until the first frame logs the cold-start time (spec §10).
+    /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
 }
 
