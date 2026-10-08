@@ -30,6 +30,8 @@ pub struct UiState {
     /// Read only for the position; `None` until the output opened, or without a device.
     pub player: Option<player::Player>,
     scrolling: fastframe_scroll::Scrolling,
+    /// The queue panel shows; the player bar toggles it.
+    pub queue_open: bool,
 }
 
 impl Default for UiState {
@@ -41,6 +43,7 @@ impl Default for UiState {
             images: TextureCache::new(64 << 20),
             player: None,
             scrolling: Default::default(),
+            queue_open: false,
         }
     }
 }
@@ -206,12 +209,7 @@ fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events:
                 send(Action::Next);
             }
             if !focused && key(Modifiers::NONE, Key::Space) {
-                // ponytail: Play/Pause by state until Task 12's TogglePlay
-                let busy = matches!(
-                    pb.state,
-                    Some(player::PlayState::Playing | player::PlayState::Buffering)
-                );
-                send(if busy { Action::Pause } else { Action::Play });
+                send(Action::TogglePlay);
             }
         }
         if back || i.pointer.button_pressed(PointerButton::Extra1) {
@@ -273,6 +271,7 @@ pub fn draw(
             state.player.as_ref(),
             &mut state.bar,
             &mut state.images,
+            &mut state.queue_open,
         );
         sidebar::show(ui, model, &mut events);
     }
@@ -525,6 +524,57 @@ mod tests {
         assert!(ctx.text_edit_focused());
         let events = pass(&model, alt_left());
         assert!(events.is_empty(), "{events:?}");
+    }
+
+    /// As a screen reader finds them: Space and Play send `TogglePlay` (the backend decides),
+    /// repeat cycles Off → All → One, Queue opens the panel.
+    #[test]
+    fn player_bar_toggles_play_cycles_repeat_and_opens_the_queue() {
+        use crate::queue::Repeat;
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        model.playback.track = Some(testing::track(1));
+        let mut pass = |model: &Model, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                draw(ui, model, &tx, &mut state);
+            });
+            out.textures_delta.clear(); // nothing renders them
+            out
+        };
+        let mut sent = || -> Vec<String> {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .map(|a| format!("{a:?}"))
+                .collect()
+        };
+        let out = pass(&model, vec![testing::key(egui::Key::Space)]);
+        pass(&model, vec![testing::click(&out, "Play")]);
+        assert_eq!(sent(), ["TogglePlay", "TogglePlay"]);
+        for (repeat, label, then) in [
+            (Repeat::Off, "Repeat off", "SetRepeat(All)"),
+            (Repeat::All, "Repeat all", "SetRepeat(One)"),
+            (Repeat::One, "Repeat one", "SetRepeat(Off)"),
+        ] {
+            model.queue.repeat = repeat;
+            let out = pass(&model, vec![]);
+            pass(&model, vec![testing::click(&out, label)]);
+            assert_eq!(sent(), [then]);
+        }
+        let out = pass(&model, vec![]);
+        pass(&model, vec![testing::click(&out, "Shuffle")]);
+        assert_eq!(sent(), ["SetShuffle(true)"]);
+        pass(&model, vec![testing::click(&out, "Queue")]);
+        assert!(state.queue_open);
     }
 
     /// A 3:2 image in a square keeps its middle two thirds; a square one is shown whole.

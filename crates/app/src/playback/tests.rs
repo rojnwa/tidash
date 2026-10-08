@@ -216,12 +216,16 @@ fn a_lost_output_is_shown() {
     );
 }
 
+/// Loads are spawned on this runtime, which never runs them: nothing reaches TIDAL.
+fn idle_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("a runtime")
+}
+
 #[test]
 fn each_hiccup_in_a_track_gets_one_restart() {
-    // Loads are spawned on this runtime, which never runs them: nothing reaches TIDAL.
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .expect("a runtime");
+    let rt = idle_runtime();
     let _rt = rt.enter();
     let c = client();
     let c = Some(&c);
@@ -324,4 +328,84 @@ fn pause_time_is_excluded() {
         report_for(&p, End::At(S * 30), t0 + S * 130, 0).is_some(),
         "30 s played, still running"
     );
+}
+
+fn current_id(p: &Playback) -> Option<u64> {
+    p.queue.current().map(|t| t.id)
+}
+
+#[test]
+fn natural_end_with_repeat_one_replays() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let c = Some(&c);
+    let (mut p, _rx) = playback();
+    p.handle(c, Action::SetRepeat(crate::queue::Repeat::One));
+    let (tracks, start) = (tracks(3), 1);
+    p.handle(c, Action::PlayTracks { tracks, start });
+    let end = |p: &mut Playback| {
+        p.loading = false; // loaded and played to its end
+        let id = p.seq;
+        p.on_msg(c, Msg::Player(PlayerEvent::TrackEnded(id)));
+    };
+    end(&mut p);
+    assert!(p.loading, "loads again");
+    assert_eq!(current_id(&p), Some(1));
+    p.handle(c, Action::SetRepeat(crate::queue::Repeat::Off));
+    end(&mut p);
+    assert_eq!(current_id(&p), Some(2), "off: the next one");
+}
+
+#[test]
+fn removing_current_while_playing_loads_next() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let c = Some(&c);
+    let (mut p, _rx) = playback();
+    let (tracks, start) = (tracks(4), 1);
+    p.handle(c, Action::PlayTracks { tracks, start });
+    let now = |p: &mut Playback, state| {
+        p.loading = false;
+        p.state = state;
+    };
+    now(&mut p, PlayState::Playing);
+    let seq = p.seq;
+    p.handle(c, Action::RemoveFromQueue(0));
+    assert_eq!(
+        (p.seq, current_id(&p)),
+        (seq, Some(1)),
+        "not the current one"
+    );
+    p.handle(c, Action::RemoveFromQueue(0));
+    assert_eq!(current_id(&p), Some(2));
+    assert!(p.loading && p.want_play, "the next one loads and plays");
+    p.handle(c, Action::Pause);
+    now(&mut p, PlayState::Paused);
+    p.handle(c, Action::RemoveFromQueue(0));
+    assert_eq!(current_id(&p), Some(3));
+    assert!(p.loading && !p.want_play, "the next one loads, paused");
+    p.handle(c, Action::Play);
+    now(&mut p, PlayState::Playing);
+    p.handle(c, Action::RemoveFromQueue(0));
+    assert_eq!(current_id(&p), None);
+    assert!(!p.loading, "none left: stopped");
+}
+
+#[test]
+fn toggle_play_pauses_and_resumes() {
+    let (mut p, _rx) = playback();
+    p.queue.replace(tracks(2), 0);
+    for (state, loading, plays) in [
+        (PlayState::Playing, false, false),
+        (PlayState::Buffering, false, false),
+        (PlayState::Stopped, true, false), // the next track resolving
+        (PlayState::Paused, false, true),
+        (PlayState::Stopped, false, true),
+    ] {
+        (p.state, p.loading, p.want_play) = (state, loading, !plays);
+        p.handle(None, Action::TogglePlay);
+        assert_eq!(p.want_play, plays, "{state:?}, loading: {loading}");
+    }
 }

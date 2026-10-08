@@ -1,6 +1,7 @@
 //! Plain-data UI state and the messages that move between UI and backend.
 
 use crate::i18n::tr;
+use crate::queue::Repeat;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -79,10 +80,20 @@ pub struct Slot {
     pub used: u64,
 }
 
+/// The login redirect URL. It carries the authorization code: `Debug` hides it.
 #[derive(Clone)]
+pub struct Redirect(pub String);
+
+impl std::fmt::Debug for Redirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Action {
     BeginLogin,
-    FinishLogin(String),
+    FinishLogin(Redirect),
     Logout,
     Search(String),
     Open(Route),
@@ -92,10 +103,30 @@ pub enum Action {
     },
     Play,
     Pause,
+    /// Pause if playing or loading, else play: the backend decides, from its own state.
+    TogglePlay,
     Next,
     Previous,
     Seek(Duration),
     SetVolume(f32),
+    /// Right after the current track.
+    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
+    PlayNext(Vec<tidal::Track>),
+    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
+    AddToQueue(Vec<tidal::Track>),
+    /// `to` is a slot, `0..=len`, counted before the move.
+    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
+    MoveInQueue {
+        from: usize,
+        to: usize,
+    },
+    /// Removing the current track: the next one takes its place, playing or paused as it was.
+    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
+    RemoveFromQueue(usize),
+    #[allow(dead_code, reason = "the queue panel (Task 13) sends it")]
+    PlayQueueIndex(usize),
+    SetShuffle(bool),
+    SetRepeat(Repeat),
     /// `image` at most `px` wide.
     LoadImage {
         image: tidal::Image,
@@ -106,40 +137,6 @@ pub enum Action {
         item: tidal::Favorite,
         on: bool,
     },
-}
-
-// Debug is manual: `FinishLogin` carries the redirect URL with the authorization code.
-impl std::fmt::Debug for Action {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BeginLogin => f.write_str("BeginLogin"),
-            Self::FinishLogin(_) => f.write_str("FinishLogin(<redacted>)"),
-            Self::Logout => f.write_str("Logout"),
-            Self::Search(q) => f.debug_tuple("Search").field(q).finish(),
-            Self::Open(r) => f.debug_tuple("Open").field(r).finish(),
-            Self::PlayTracks { tracks, start } => f
-                .debug_struct("PlayTracks")
-                .field("tracks", tracks)
-                .field("start", start)
-                .finish(),
-            Self::Play => f.write_str("Play"),
-            Self::Pause => f.write_str("Pause"),
-            Self::Next => f.write_str("Next"),
-            Self::Previous => f.write_str("Previous"),
-            Self::Seek(d) => f.debug_tuple("Seek").field(d).finish(),
-            Self::SetVolume(v) => f.debug_tuple("SetVolume").field(v).finish(),
-            Self::LoadImage { image, px } => f
-                .debug_struct("LoadImage")
-                .field("image", image)
-                .field("px", px)
-                .finish(),
-            Self::SetFavorite { item, on } => f
-                .debug_struct("SetFavorite")
-                .field("item", item)
-                .field("on", on)
-                .finish(),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -206,10 +203,12 @@ pub enum Event {
 }
 
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code, reason = "the queue panel (M2) reads it")]
+#[allow(dead_code, reason = "read by the queue panel (Task 13)")]
 pub struct QueueSnapshot {
     pub tracks: Vec<tidal::Track>,
     pub current: Option<usize>,
+    pub shuffle: bool,
+    pub repeat: Repeat,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -535,8 +534,8 @@ mod tests {
     fn an_expired_session_keeps_the_queue() {
         let mut m = logged_in();
         m.apply(Event::Queue(QueueSnapshot {
-            tracks: vec![],
             current: Some(4),
+            ..Default::default()
         }));
         m.apply(Event::Playback(PlaybackSnapshot {
             volume: 0.5,
@@ -793,9 +792,9 @@ mod tests {
 
     #[test]
     fn finish_login_debug_hides_the_code() {
-        let a = Action::FinishLogin(
+        let a = Action::FinishLogin(Redirect(
             "https://tidal.com/android/login/auth?code=SECRET123&state=s".into(),
-        );
+        ));
         assert!(!format!("{a:?}").contains("SECRET123"));
     }
 }

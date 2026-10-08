@@ -302,6 +302,31 @@ impl Playback {
                 self.want_play = false;
                 self.player.send(PlayerCmd::Pause);
             }
+            Action::TogglePlay => {
+                let busy = matches!(self.shown(), PlayState::Playing | PlayState::Buffering);
+                self.handle(c, if busy { Action::Pause } else { Action::Play });
+            }
+            Action::PlayNext(tracks) => self.edit_queue(|q| q.insert_next(tracks)),
+            Action::AddToQueue(tracks) => self.edit_queue(|q| q.append(tracks)),
+            Action::MoveInQueue { from, to } => self.edit_queue(|q| q.move_item(from, to)),
+            Action::SetShuffle(on) => self.edit_queue(|q| q.set_shuffle(on)),
+            Action::SetRepeat(r) => self.edit_queue(|q| q.set_repeat(r)),
+            Action::RemoveFromQueue(i) => {
+                let active = self.loading || self.state != PlayState::Stopped;
+                let was_current = self.queue.remove(i);
+                self.publish_queue();
+                self.publish();
+                if was_current && active {
+                    // The next track takes its place, playing or paused as it was.
+                    self.end_here(c);
+                    self.start_current(c, None);
+                }
+            }
+            Action::PlayQueueIndex(i) => {
+                if self.queue.jump(i).is_some() {
+                    self.change_track(c);
+                }
+            }
             Action::Next => {
                 if self.queue.next().is_some() {
                     self.change_track(c);
@@ -391,7 +416,7 @@ impl Playback {
             }
             Msg::Player(PlayerEvent::TrackEnded(id)) if id == self.seq => {
                 self.end_play(c, End::Natural);
-                if self.queue.next().is_some() {
+                if self.queue.advance().is_some() {
                     self.publish_queue();
                     self.start_current(c, None);
                 } // else the player stopped itself; the queue stays on its last track
@@ -554,14 +579,18 @@ impl Playback {
         }))
     }
 
+    /// The state shown: a resolving stream is buffering, not the Stop that silenced the old track.
+    fn shown(&self) -> PlayState {
+        if self.loading {
+            PlayState::Buffering
+        } else {
+            self.state
+        }
+    }
+
     fn publish(&self) {
         self.emit.send(Event::Playback(PlaybackSnapshot {
-            // A resolving stream shows as buffering, not as the Stop that silenced the old track.
-            state: Some(if self.loading {
-                PlayState::Buffering
-            } else {
-                self.state
-            }),
+            state: Some(self.shown()),
             track: self.queue.current().cloned(),
             volume: self.volume,
         }));
@@ -569,6 +598,13 @@ impl Playback {
 
     fn publish_queue(&self) {
         self.emit.send(Event::Queue(self.queue.snapshot()));
+    }
+
+    /// Changes the queue and shows it; an empty queue's added track shows as current.
+    fn edit_queue(&mut self, edit: impl FnOnce(&mut Queue)) {
+        edit(&mut self.queue);
+        self.publish_queue();
+        self.publish();
     }
 }
 

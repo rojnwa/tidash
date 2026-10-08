@@ -1,7 +1,7 @@
 //! Login screen: paste-the-redirect-URL flow.
 
 use crate::i18n::tr;
-use crate::model::{Action, Model};
+use crate::model::{Action, Model, Redirect};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Default)]
@@ -33,7 +33,8 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, stat
         );
         let ready = !state.pasted.trim().is_empty();
         if ui.add_enabled(ready, egui::Button::new(tr("Continue"))).clicked() {
-            let _ = tx.send(Action::FinishLogin(std::mem::take(&mut state.pasted)));
+            let pasted = Redirect(std::mem::take(&mut state.pasted));
+            let _ = tx.send(Action::FinishLogin(pasted));
         }
     });
 }

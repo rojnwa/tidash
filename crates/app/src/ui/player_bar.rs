@@ -1,9 +1,11 @@
-//! Player bar: cover, title and artists, transport, seek and volume.
+//! Player bar: cover, title and artists, transport with shuffle and repeat, seek, volume and
+//! the queue panel's toggle.
 
 use super::{cover, tracks};
 use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::{Action, Model};
+use crate::queue::Repeat;
 use egui::{Button, Label, RichText, Slider, vec2};
 use player::{PlayState, Player};
 use std::time::Duration;
@@ -24,6 +26,7 @@ pub fn show(
     player: Option<&Player>,
     state: &mut State,
     images: &mut TextureCache,
+    queue_open: &mut bool,
 ) {
     let pb = &model.playback;
     let send = |a: Action| {
@@ -50,7 +53,10 @@ pub fn show(
                 });
             });
 
-            let has = pb.track.is_some();
+            let (has, q) = (pb.track.is_some(), &model.queue);
+            if ui.selectable_label(q.shuffle, tr("Shuffle")).clicked() {
+                send(Action::SetShuffle(!q.shuffle));
+            }
             if ui.add_enabled(has, Button::new(tr("Previous"))).clicked() {
                 send(Action::Previous);
             }
@@ -62,10 +68,21 @@ pub fn show(
                 )
                 .clicked()
             {
-                send(if busy { Action::Pause } else { Action::Play });
+                send(Action::TogglePlay); // the backend's state decides, not this label's
             }
             if ui.add_enabled(has, Button::new(tr("Next"))).clicked() {
                 send(Action::Next);
+            }
+            let (repeat, then) = match q.repeat {
+                Repeat::Off => (tr("Repeat off"), Repeat::All),
+                Repeat::All => (tr("Repeat all"), Repeat::One),
+                Repeat::One => (tr("Repeat one"), Repeat::Off),
+            };
+            if ui
+                .selectable_label(q.repeat != Repeat::Off, repeat)
+                .clicked()
+            {
+                send(Action::SetRepeat(then));
             }
 
             let duration = pb.track.as_ref().map_or(0.0, |t| t.duration as f32);
@@ -74,7 +91,7 @@ pub fn show(
                 .min(duration);
             let mut at = state.seek.unwrap_or(pos);
             ui.label(tracks::duration(at as u32));
-            ui.spacing_mut().slider_width = (ui.available_width() - 230.0).max(80.0);
+            ui.spacing_mut().slider_width = (ui.available_width() - 300.0).max(80.0);
             let seek = ui.add_enabled(
                 has,
                 Slider::new(&mut at, 0.0..=duration.max(1.0)).show_value(false),
@@ -96,6 +113,7 @@ pub fn show(
             {
                 send(Action::SetVolume(volume));
             }
+            ui.toggle_value(queue_open, tr("Queue"));
         });
     });
 }

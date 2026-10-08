@@ -212,3 +212,23 @@ msgstr ""
 #: src/pages.rs
 msgid "Could not update favorites"
 msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Shuffle"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Repeat off"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Repeat all"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Repeat one"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Queue"
+msgstr ""

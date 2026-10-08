@@ -4591,6 +4591,7 @@ dependencies = [
  "log",
  "open",
  "player",
+ "rand",
  "reqwest",
  "tidal",
  "tokio",

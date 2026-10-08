@@ -174,13 +174,10 @@ fn state_for(
 }
 
 fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Option<Action> {
-    // As the player bar's button: loading counts as playing.
-    let busy = matches!(pb.state, Some(PlayState::Playing | PlayState::Buffering));
     Some(match command {
         Command::Play => Action::Play,
         Command::Pause | Command::Stop => Action::Pause,
-        Command::PlayPause if busy => Action::Pause,
-        Command::PlayPause => Action::Play,
+        Command::PlayPause => Action::TogglePlay,
         Command::Next => Action::Next,
         Command::Previous => Action::Previous,
         Command::SeekBy(ms) => {
@@ -234,10 +231,10 @@ mod tests {
     fn commands_map_to_actions() {
         let s = Duration::from_secs(1);
         let act = |c, st| format!("{:?}", action_for(c, &snapshot(st), s * 20));
-        assert_eq!(act(Command::PlayPause, PlayState::Playing), "Some(Pause)");
-        assert_eq!(act(Command::PlayPause, PlayState::Buffering), "Some(Pause)");
-        assert_eq!(act(Command::PlayPause, PlayState::Paused), "Some(Play)");
-        assert_eq!(act(Command::PlayPause, PlayState::Stopped), "Some(Play)");
+        for st in [PlayState::Playing, PlayState::Paused, PlayState::Stopped] {
+            assert_eq!(act(Command::PlayPause, st), "Some(TogglePlay)", "{st:?}");
+        }
+        assert_eq!(act(Command::Play, PlayState::Playing), "Some(Play)");
         assert_eq!(act(Command::Stop, PlayState::Playing), "Some(Pause)");
         assert_eq!(
             act(Command::SeekBy(-30_000), PlayState::Playing),

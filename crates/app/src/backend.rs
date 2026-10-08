@@ -2,7 +2,7 @@
 
 use crate::i18n::tr;
 use crate::images::Artwork;
-use crate::model::{Action, Event};
+use crate::model::{Action, Event, Redirect};
 use crate::playback::{Msg, Playback};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -290,7 +290,7 @@ impl Backend {
                     log::warn!("could not open the browser: {e}");
                 }
             }
-            Action::FinishLogin(redirect) => self.finish_login(&redirect).await,
+            Action::FinishLogin(Redirect(redirect)) => self.finish_login(&redirect).await,
             Action::Logout => {
                 if let Some(t) = self.search_task.take() {
                     t.abort();
@@ -356,12 +356,27 @@ impl Backend {
             Action::PlayTracks { .. }
             | Action::Play
             | Action::Pause
+            | Action::TogglePlay
             | Action::Next
             | Action::Previous
             | Action::Seek(_)
-            | Action::SetVolume(_) => match &mut self.playback {
+            | Action::SetVolume(_)
+            | Action::PlayNext(_)
+            | Action::AddToQueue(_)
+            | Action::MoveInQueue { .. }
+            | Action::RemoveFromQueue(_)
+            | Action::PlayQueueIndex(_)
+            | Action::SetShuffle(_)
+            | Action::SetRepeat(_) => match &mut self.playback {
                 Some(p) => p.handle(self.client.as_ref(), action),
-                None if matches!(action, Action::PlayTracks { .. } | Action::Play) => {
+                None if matches!(
+                    action,
+                    Action::PlayTracks { .. }
+                        | Action::Play
+                        | Action::TogglePlay
+                        | Action::PlayQueueIndex(_)
+                ) =>
+                {
                     self.emit
                         .send(Event::Error(tr("No audio output device").into_owned()));
                 }
