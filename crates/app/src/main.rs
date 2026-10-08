@@ -76,6 +76,7 @@ impl eframe::App for App {
                 Event::Image { cover, size, image } => {
                     self.ui.images.insert(ctx, cover, size, image)
                 }
+                Event::ImageFailed { cover, size } => self.ui.images.forget(cover, size),
                 Event::Player(p) => self.ui.player = Some(p),
                 Event::Seeked(at) => self.media.seeked(at),
                 Event::Playback(p) => {

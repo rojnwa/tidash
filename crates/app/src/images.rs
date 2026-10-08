@@ -42,6 +42,11 @@ impl TextureCache {
         None
     }
 
+    /// The cover could not be loaded: the next `get` requests it again.
+    pub fn forget(&mut self, cover: String, size: u32) {
+        self.requested.remove(&(cover, size));
+    }
+
     pub fn insert(&mut self, ctx: &Context, cover: String, size: u32, image: ColorImage) {
         let key = (cover, size);
         let tex = ctx.load_texture(format!("{}@{size}", key.0), image, TextureOptions::LINEAR);
@@ -83,6 +88,17 @@ mod tests {
         c.insert(&ctx, "a".into(), 160, img());
         assert!(c.get(&ctx, "a", 160, || n += 1).is_some());
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn a_failed_cover_is_requested_again() {
+        let ctx = Context::default();
+        let mut c = TextureCache::new(4);
+        let mut n = 0;
+        c.get(&ctx, "a", 160, || n += 1);
+        c.forget("a".into(), 160);
+        c.get(&ctx, "a", 160, || n += 1);
+        assert_eq!(n, 2);
     }
 
     #[test]
