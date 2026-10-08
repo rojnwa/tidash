@@ -1,7 +1,7 @@
 //! Playback: the segment reader, play accounting, and the backend glue between the queue,
 //! TIDAL stream info and the player.
 
-use crate::backend::Emitter;
+use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
 use crate::model::{Action, Event, PlaybackSnapshot};
 use crate::queue::Queue;
@@ -196,8 +196,10 @@ pub enum Msg {
     /// A `start_current` resolved its stream (source and quality) or failed.
     Loaded {
         seq: u64,
-        result: Result<(Source, String), String>,
+        result: Result<(Source, String), Box<dyn std::error::Error + Send + Sync>>,
     },
+    /// The session is dead (`backend::session_expired`).
+    SessionExpired,
 }
 
 /// `stream_info`, retried once after 2 s unless the failure is terminal.
@@ -329,6 +331,7 @@ impl Playback {
                 self.seq
             ),
             Msg::Loaded { seq, result } => log::debug!("stream {seq} resolved: {}", result.is_ok()),
+            Msg::SessionExpired => {}
         }
         match msg {
             Msg::Loaded { seq, result } if seq == self.seq => {
@@ -345,13 +348,16 @@ impl Playback {
                             self.player.send(PlayerCmd::Play);
                         }
                     }
+                    // Not the track's fault: it waits, with the queue, for the next login.
+                    Err(e) if session_expired(&*e, &self.msgs) => self.stop(),
                     Err(e) => {
                         log::warn!("stream for track {}: {e}", self.track_id());
                         self.fail_track(c);
                     }
                 }
             }
-            Msg::Loaded { .. } => {} // superseded
+            Msg::Loaded { .. } => {}  // superseded
+            Msg::SessionExpired => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
                 if let Some(p) = &mut self.play {
@@ -455,18 +461,15 @@ impl Playback {
         self.resume_at = resume_at;
         self.last_pos = resume_at.unwrap_or_default();
         tokio::spawn(async move {
-            let result = match stream_info(&c, id).await {
-                Ok(info) => {
-                    let quality = info.quality;
-                    match tokio::task::spawn_blocking(move || segment_source(seq, info.urls)).await
-                    {
-                        Ok(Ok(source)) => Ok((source, quality)),
-                        Ok(Err(e)) => Err(e.to_string()),
-                        Err(e) => Err(e.to_string()),
-                    }
-                }
-                Err(e) => Err(e.to_string()),
-            };
+            // Typed: a dead session (`tidal::Error::Auth`) is told apart from a failed track.
+            let result = async {
+                let info = stream_info(&c, id).await?;
+                let quality = info.quality;
+                let source =
+                    tokio::task::spawn_blocking(move || segment_source(seq, info.urls)).await??;
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>((source, quality))
+            }
+            .await;
             let _ = msgs.send(Msg::Loaded { seq, result }); // backend gone = app closing
         });
         self.publish();
@@ -750,6 +753,32 @@ mod tests {
             errors(&rx),
             ["Audio output lost; playback resumes when it is back"]
         );
+    }
+
+    #[test]
+    fn a_dead_session_stops_the_load_but_fails_no_track() {
+        let (mut p, rx) = playback();
+        let (msgs, mut sent) = tokio::sync::mpsc::unbounded_channel();
+        p.msgs = msgs;
+        p.queue.replace(tracks(3), 0);
+        let fail_load = |p: &mut Playback, e: tidal::Error| {
+            p.loading = true;
+            let result = Err(e.into());
+            p.on_msg(None, Msg::Loaded { seq: p.seq, result });
+        };
+        fail_load(&mut p, tidal::Error::Auth("invalid_grant".into()));
+        assert!(matches!(sent.try_recv(), Ok(Msg::SessionExpired)));
+        assert!(errors(&rx).is_empty(), "no track reported unavailable");
+        assert_eq!(p.queue.current().map(|t| t.id), Some(0), "the queue stays");
+        assert!(!p.loading);
+        let offline = tidal::Error::Status {
+            status: 503,
+            sub_status: None,
+            message: "down".into(),
+        };
+        fail_load(&mut p, offline);
+        assert!(sent.try_recv().is_err(), "the session is fine");
+        assert_eq!(errors(&rx), ["t0 is unavailable"]);
     }
 
     #[test]

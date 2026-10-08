@@ -68,6 +68,8 @@ pub enum Event {
     LoginUrl(String),
     LoggedIn,
     LoggedOut,
+    /// The session is dead (its token refresh failed): log in again; the queue stays.
+    SessionExpired,
     CredentialsNotPersistent,
     /// A search was submitted; results for any other query are stale.
     SearchStarted(String),
@@ -166,6 +168,16 @@ impl Model {
                     ..Self::default()
                 };
             }
+            Event::SessionExpired => {
+                *self = Self {
+                    queue: std::mem::take(&mut self.queue),
+                    playback: std::mem::take(&mut self.playback),
+                    errors: std::mem::take(&mut self.errors),
+                    ..Self::default()
+                };
+                self.errors
+                    .push(tr("Your TIDAL session has expired; please log in again").into_owned());
+            }
             Event::CredentialsNotPersistent => self.errors.push(
                 tr("Login will not be remembered: no system credential store available")
                     .into_owned(),
@@ -242,6 +254,30 @@ mod tests {
         m.apply(Event::LoggedOut);
         assert_eq!(m.route, Route::Login);
         assert!(!m.logged_in);
+    }
+
+    #[test]
+    fn an_expired_session_returns_to_login_keeping_the_queue() {
+        let mut m = Model::default();
+        m.apply(Event::LoggedIn);
+        m.navigate(Route::Album(3));
+        m.apply(Event::Queue(QueueSnapshot {
+            tracks: vec![],
+            current: Some(4),
+        }));
+        m.apply(Event::Playback(PlaybackSnapshot {
+            volume: 0.5,
+            ..Default::default()
+        }));
+        m.apply(Event::SessionExpired);
+        assert_eq!(m.route, Route::Login);
+        assert!(!m.logged_in);
+        assert!(!m.back(), "no way back past the login");
+        assert_eq!((m.queue.current, m.playback.volume), (Some(4), 0.5));
+        assert_eq!(
+            m.errors,
+            ["Your TIDAL session has expired; please log in again"]
+        );
     }
 
     #[test]
