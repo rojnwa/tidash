@@ -156,6 +156,7 @@ impl TokenStore for KeyringStore {
         self.delete("session")
     }
 }
+
 #[derive(Default)]
 pub struct MemoryStore(Mutex<Option<Session>>);
 
@@ -185,6 +186,7 @@ pub fn default_store() -> (Arc<dyn TokenStore>, Result<Option<Session>>) {
         Err(e) => (Arc::new(MemoryStore::default()), Err(e)),
     }
 }
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
