@@ -3,6 +3,7 @@
 mod backend;
 mod i18n;
 mod images;
+mod messages;
 mod model;
 mod now_playing;
 mod pages;
