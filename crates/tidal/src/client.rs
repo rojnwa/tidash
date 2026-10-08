@@ -2,7 +2,7 @@
 //! single-flight refresh, concurrency cap, retries, and GETs through the disk cache.
 
 use crate::{ClientConfig, DiskCache, Entry, Error, Result, Session, TokenStore, refresh};
-use reqwest::header::{ETAG, IF_NONE_MATCH};
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use reqwest::{Method, StatusCode, Url};
 use serde::de::DeserializeOwned;
 use std::sync::{Arc, RwLock};
@@ -231,8 +231,16 @@ impl Client {
             if v2 {
                 rb = rb.header("x-tidal-client-version", &self.config().client_version);
             }
-            if let Some(form) = form {
-                rb = rb.form(form);
+            match form {
+                Some(form) => rb = rb.form(form),
+                // As the official client sends it. hyper leaves `Content-Length` off an empty
+                // body, and some front ends answer 411 without one.
+                None if method == Method::PUT => {
+                    rb = rb
+                        .header(CONTENT_TYPE, "application/json")
+                        .header(CONTENT_LENGTH, "0");
+                }
+                None => {}
             }
             if let Some(etag) = etag {
                 rb = rb.header(IF_NONE_MATCH, etag);

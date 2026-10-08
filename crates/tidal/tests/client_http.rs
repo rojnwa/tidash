@@ -259,6 +259,10 @@ async fn foreign_origin_path_is_rejected() {
         assert!(matches!(r, Err(Error::Status { status: 0, .. })), "{p}");
         let r = c.delete(p).await;
         assert!(matches!(r, Err(Error::Status { status: 0, .. })), "{p}");
+        let r = c.post_form(p, &[("a", "1".into())]).await;
+        assert!(matches!(r, Err(Error::Status { status: 0, .. })), "{p}");
+        let r = c.put_v2(p, &[], None).await;
+        assert!(matches!(r, Err(Error::Status { status: 0, .. })), "{p}");
     }
 }
 
@@ -343,6 +347,8 @@ async fn put_v2_with_query_only() {
     let server = MockServer::start().await;
     standard("PUT", "/v2/favorites/mixes/remove", true)
         .and(query_param("mixIds", "a,b"))
+        .and(header("content-type", "application/json"))
+        .and(header("content-length", "0"))
         .and(body_string(""))
         .respond_with(ok())
         .expect(1)
@@ -350,6 +356,26 @@ async fn put_v2_with_query_only() {
         .await;
     let (c, _) = setup(&server, "ACCESS");
     c.put_v2("favorites/mixes/remove", &[("mixIds", "a,b".into())], None)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn put_v2_with_form() {
+    let server = MockServer::start().await;
+    standard("PUT", "/v2/favorites/mixes/add", true)
+        .and(header("content-type", "application/x-www-form-urlencoded"))
+        .and(body_string("mixIds=a%2Cb&onArtifactNotFound=FAIL"))
+        .respond_with(ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (c, _) = setup(&server, "ACCESS");
+    let form = [
+        ("mixIds", "a,b".into()),
+        ("onArtifactNotFound", "FAIL".into()),
+    ];
+    c.put_v2("favorites/mixes/add", &[], Some(&form))
         .await
         .unwrap();
 }
