@@ -36,11 +36,21 @@ impl Queue {
     }
 
     pub fn snapshot(&self) -> QueueSnapshot {
-        QueueSnapshot { tracks: self.tracks.clone(), current: self.current }
+        QueueSnapshot {
+            tracks: self.tracks.clone(),
+            current: self.current,
+        }
     }
 
     fn ready_from(&self, start: usize) -> Option<usize> {
-        Some(start + self.tracks.get(start..)?.iter().position(|t| t.stream_ready)?)
+        Some(
+            start
+                + self
+                    .tracks
+                    .get(start..)?
+                    .iter()
+                    .position(|t| t.stream_ready)?,
+        )
     }
 }
 
@@ -60,7 +70,11 @@ mod tests {
                 track_number: i as u32 + 1,
                 volume_number: 1,
                 artists: vec![],
-                album: tidal::AlbumRef { id: 9, title: "a".into(), cover: None },
+                album: tidal::AlbumRef {
+                    id: 9,
+                    title: "a".into(),
+                    cover: None,
+                },
                 stream_ready,
             })
             .collect()
@@ -75,14 +89,21 @@ mod tests {
         let mut q = Queue::default();
         assert_eq!(id(q.replace(tracks(&[true, false, true]), 1)), Some(2));
         assert_eq!(id(q.current()), Some(2));
-        assert_eq!(id(q.replace(tracks(&[true, false]), 1)), None, "nothing playable from start");
+        assert_eq!(
+            id(q.replace(tracks(&[true, false]), 1)),
+            None,
+            "nothing playable from start"
+        );
         assert_eq!(id(q.current()), None);
     }
 
     #[test]
     fn next_skips_unavailable_and_ends() {
         let mut q = Queue::default();
-        assert_eq!(id(q.replace(tracks(&[true, false, true, false]), 0)), Some(0));
+        assert_eq!(
+            id(q.replace(tracks(&[true, false, true, false]), 0)),
+            Some(0)
+        );
         assert_eq!(id(q.next()), Some(2));
         assert_eq!(id(q.next()), None);
         assert_eq!(id(q.current()), Some(2), "stays on the last playable track");
@@ -91,10 +112,17 @@ mod tests {
     #[test]
     fn previous_stops_at_start() {
         let mut q = Queue::default();
-        assert_eq!(id(q.replace(tracks(&[false, true, false, true]), 3)), Some(3));
+        assert_eq!(
+            id(q.replace(tracks(&[false, true, false, true]), 3)),
+            Some(3)
+        );
         assert_eq!(id(q.previous()), Some(1));
         assert_eq!(id(q.previous()), None);
-        assert_eq!(id(q.current()), Some(1), "stays on the first playable track");
+        assert_eq!(
+            id(q.current()),
+            Some(1),
+            "stays on the first playable track"
+        );
         assert_eq!(id(Queue::default().previous()), None);
     }
 

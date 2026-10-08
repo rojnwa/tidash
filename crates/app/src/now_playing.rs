@@ -64,10 +64,16 @@ impl MediaControls {
             && self.requested.as_deref() != cover
         {
             self.requested = cover.map(str::to_owned);
-            fetch(url.clone(), f.clone(), self.landed.0.clone(), self.wake.clone());
+            fetch(
+                url.clone(),
+                f.clone(),
+                self.landed.0.clone(),
+                self.wake.clone(),
+            );
         }
         let art_file = file.filter(|_| on_disk);
-        self.controls.update(state_for(pb, position, art_url, art_file));
+        self.controls
+            .update(state_for(pb, position, art_url, art_file));
     }
 
     /// Playback jumped to `at`.
@@ -81,7 +87,11 @@ impl MediaControls {
         if self.landed.1.try_iter().count() > 0 {
             self.show(pb, position);
         }
-        self.controls.commands().into_iter().filter_map(|c| action_for(c, pb, position)).collect()
+        self.controls
+            .commands()
+            .into_iter()
+            .filter_map(|c| action_for(c, pb, position))
+            .collect()
     }
 }
 
@@ -121,13 +131,23 @@ fn fetch(url: String, path: PathBuf, done: Sender<()>, wake: Wake) {
             Err(e) => log::debug!("cover {url}: {e}"),
         }
     };
-    if let Err(e) = std::thread::Builder::new().name("cover-file".into()).spawn(run) {
+    if let Err(e) = std::thread::Builder::new()
+        .name("cover-file".into())
+        .spawn(run)
+    {
         log::warn!("cover download thread failed: {e}");
     }
 }
 
-fn state_for(pb: &PlaybackSnapshot, position: Duration, art_url: Option<String>, art_file: Option<PathBuf>) -> State {
-    let Some(t) = &pb.track else { return State::default() };
+fn state_for(
+    pb: &PlaybackSnapshot,
+    position: Duration,
+    art_url: Option<String>,
+    art_file: Option<PathBuf>,
+) -> State {
+    let Some(t) = &pb.track else {
+        return State::default();
+    };
     State {
         playback: match pb.state {
             Some(PlayState::Playing) => Playback::Playing,
@@ -162,10 +182,19 @@ fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Op
         Command::Previous => Action::Previous,
         Command::SeekBy(ms) => {
             let by = Duration::from_millis(ms.unsigned_abs());
-            Action::Seek(if ms < 0 { position.saturating_sub(by) } else { position + by })
+            Action::Seek(if ms < 0 {
+                position.saturating_sub(by)
+            } else {
+                position + by
+            })
         }
         // A request for a track since replaced is dropped.
-        Command::SetPosition { track_id, position } if pb.track.as_ref().is_some_and(|t| t.id.to_string() == track_id) => {
+        Command::SetPosition { track_id, position }
+            if pb
+                .track
+                .as_ref()
+                .is_some_and(|t| t.id.to_string() == track_id) =>
+        {
             Action::Seek(position)
         }
         _ => return None,
@@ -184,10 +213,18 @@ mod tests {
             track_number: 1,
             volume_number: 1,
             artists: vec![],
-            album: tidal::AlbumRef { id: 1, title: "Album".into(), cover: None },
+            album: tidal::AlbumRef {
+                id: 1,
+                title: "Album".into(),
+                cover: None,
+            },
             stream_ready: true,
         };
-        PlaybackSnapshot { state: Some(state), track: Some(track), volume: 1.0 }
+        PlaybackSnapshot {
+            state: Some(state),
+            track: Some(track),
+            volume: 1.0,
+        }
     }
 
     #[test]
@@ -199,9 +236,18 @@ mod tests {
         assert_eq!(act(Command::PlayPause, PlayState::Paused), "Some(Play)");
         assert_eq!(act(Command::PlayPause, PlayState::Stopped), "Some(Play)");
         assert_eq!(act(Command::Stop, PlayState::Playing), "Some(Pause)");
-        assert_eq!(act(Command::SeekBy(-30_000), PlayState::Playing), "Some(Seek(0ns))");
-        assert_eq!(act(Command::SeekBy(10_000), PlayState::Playing), "Some(Seek(30s))");
-        let to = |id: &str| Command::SetPosition { track_id: id.into(), position: s * 5 };
+        assert_eq!(
+            act(Command::SeekBy(-30_000), PlayState::Playing),
+            "Some(Seek(0ns))"
+        );
+        assert_eq!(
+            act(Command::SeekBy(10_000), PlayState::Playing),
+            "Some(Seek(30s))"
+        );
+        let to = |id: &str| Command::SetPosition {
+            track_id: id.into(),
+            position: s * 5,
+        };
         assert_eq!(act(to("7"), PlayState::Paused), "Some(Seek(5s))");
         assert_eq!(act(to("8"), PlayState::Paused), "None", "another track's");
         assert_eq!(act(Command::Raise, PlayState::Paused), "None");
@@ -212,9 +258,15 @@ mod tests {
         let st = state_for(&snapshot(PlayState::Buffering), Duration::ZERO, None, None);
         assert_eq!(st.playback, Playback::Paused);
         let t = st.track.expect("track");
-        assert_eq!((t.id.as_str(), t.title.as_str(), t.album.as_str()), ("7", "Song", "Album"));
+        assert_eq!(
+            (t.id.as_str(), t.title.as_str(), t.album.as_str()),
+            ("7", "Song", "Album")
+        );
         assert_eq!(t.duration, Some(Duration::from_secs(200)));
-        assert_eq!(state_for(&PlaybackSnapshot::default(), Duration::ZERO, None, None), State::default());
+        assert_eq!(
+            state_for(&PlaybackSnapshot::default(), Duration::ZERO, None, None),
+            State::default()
+        );
     }
 
     #[test]
@@ -222,8 +274,14 @@ mod tests {
         let cache = directories::ProjectDirs::from("", "", "tidalfast").expect("a home dir");
         let dir = cover_dir().expect("a cache dir");
         assert!(dir.starts_with(cache.cache_dir()));
-        assert_eq!(cover_file(Some(&dir), "ab12-cd34"), Some(dir.join("ab12-cd34.jpg")));
-        assert!(cover_file(None, "ab12-cd34").is_none(), "no cache dir, no file");
+        assert_eq!(
+            cover_file(Some(&dir), "ab12-cd34"),
+            Some(dir.join("ab12-cd34.jpg"))
+        );
+        assert!(
+            cover_file(None, "ab12-cd34").is_none(),
+            "no cache dir, no file"
+        );
         assert!(cover_file(Some(&dir), "../evil").is_none());
         assert!(cover_file(Some(&dir), "").is_none());
     }
