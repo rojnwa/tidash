@@ -234,7 +234,9 @@ RAM is over budget on both OSes for the same font reason. Linux: build and tests
 M2 on Windows (same machine, release build, Home loaded 15 s after launch, three launches each):
 before mapping the fallback fonts, a 150 MB working set (256–262 MB private); with `fastframe-fonts`
 pinned to crmne/fastframe#17 (fallback faces memory-mapped), 93 MB (202–204 MB private). First frame
-121–136 ms and 0–0.3% idle CPU in both.
+121–136 ms and 0–0.3% idle CPU in both. Measured as the working set (Task Manager's Memory column;
+private bytes for reference), Windows now meets the 150 MB budget; macOS is to be re-measured with
+the pin.
 
 ## 11. Shipping
 
