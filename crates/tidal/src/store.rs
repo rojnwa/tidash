@@ -4,6 +4,8 @@ use crate::{Error, Result, Session};
 use keyring_core::Entry;
 use std::sync::{Arc, Mutex, Once};
 
+/// Calls block (keychain prompts, D-Bus), and the Linux store runs a tokio runtime of its own,
+/// which panics on an async runtime thread: call them from plain threads or `spawn_blocking`.
 pub trait TokenStore: Send + Sync {
     fn load(&self) -> Result<Option<Session>>;
     fn save(&self, s: &Session) -> Result<()>;
@@ -174,7 +176,8 @@ impl TokenStore for MemoryStore {
 }
 
 /// The OS store and the session its probe read, so nobody reads it again (each read can raise
-/// a macOS keychain prompt). When the OS store cannot be read: memory, and why.
+/// a macOS keychain prompt). When the OS store cannot be read: memory, and why. Blocks, as
+/// [`TokenStore`] calls do.
 pub fn default_store() -> (Arc<dyn TokenStore>, Result<Option<Session>>) {
     let k = KeyringStore::new();
     match k.load() {

@@ -63,9 +63,10 @@ pub fn start(
                 tx: event_tx,
                 waker: Box::new(waker),
             });
+            let store = tidal::default_store(); // blocks: before the runtime runs on this thread
             rt.block_on(async move {
                 let playback = backend_player.map(|p| Playback::new(p, emit.clone(), msg_tx));
-                Backend::new(emit, playback, tidal::default_store())
+                Backend::new(emit, playback, store)
                     .run(action_rx, msg_rx)
                     .await;
             });
@@ -213,7 +214,7 @@ impl Backend {
                 let client = self.client.take();
                 self.pkce = None;
                 // The user asked to log out: do so even if the stored copy could not be removed.
-                if let Err(e) = self.store.clear() {
+                if let Err(e) = self.with_store(|s| s.clear()).await {
                     self.emit
                         .send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
                 }
@@ -292,7 +293,8 @@ impl Backend {
         };
         match session {
             Ok(session) => {
-                if let Err(e) = self.store.save(&session) {
+                let saved = session.clone();
+                if let Err(e) = self.with_store(move |s| s.save(&saved)).await {
                     self.emit.send(Event::Error(format!(
                         "{}: {e}",
                         tr("Login will not be remembered")
@@ -305,6 +307,17 @@ impl Backend {
                 .emit
                 .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
         }
+    }
+
+    /// Store calls block, so they run off the async workers (see `TokenStore`).
+    async fn with_store(
+        &self,
+        call: impl FnOnce(&dyn TokenStore) -> tidal::Result<()> + Send + 'static,
+    ) -> tidal::Result<()> {
+        let store = Arc::clone(&self.store);
+        tokio::task::spawn_blocking(move || call(store.as_ref()))
+            .await
+            .unwrap_or_else(|e| Err(tidal::Error::Store(e.to_string())))
     }
 }
 
@@ -327,23 +340,70 @@ mod tests {
         }
     }
 
-    /// The events of a startup whose store probe read `stored`.
-    fn startup(stored: tidal::Result<Option<tidal::Session>>) -> Vec<Event> {
+    /// Blocks on a runtime of its own, as the Linux store (zbus) does: that panics on an
+    /// async runtime thread.
+    struct OwnRuntime;
+
+    impl OwnRuntime {
+        fn block() {
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("a runtime")
+                .block_on(async {});
+        }
+    }
+
+    impl TokenStore for OwnRuntime {
+        fn load(&self) -> tidal::Result<Option<tidal::Session>> {
+            Self::block();
+            Ok(None)
+        }
+        fn save(&self, _: &tidal::Session) -> tidal::Result<()> {
+            Self::block();
+            Ok(())
+        }
+        fn clear(&self) -> tidal::Result<()> {
+            Self::block();
+            Ok(())
+        }
+    }
+
+    /// The events of a run with `store`, whose startup probe read `stored`, that handles
+    /// `actions` and ends.
+    fn run(
+        store: Arc<dyn TokenStore>,
+        stored: tidal::Result<Option<tidal::Session>>,
+        actions: Vec<Action>,
+    ) -> Vec<Event> {
         let (tx, events) = channel();
         let emit = Arc::new(Emitter {
             tx,
             waker: Box::new(|| {}),
         });
-        let backend = Backend::new(emit, None, (Arc::new(NoReads), stored));
+        let backend = Backend::new(emit, None, (store, stored));
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("a runtime");
-        // Senders dropped at once: `run` goes through startup and returns.
-        let (_, actions) = unbounded_channel();
+        let (action_tx, action_rx) = unbounded_channel();
+        for a in actions {
+            let _ = action_tx.send(a);
+        }
+        // Senders dropped: `run` handles what was sent and returns.
+        drop(action_tx);
         let (_, msgs) = unbounded_channel();
-        rt.block_on(backend.run(actions, msgs));
+        rt.block_on(backend.run(action_rx, msgs));
         events.try_iter().collect()
+    }
+
+    fn startup(stored: tidal::Result<Option<tidal::Session>>) -> Vec<Event> {
+        run(Arc::new(NoReads), stored, vec![])
+    }
+
+    #[test]
+    fn logout_clears_the_store_off_the_runtime() {
+        let events = run(Arc::new(OwnRuntime), Ok(None), vec![Action::Logout]);
+        assert!(matches!(events[..], [Event::LoggedOut]), "{events:?}");
     }
 
     #[test]
