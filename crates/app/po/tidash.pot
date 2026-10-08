@@ -134,3 +134,7 @@ msgstr ""
 #: src/playback.rs
 msgid "Audio output lost; playback resumes when it is back"
 msgstr ""
+
+#: src/model.rs
+msgid "Your TIDAL session has expired; please log in again"
+msgstr ""
