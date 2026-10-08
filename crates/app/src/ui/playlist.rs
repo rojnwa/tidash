@@ -27,10 +27,13 @@ mod tests {
     use crate::ui::testing::{at, every_state, key, pass, playlist, tracks};
     use egui::Key;
 
+    /// The first track is unavailable: Enter on its row plays nothing, so only Play can.
     fn data() -> PageData {
+        let mut list = tracks(3);
+        list[0].stream_ready = false;
         PageData::Playlist {
             playlist: playlist(),
-            tracks: tracks(3),
+            tracks: list,
         }
     }
 

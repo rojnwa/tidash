@@ -1,5 +1,6 @@
-//! Home, Explore and the other v1 pages (a title, then shelves), and a "View all" (its one
-//! shelf in full: every track, or a grid of cards).
+//! Home, Explore and the other pages (a title, then shelves). A page of one shelf (a v2 "View
+//! all", or a v1 `single-module-page`) shows it in full: every track, or a grid of cards
+//! (ruling R17).
 
 use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
@@ -10,34 +11,113 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
     let Some(PageData::Shelves(page)) = super::page_data(ui, ctx, route) else {
         return;
     };
+    let one = match &page.shelves[..] {
+        [s] => Some(s),
+        _ => None,
+    };
     super::page(ui, route, |ui| {
-        if *route == Route::Home {
-            ui.heading(tr("Home")); // the home feed has no title
-        } else if !page.title.is_empty() {
-            ui.heading(&page.title);
+        let home = tr("Home"); // the home feed has no title
+        let title: &str = if *route == Route::Home {
+            &home
+        } else if page.title.is_empty() {
+            one.map_or("", |s| &s.title)
+        } else {
+            &page.title
+        };
+        if !title.is_empty() {
+            ui.heading(title);
         }
-        if !matches!(route, Route::ViewAll(_)) {
+        let Some(s) = one else {
             shelf::shelves(ui, &page.shelves, ctx);
             return;
-        }
-        for s in &page.shelves {
-            if s.layout == Layout::Tracks {
-                // ponytail: up to 500 tracks cloned per frame; keep them as tracks on arrival
-                // if this ever shows in a profile.
-                let list: Vec<_> = shelf::tracks_of(&s.items).cloned().collect();
-                tracks::show(ui, ctx, "view-all-tracks", &list, false);
-            } else {
-                shelf::grid(ui, &s.items, ctx);
-            }
+        };
+        if s.layout == Layout::Tracks {
+            // ponytail: up to 500 tracks cloned per frame (~135 µs measured); keep them as
+            // tracks on arrival if this ever shows in a profile.
+            let list: Vec<_> = shelf::tracks_of(&s.items).cloned().collect();
+            tracks::show(ui, ctx, "all-tracks", &list, false);
+        } else {
+            shelf::grid(ui, &s.items, ctx);
         }
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{PageData, Route};
-    use crate::ui::testing::{album, artist, every_state, mix, playlist, tracks};
+    use crate::model::{Event, PageData, Route};
+    use crate::ui::testing::{album, artist, at, every_state, mix, pass, playlist, tracks};
     use tidal::{Item, Layout, More, Page, Shelf};
+
+    /// A v1 "View all": a page of one untitled-page shelf, as `Client::page` fills it.
+    fn single_module(title: &str, layout: Layout, items: Vec<Item>) -> (Route, Page) {
+        let shelf = Shelf {
+            title: title.into(),
+            layout,
+            items,
+            more: None,
+        };
+        let route = Route::Page("pages/single-module-page/x".into());
+        (
+            route,
+            Page {
+                title: String::new(),
+                shelves: vec![shelf],
+            },
+        )
+    }
+
+    /// The text and top edge of each AccessKit node `show` draws for `page` at `route`.
+    fn nodes(route: Route, page: Page) -> Vec<(String, f64)> {
+        let mut model = at(route.clone());
+        model.apply(Event::Page {
+            route,
+            data: PageData::Shelves(page),
+        });
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let tree = out
+            .platform_output
+            .accesskit_update
+            .expect("AccessKit is on");
+        tree.nodes
+            .iter()
+            .filter_map(|(_, n)| {
+                let text = n.label().or(n.value())?.to_owned();
+                Some((text, n.bounds()?.y0))
+            })
+            .collect()
+    }
+
+    /// Ruling R17: a one-shelf page lists every track, not a shelf's first 10.
+    #[test]
+    fn a_single_module_page_lists_every_track() {
+        let items = tracks(12).into_iter().map(Item::Track).collect();
+        let (route, page) = single_module("New Tracks", Layout::Tracks, items);
+        let nodes = nodes(route, page);
+        let shows = |t: &str| nodes.iter().any(|(s, _)| s == t);
+        assert!(shows("New Tracks"), "the shelf's title heads the page");
+        assert!(shows("11. Track 11, Artist 1, 3:20"), "{nodes:?}");
+    }
+
+    /// Ruling R17: a one-shelf page of cards is a grid that wraps, not one sideways row.
+    #[test]
+    fn a_single_module_page_of_cards_is_a_grid() {
+        let items = (1..=8).map(|i| Item::Album(album(i))).collect();
+        let (route, page) = single_module("New Albums", Layout::Cards, items);
+        let nodes = nodes(route, page);
+        let top = |t: &str| nodes.iter().find(|(s, _)| s == t).map(|n| n.1);
+        let (first, fifth) = (
+            top("Album 1, Artist 1, Artist 2"),
+            top("Album 5, Artist 1, Artist 2"),
+        );
+        assert!(top("New Albums").is_some(), "{nodes:?}");
+        assert!(
+            first.zip(fifth).is_some_and(|(a, b)| b > a),
+            "card 5 starts a row below card 1: {nodes:?}"
+        );
+    }
 
     #[test]
     fn views_render_every_state() {
