@@ -72,16 +72,19 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   drops it; a device unplugged while paused is noticed only on resume, after one period; `wasapi`'s
   `trace!` in `write_to_device` runs in the render loop (set `log`'s `release_max_level_debug` in the
   app so it compiles out).
-- Engine races at the track boundary (rare): `set_output` and the preload-error path read the
-  position around `poll_switch`, so a boundary crossed in between opens exclusive at A's format while
-  B plays, or re-seeks A near 0; a superseded seek in the preload-error arm undoes the switch without
-  a flush (B's leftover frames are heard until the next flush); the drain path has a theoretical race
-  when B is shorter than a device period and `Preload(C)` lands in the window (`engine.rs`).
+- Engine races at the track boundary (rare): a superseded seek in the preload-error arm undoes the
+  switch without a flush (B's leftover frames are heard until the next flush); the drain path has a
+  theoretical race when B is shorter than a device period and `Preload(C)` lands in the window; a
+  seek interrupting `begin` of an after-tail preload (the drained path) still drops it and ends A
+  (`engine.rs`). `Shared::heard` retries when a switch lands between its reads, but the renderer
+  writes the new clock before it bumps `switches`, so a read in those few instructions can still mix
+  the two tracks' clocks (an odd/even count would close it, `render.rs`).
 - `SWITCH_WAIT` polls every 1 ms; 5 ms cuts the wakes five-fold (CPU budget, `engine.rs`).
 - A failed positional write stores its `Interrupted` kind as the download error, and `read_exact`
   retries that forever: map it to `Other`, or retry in `write_all_at` (`stream.rs`).
 - A long Hi-Res track is a large temp file: 954 MB for 25 minutes of 24/192, two during a preload;
-  `/tmp` is RAM (tmpfs) on many Linux distributions.
+  `/tmp` is RAM (tmpfs) on many Linux distributions. Create it with `tempfile::tempfile_in(dir)`
+  (`stream.rs`), `dir` passed in by the app (its cache directory).
 - Tests that miss their path: `a_lost_exclusive_device_falls_back_and_continues` renders nothing
   after `maintain`; the preload-fails-before-heard test checks events, not A's tail;
   `preload_after_the_end_is_dropped` cannot fail on its filter; the eof-branch late preload relies on

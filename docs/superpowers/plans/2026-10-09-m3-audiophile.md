@@ -375,12 +375,15 @@
     - A 16/44.1 album: the badge reads `16/44.1 FLAC · Exclusive`, the volume is locked, and there is no gap between the tracks of a continuous (live) album.
     - A 24/96 track: the log has `exclusive output: … 96000 Hz, packed 24-bit`.
     - S1's 24/88.2 track 328638758: one notice, and the badge reads `24/88.2 FLAC · Shared 96 kHz`.
-    - Unplug the DAC mid-track: one notice, and playback goes on through the default device.
+    - Unplug the DAC mid-track: one notice, and playback goes on through the default device. Time
+      the latency from the unplug to the `Fallback` notice (at most ~1.5 s expected: the 0.5 s event
+      timeout, then the engine's once-a-second check) and record it in spec §10.
+    - The first exclusive open after the app starts succeeds (the shared stream is closed first).
     - Exclusive off: the volume works again.
     - Normalization Track vs Off: the level changes audibly.
     - Hi-Res off: the badge shows 16/44.1 on a Hi-Res album.
     - 24/192 bit-perfect needs a DAC that takes 192 kHz; without one, record that limitation.
-  - **macOS** (the human's Mac): the same checks with a 24/192 track. Audio MIDI Setup shows 192.0 kHz while it plays, another app cannot play (hog mode), and `cargo test -p player --lib -- --ignored exclusive` passes.
+  - **macOS** (the human's Mac): the same checks with a 24/192 track. Audio MIDI Setup shows 192.0 kHz while it plays, another app cannot play (hog mode), and `cargo test -p player --lib -- --ignored exclusive` passes. After the app quits, check the device's physical format in Audio MIDI Setup (it stays changed after hog mode ends; see follow-ups).
   - **Linux:** on a Linux machine with a `hw:` device, `/proc/asound/card*/pcm0p/sub0/hw_params` shows `rate: 192000`; without one, it is verified in CI only and recorded as such.
 - [ ] **Step 6: Commit** `docs: M3 audiophile outcome and follow-ups`.
 
