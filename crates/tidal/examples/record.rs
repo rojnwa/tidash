@@ -1,13 +1,18 @@
-//! Records one live, read-only TIDAL GET for fixtures and spikes (run by hand, logged in):
-//! `cargo run -p tidal --example record -- <v1|v2|openapi> <path?query> <name> ["Header: value"...]`
+//! Records one live TIDAL request for fixtures and spikes (run by hand, logged in):
+//! `cargo run -p tidal --example record -- <v1|v2|openapi> <path?query> <name> [flags]`
+//!
+//! Flags: `--method <GET|POST|PUT|PATCH|DELETE>`, `--form k=v` (repeatable), `--json '<body>'`
+//! (sent as `application/vnd.api+json`, with an `Idempotency-Key` on openapi), `--header k:v`
+//! (repeatable; an empty value drops a default header). A bodiless PUT goes out as
+//! `application/json`, as the client sends it.
 //!
 //! `{uid}` in the path becomes the session's user id. The standard query params are added
-//! unless the path already sets them; an extra header with an empty value drops a default one.
-//! Writes `target/record/<name>.json` (body) and `<name>.txt` (status, URL, cache headers).
-//! Never prints or writes the token.
+//! unless the path already sets them. Writes `target/record/<name>.json` (body) and
+//! `<name>.txt` (method, status, URL, cache headers). Never prints or writes the token.
 #![allow(clippy::print_stdout)]
 
-use reqwest::header::{ACCEPT, HeaderMap, HeaderName, HeaderValue};
+use reqwest::Method;
+use reqwest::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::path::Path;
@@ -16,25 +21,47 @@ use std::sync::Arc;
 type BoxError = Box<dyn std::error::Error>;
 
 const CLIENT_VERSION: &str = "2026.9.30";
+const USAGE: &str = "usage: record <v1|v2|openapi> <path?query> <name> [--method M] \
+                     [--form k=v]... [--json '<body>'] [--header k:v]...";
+
+#[derive(Default)]
+struct Req {
+    method: Option<Method>,
+    form: Vec<(String, String)>,
+    json: Option<String>,
+    headers: Vec<String>,
+}
 
 fn main() -> Result<(), BoxError> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let [api, path, name, headers @ ..] = args.as_slice() else {
-        return Err(
-            "usage: record <v1|v2|openapi> <path?query> <name> [\"Header: value\"...]".into(),
-        );
+    let mut args = std::env::args().skip(1);
+    let (Some(api), Some(path), Some(name)) = (args.next(), args.next(), args.next()) else {
+        return Err(USAGE.into());
     };
+    let mut req = Req::default();
+    while let Some(flag) = args.next() {
+        let val = args.next().ok_or(USAGE)?;
+        match flag.as_str() {
+            "--method" => req.method = Some(val.to_uppercase().parse()?),
+            "--form" => {
+                let (k, v) = val.split_once('=').ok_or("a form field is `k=v`")?;
+                req.form.push((k.into(), v.into()));
+            }
+            "--json" => req.json = Some(val),
+            "--header" => req.headers.push(val),
+            _ => return Err(USAGE.into()),
+        }
+    }
     // Blocking keyring read, before the async runtime exists.
     let (store, session) = tidal::default_store();
     let session = session?.ok_or("not logged in")?;
-    tokio::runtime::Runtime::new()?.block_on(run(api, path, name, headers, store, session))
+    tokio::runtime::Runtime::new()?.block_on(run(&api, &path, &name, req, store, session))
 }
 
 async fn run(
     api: &str,
     path: &str,
     name: &str,
-    headers: &[String],
+    req: Req,
     store: Arc<dyn tidal::TokenStore>,
     session: tidal::Session,
 ) -> Result<(), BoxError> {
@@ -72,6 +99,7 @@ async fn run(
         }
     }
 
+    let method = req.method.unwrap_or(Method::GET);
     let mut hdrs = HeaderMap::new();
     let accept = if api == "openapi" {
         "application/vnd.api+json"
@@ -85,7 +113,19 @@ async fn run(
             HeaderValue::from_static(CLIENT_VERSION),
         );
     }
-    for h in headers {
+    if req.json.is_some() {
+        hdrs.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/vnd.api+json"),
+        );
+        if api == "openapi" {
+            hdrs.insert("idempotency-key", tidal::new_session_id().parse()?);
+        }
+    } else if req.form.is_empty() && method == Method::PUT {
+        hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        hdrs.insert(CONTENT_LENGTH, HeaderValue::from_static("0"));
+    }
+    for h in &req.headers {
         let (k, v) = h.split_once(':').ok_or("a header is `Name: value`")?;
         let k: HeaderName = k.trim().parse()?;
         if v.trim().is_empty() {
@@ -95,24 +135,34 @@ async fn run(
         }
     }
 
-    let resp = reqwest::Client::new()
-        .get(url.clone())
+    let mut rb = reqwest::Client::new()
+        .request(method.clone(), url.clone())
         .headers(hdrs)
-        .bearer_auth(&session.access_token)
-        .send()
-        .await?;
+        .bearer_auth(&session.access_token);
+    if !req.form.is_empty() {
+        rb = rb.form(&req.form);
+    }
+    if let Some(json) = req.json {
+        rb = rb.body(json);
+    }
+    let resp = rb.send().await?;
     let status = resp.status().as_u16();
-    let mut meta = format!("status: {status}\nurl: {url}\n");
-    for h in ["cache-control", "etag", "vary", "content-type"] {
+    let mut meta = format!("method: {method}\nstatus: {status}\nurl: {url}\n");
+    for h in ["cache-control", "etag", "vary", "content-type", "location"] {
         if let Some(v) = resp.headers().get(h) {
             writeln!(meta, "{h}: {}", v.to_str().unwrap_or("?"))?;
         }
     }
+    let etag = resp.headers().get("etag").cloned();
     let body = resp.bytes().await?;
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/record");
     std::fs::create_dir_all(&dir)?;
     std::fs::write(dir.join(format!("{name}.json")), &body)?;
     std::fs::write(dir.join(format!("{name}.txt")), meta)?;
-    println!("{name}: {status} ({} bytes)", body.len());
+    let etag = etag.as_ref().and_then(|v| v.to_str().ok()).unwrap_or("-");
+    println!(
+        "{name}: {method} {status} ({} bytes) etag {etag}",
+        body.len()
+    );
     Ok(())
 }
