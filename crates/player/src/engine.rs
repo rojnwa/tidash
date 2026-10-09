@@ -518,8 +518,8 @@ impl Engine {
         self.ring = Some(ring);
         self.rate = rate;
         if self.track.is_some() {
-            self.poll_switch(); // one made before `configure`: the position is the new track's
-            self.seek(self.shared.position());
+            let at = self.poll_switch(); // one made before `configure`: the new track's position
+            self.seek(at);
             self.format_event();
         }
         true
@@ -666,12 +666,12 @@ impl Engine {
             Err(e) if superseded(&e, &self.interrupt) => return false,
             Err(e) => {
                 let id = t.id;
-                self.poll_switch(); // heard by now: then its error is the current track's
+                let at = self.poll_switch(); // heard by now: then its error is the current track's
                 if self.ending.is_some() {
                     // A preload failing before it is heard is dropped: the ending track plays
                     // out instead, and the app meets the error when it loads that one itself.
                     log::warn!("preloaded track {id}: {e}");
-                    self.seek(self.shared.position()); // undoes the switch first
+                    self.seek(at); // undoes the switch first
                     self.next = None;
                 } else {
                     self.fail(id, e.to_string());
@@ -730,13 +730,15 @@ impl Engine {
         true
     }
 
-    /// The renderer reached the boundary: the current track is heard from now on.
-    fn poll_switch(&mut self) {
-        let n = self.shared.switches.load(Acquire);
+    /// The renderer reached the boundary: the current track is heard from now on. Returns the
+    /// position heard, read at the same moment as the switch.
+    fn poll_switch(&mut self) -> Duration {
+        let (n, at) = self.shared.heard();
         if n != self.switches_seen {
             self.switches_seen = n;
             self.switched();
         }
+        at
     }
 
     /// The ending track is over. With none (an undone switch), nothing happens.

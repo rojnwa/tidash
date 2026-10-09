@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, fence};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -73,6 +73,19 @@ impl Shared {
         let frames = self.frames.load(Relaxed);
         let ns = frames_to_ns(frames, self.device_rate.load(Relaxed));
         Duration::from_nanos(self.base_ns.load(Relaxed).saturating_add(ns))
+    }
+
+    /// `switches` and `position()` from one moment: read again when the renderer crossed a
+    /// boundary in between (the clock restarted for the next track).
+    pub(crate) fn heard(&self) -> (u64, Duration) {
+        loop {
+            let n = self.switches.load(Acquire);
+            let at = self.position();
+            fence(Acquire); // the position's loads stay before the check
+            if self.switches.load(Relaxed) == n {
+                return (n, at);
+            }
+        }
     }
 }
 

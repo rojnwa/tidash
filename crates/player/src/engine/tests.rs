@@ -548,6 +548,113 @@ fn a_new_device_is_opened_for_the_next_track() {
     assert_eq!(dac.asked(), [S16_44100, S16_44100]);
 }
 
+/// Track 1 at 44.1 kHz (passthrough: all of it is in the ring) with `next` preloaded,
+/// decoded to the switch and rendered until `r`'s next block crosses the boundary.
+fn at_the_boundary(next: Source) -> (Engine, Renderer, Receiver<PlayerEvent>) {
+    let (_player, events, mut r, mut e) = parts();
+    r.configure(44_100, 2);
+    e.command(PlayerCmd::Load(fixture(1)));
+    e.command(PlayerCmd::Preload(Some(next)));
+    r.render(&mut [0.0; BLOCK]); // takes the load flushes
+    for _ in 0..1_000 {
+        if e.ending.is_some() {
+            break;
+        }
+        e.step();
+    }
+    assert!(e.ending.is_some(), "no switch");
+    let left = e.shared.boundary.load(Relaxed) - e.shared.frames.load(Relaxed);
+    for _ in 0..(left - 1) / (BLOCK / 2) as u64 {
+        r.render(&mut [0.0; BLOCK]);
+    }
+    (e, r, events)
+}
+
+/// The old output renders on while it closes, across the boundary: exclusive then opens at
+/// the format of the track heard by then, the next one.
+#[test]
+fn set_output_at_the_boundary_opens_the_track_heard() {
+    let (mut e, r, events) = at_the_boundary(source(2, "s24_96000"));
+    e.sink = Some(Sink::Exclusive(Exclusive::closing(S16_44100, r))); // the shared output
+    let dac = dac(&mut e, |_| true);
+    e.command(PlayerCmd::SetOutput(exclusive()));
+    assert_eq!(dac.asked(), [S24_96000]);
+    let last = events
+        .try_iter()
+        .filter(|ev| matches!(ev, PlayerEvent::Format { .. }));
+    let want = PlayerEvent::Format {
+        track: S24_96000,
+        exclusive: true,
+        device_rate: 96_000,
+    };
+    assert_eq!(last.last(), Some(want));
+}
+
+/// Fails every read: a download that broke.
+struct Broken;
+
+impl Read for Broken {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::ErrorKind::ConnectionReset.into())
+    }
+}
+
+/// The renderer the next warning about track 7 renders one block from: the device thread
+/// crossing the boundary while the player thread logs.
+static CROSSING: Mutex<Option<Renderer>> = Mutex::new(None);
+
+struct CrossOnWarn;
+
+impl log::Log for CrossOnWarn {
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record) {
+        if record.args().to_string().starts_with("preloaded track 7:")
+            && let Some(mut r) = lock(&CROSSING).take()
+        {
+            r.render(&mut [0.0; BLOCK]);
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// A preload failing before it is heard, and the boundary crossed while that is handled (here
+/// while the error is logged): the ending track plays on from where it was heard, not from
+/// the next track's new clock, near 0.
+#[test]
+fn a_crossing_while_a_preload_fails_keeps_the_position() {
+    let _ = log::set_logger(&CrossOnWarn);
+    log::set_max_level(log::LevelFilter::Warn);
+    // Enough of it to open (its first moof ends at byte 844), then the download breaks.
+    let broken = Source {
+        reader: Box::new(fixture(7).reader.take(1500).chain(Broken)),
+        len: None,
+        ..fixture(7)
+    };
+    let (mut e, r, _events) = at_the_boundary(broken);
+    *lock(&CROSSING) = Some(r);
+    for _ in 0..1_000 {
+        if lock(&CROSSING).is_none() {
+            break; // track 7 failed
+        }
+        e.step();
+    }
+    assert_eq!(
+        e.shared.switches.load(Relaxed),
+        1,
+        "no crossing: logger not set"
+    );
+    assert_eq!(e.track.as_ref().unwrap().id, 1);
+    let at = e.shared.position();
+    assert!(
+        at >= Duration::from_millis(400),
+        "track 1 restarted at {at:?}"
+    );
+}
+
 #[test]
 fn a_new_renderer_continues_the_position() {
     let (_player, _events, mut r, mut e) = parts();

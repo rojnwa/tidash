@@ -72,6 +72,28 @@ impl Exclusive {
         };
         (x, failed)
     }
+
+    /// No device; closing it renders one more block from `renderer`, as a device does while
+    /// it stops.
+    #[cfg(test)]
+    pub(crate) fn closing(format: Format, renderer: Renderer) -> Exclusive {
+        struct Closing(Renderer);
+        impl Stream for Closing {
+            fn pause(&mut self) {}
+            fn resume(&mut self) {}
+        }
+        impl Drop for Closing {
+            fn drop(&mut self) {
+                fastframe_audio::Render::render(&mut self.0, &mut [0.0; 960]);
+            }
+        }
+        Exclusive {
+            format,
+            stream: Some(Box::new(Closing(renderer))),
+            failed: Arc::default(),
+            paused: false,
+        }
+    }
 }
 
 /// Holds `device` at `format` (no resampling, no volume) and starts it pulling from

@@ -68,6 +68,9 @@ impl Engine {
     pub(super) fn set_output(&mut self, config: OutputConfig) {
         if config != self.config {
             self.config = config;
+            // Closed first: while it stops, the old output can render past the boundary.
+            self.sink = None;
+            self.poll_switch();
             let heard = self.ending.as_ref().or(self.track.as_ref());
             self.open_output(heard.map(|t| t.decoder.format()));
         }
