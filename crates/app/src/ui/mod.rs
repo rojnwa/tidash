@@ -49,6 +49,18 @@ impl Default for UiState {
     }
 }
 
+impl UiState {
+    /// What the UI keeps of a session ends with it (`LoggedOut`, `SessionExpired`): the next
+    /// account finds the search box empty, with no undo history to bring the query back.
+    pub fn apply(&mut self, ctx: &egui::Context, ev: &Event) {
+        if matches!(ev, Event::LoggedOut | Event::SessionExpired) {
+            self.search = Default::default();
+            let id = search::query_id();
+            ctx.data_mut(|d| d.remove::<egui::text_edit::TextEditState>(id));
+        }
+    }
+}
+
 /// What every view draws with.
 pub struct Ctx<'a> {
     pub model: &'a Model,

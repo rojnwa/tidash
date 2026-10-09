@@ -151,7 +151,10 @@ impl eframe::App for App {
                     self.model.apply(Event::Playback(p));
                     self.media.show(&self.model.playback, position);
                 }
-                ev => self.model.apply(ev),
+                ev => {
+                    self.ui.apply(ctx, &ev);
+                    self.model.apply(ev);
+                }
             }
         }
         self.open_current(); // Home after `LoggedIn`
