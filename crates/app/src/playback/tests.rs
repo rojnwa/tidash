@@ -525,11 +525,12 @@ fn a_preloaded_track_starts_without_a_load() {
         (p.quality.as_str(), p.codec.as_str()),
         ("HI_RES_LOSSLESS", "flac")
     );
-    assert_eq!(
-        p.play.as_ref().map(|play| play.track_id),
-        Some(1),
-        "a new play"
-    );
+    let play = p.play.as_ref().expect("a new play");
+    assert_eq!(play.track_id, 1);
+    // No State event comes at a gapless switch: the play counts from its start all the same.
+    let report = report_for(play, End::Natural, Instant::now() + S * 31, 0);
+    let quality = report.expect("reported").quality;
+    assert_eq!(quality, "HI_RES_LOSSLESS");
 }
 
 fn track_9() -> Vec<tidal::Track> {

@@ -511,12 +511,15 @@ impl Playback {
                 if self.play.is_none()
                     && let Some(t) = self.queue.current()
                 {
-                    self.play = Some(PlayAccounting::new(
+                    let mut play = PlayAccounting::new(
                         t,
                         self.quality.clone(),
                         self.player.position(),
                         now_ms(),
-                    ));
+                    );
+                    // A gapless start sends no State event: the player was playing all along.
+                    play.set_playing(self.state == PlayState::Playing, Instant::now());
+                    self.play = Some(play);
                 }
             }
             Msg::Player(PlayerEvent::TrackEnded(id)) if id == self.seq => {
