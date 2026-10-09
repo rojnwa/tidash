@@ -618,13 +618,23 @@ fn stream_error_emits_error() {
     assert!(err < seen.len() - 1);
 }
 
+/// Renders until track 1 starts, then lets the player thread fill the ring (and so decode to
+/// a whole fixture's end): from an empty ring a debug build lags behind these tests.
+fn fill_ring(
+    renderer: &mut Renderer,
+    events: &Receiver<PlayerEvent>,
+) -> (Vec<f32>, Vec<PlayerEvent>) {
+    let rendered = render_until(renderer, events, &TrackStarted(1));
+    std::thread::sleep(Duration::from_millis(200));
+    rendered
+}
+
 /// Plays `s16_44100` twice (ids 1, 2) at `rate`, gaplessly: what was rendered until the stop,
 /// and the events. Compared sample for sample, the output must not underrun: the ring fills
 /// before rendering goes on, at `PACE`.
 fn play_gapless(rate: u32) -> (Vec<f32>, Vec<PlayerEvent>) {
     let (_player, events, mut r) = start_with_preload(rate, source(2, "s16_44100"));
-    let (mut out, mut seen) = render_until(&mut r, &events, &TrackStarted(1));
-    std::thread::sleep(Duration::from_millis(200));
+    let (mut out, mut seen) = fill_ring(&mut r, &events);
     let (rest, more) = render_paced(&mut r, &events, &State(Stopped), PACE);
     out.extend(rest);
     seen.extend(more);
@@ -665,7 +675,8 @@ fn position_restarts_at_the_boundary() {
 #[test]
 fn a_late_preload_still_follows() {
     let (player, events, mut r) = start("s16_44100");
-    let mut out = render_ms(&mut r, 100); // A is fully decoded by then
+    let (mut out, _) = fill_ring(&mut r, &events); // A is fully decoded by then
+    out.extend(render_ms(&mut r, 100));
     player.send(PlayerCmd::Preload(Some(source(2, "s16_44100"))));
     let (rest, seen) = render_until(&mut r, &events, &State(Stopped));
     out.extend(rest);
@@ -678,7 +689,8 @@ fn a_late_preload_still_follows() {
 #[test]
 fn seek_before_the_boundary_stays_in_the_ending_track() {
     let (player, events, mut r) = start_with_preload(48_000, source(2, "s16_44100"));
-    render_ms(&mut r, 50); // the switch to B is decoded, not heard
+    fill_ring(&mut r, &events); // the switch to B is decoded, not heard
+    render_ms(&mut r, 50);
     let target = Duration::from_millis(100);
     player.send(PlayerCmd::Seek(target));
     wait_position(&player, target);
@@ -723,6 +735,21 @@ fn a_preload_that_fails_to_open_ends_the_track_normally() {
     let (_player, events, mut r) = start_with_preload(48_000, broken);
     let (_, seen) = render_until(&mut r, &events, &State(Stopped));
     assert!(seen.contains(&TrackEnded(1)), "{seen:?}");
+    assert!(
+        !seen.iter().any(|e| matches!(e, PlayerEvent::Error { .. })),
+        "{seen:?}"
+    );
+}
+
+#[test]
+fn a_preload_failing_before_it_is_heard_ends_the_track_normally() {
+    // Enough of B to open it (ftyp, moov and the first moof end at byte 844), then the
+    // download breaks inside the first mdat: B fails right after the switch to it.
+    let broken = Cut::source(2, "s16_44100", 1500, false);
+    let (_player, events, mut r) = start_with_preload(48_000, broken);
+    let (_, seen) = render_until(&mut r, &events, &State(Stopped));
+    assert!(seen.contains(&TrackEnded(1)), "{seen:?}");
+    assert!(!seen.contains(&TrackStarted(2)), "{seen:?}");
     assert!(
         !seen.iter().any(|e| matches!(e, PlayerEvent::Error { .. })),
         "{seen:?}"

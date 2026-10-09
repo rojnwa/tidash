@@ -65,10 +65,9 @@ pub enum PlayerEvent {
     TrackStarted(u64),
     /// Playback stopped at the track's natural end, with no preload after it.
     TrackEnded(u64),
-    Error {
-        id: u64,
-        message: String,
-    },
+    /// The track failed and playback stopped. A preload that fails before it is heard sends
+    /// none: it is dropped, and the track before it plays out and ends.
+    Error { id: u64, message: String },
     /// The output could not be opened again; sent on the first failed reopen, not on the retries
     /// after it. The output keeps trying, and a loaded track plays on once it is back.
     OutputLost,
@@ -575,7 +574,16 @@ impl Engine {
             Err(e) if superseded(&e, &self.interrupt) => return false,
             Err(e) => {
                 let id = t.id;
-                self.fail(id, e.to_string());
+                self.poll_switch(); // heard by now: then its error is the current track's
+                if self.ending.is_some() {
+                    // A preload failing before it is heard is dropped: the ending track plays
+                    // out instead, and the app meets the error when it loads that one itself.
+                    log::warn!("preloaded track {id}: {e}");
+                    self.seek(self.shared.position()); // undoes the switch first
+                    self.next = None;
+                } else {
+                    self.fail(id, e.to_string());
+                }
             }
         }
         true

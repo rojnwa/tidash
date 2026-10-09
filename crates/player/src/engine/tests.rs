@@ -91,6 +91,30 @@ fn stale_decoder_resumes_seamlessly() {
     assert!(decode_all(Some(5)) == straight, "resumed decode differs");
 }
 
+/// A seek before the boundary takes the switch back: the ending track is current again, the
+/// next one a preload again, and the renderer's boundary is gone.
+#[test]
+fn a_seek_before_the_boundary_undoes_the_switch() {
+    let (_player, _events, mut r, mut e) = parts();
+    r.configure(48_000, 2);
+    e.command(PlayerCmd::Load(fixture(1)));
+    e.command(PlayerCmd::Preload(Some(fixture(2))));
+    r.render(&mut [0.0; 960]); // takes the load flushes
+    for _ in 0..1_000 {
+        if e.ending.is_some() {
+            break;
+        }
+        e.step(); // all of track 1 fits in the ring: no rendering needed
+    }
+    assert!(e.ending.is_some(), "no switch");
+    assert_eq!(e.track.as_ref().unwrap().id, 2);
+    e.command(PlayerCmd::Seek(Duration::from_millis(100)));
+    assert!(e.ending.is_none());
+    assert_eq!(e.track.as_ref().unwrap().id, 1);
+    assert_eq!(e.next.as_ref().unwrap().id, 2);
+    assert_eq!(e.shared.boundary.load(Relaxed), u64::MAX);
+}
+
 /// A decoder gone stale at the very end is rebuilt there and finds nothing left: the end of
 /// the stream, not an error.
 #[test]
