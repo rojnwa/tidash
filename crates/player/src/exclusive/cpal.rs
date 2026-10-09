@@ -29,6 +29,22 @@ fn sample_formats(bits: u16) -> &'static [SampleFormat] {
     }
 }
 
+/// macOS: the physical (device-side) formats that hold a `bits`-bit sample exactly, f32 last
+/// (exact up to 24 bits at unity gain). The format cpal is given comes first: cpal sets it as
+/// the physical format whenever the device has it, so trying another first would be undone.
+#[cfg_attr(
+    not(any(test, target_os = "macos")),
+    expect(dead_code, reason = "used on macOS")
+)]
+fn physical_formats(bits: u16) -> &'static [SampleFormat] {
+    use SampleFormat::{F32, I16, I24, I32};
+    match bits {
+        ..=16 => &[I16, I24, I32, F32],
+        17..=24 => &[I32, I24, F32],
+        _ => &[],
+    }
+}
+
 /// The stream config and sample format that play `format` unchanged on a device with `ranges`:
 /// its exact rate and channels, and a fixed period of 10 ms (within the device's limits).
 fn pick(
@@ -131,14 +147,19 @@ pub(super) fn open(
         .collect();
     #[cfg(target_os = "macos")]
     let ranges = integer_ranges(&ranges);
-    let (config, sample) = pick(&ranges, format).ok_or_else(|| {
+    let unsupported = || {
         format!(
             "{} Hz / {}-bit is not supported in exclusive mode",
             format.rate, format.bits
         )
-    })?;
+    };
+    let (config, sample) = pick(&ranges, format).ok_or_else(unsupported)?;
     #[cfg(target_os = "macos")]
     let hog = hog::Hog::take(&name)?;
+    // cpal sets only the nominal rate when the device has no physical format like the one it
+    // is given, and CoreAudio would convert to whatever it has: one that holds the track first.
+    #[cfg(target_os = "macos")]
+    let physical = hog.set_physical(format)?.ok_or_else(unsupported)?;
     renderer.configure(format.rate, format.channels);
     let BufferSize::Fixed(frames) = config.buffer_size else {
         unreachable!("pick fixes the period")
@@ -160,6 +181,16 @@ pub(super) fn open(
         SampleFormat::I24 => "24-in-32-bit",
         _ => "32-bit",
     };
+    #[cfg(target_os = "macos")]
+    let container = format!(
+        "{container}, physical {}",
+        match physical {
+            SampleFormat::I16 => "16-bit int",
+            SampleFormat::I24 => "24-bit int",
+            SampleFormat::I32 => "32-bit int",
+            _ => "32-bit float",
+        }
+    );
     log::info!(
         "exclusive output: {name}, {} Hz, {container}, period {:.1} ms",
         format.rate,
@@ -251,9 +282,15 @@ fn build<T: SizedSample + 'static>(
 /// macOS hog mode: no other process can use the device while it is held.
 #[cfg(target_os = "macos")]
 mod hog {
+    use coreaudio::audio_unit::audio_format::LinearPcmFlags;
     use coreaudio::audio_unit::macos_helpers::{
-        get_device_id_from_name, get_hogging_pid, toggle_hog_mode,
+        find_matching_physical_format, get_device_id_from_name, get_hogging_pid,
+        set_device_physical_stream_format, toggle_hog_mode,
     };
+    use coreaudio::audio_unit::{SampleFormat as Physical, StreamFormat};
+
+    use super::{SampleFormat, physical_formats};
+    use crate::Format;
 
     /// An output device in hog mode for this process; dropping it gives the device back.
     pub(super) struct Hog(u32);
@@ -276,6 +313,30 @@ mod hog {
                 return Err("the device refused exclusive use".into());
             }
             Ok(Hog(id))
+        }
+
+        /// Sets the device's physical format to the first of `physical_formats` it has at the
+        /// track's rate and channels, and returns that one; `None` when it has none.
+        pub(super) fn set_physical(&self, format: Format) -> Result<Option<SampleFormat>, String> {
+            for &f in physical_formats(format.bits) {
+                let sample_format = match f {
+                    SampleFormat::I16 => Physical::I16,
+                    SampleFormat::I24 => Physical::I24,
+                    SampleFormat::I32 => Physical::I32,
+                    _ => Physical::F32,
+                };
+                let wanted = StreamFormat {
+                    sample_rate: f64::from(format.rate),
+                    sample_format,
+                    flags: LinearPcmFlags::empty(),
+                    channels: u32::from(format.channels),
+                };
+                if let Some(asbd) = find_matching_physical_format(self.0, wanted) {
+                    set_device_physical_stream_format(self.0, asbd).map_err(|e| e.to_string())?;
+                    return Ok(Some(f));
+                }
+            }
+            Ok(None)
         }
     }
 
@@ -381,6 +442,15 @@ mod tests {
             None,
             "16-bit cannot hold 24"
         );
+    }
+
+    #[test]
+    fn physical_formats_hold_the_source_exactly() {
+        use SampleFormat::{F32, I16, I24, I32};
+        // The client format on macOS (pick's first: I16 or I32) leads.
+        assert_eq!(physical_formats(16), [I16, I24, I32, F32]);
+        assert_eq!(physical_formats(24), [I32, I24, F32]);
+        assert_eq!(physical_formats(32), [], "f32 cannot hold 32 bits");
     }
 
     #[test]
