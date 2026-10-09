@@ -56,6 +56,10 @@ pub enum Action {
         item: tidal::Favorite,
         on: bool,
     },
+    /// Saves these audio settings and plays by them from now on.
+    SetAudio(crate::settings::Audio),
+    /// Lists the output devices (`Event::Devices`).
+    ListDevices,
 }
 
 #[derive(Clone, Debug)]
@@ -113,6 +117,10 @@ pub enum Event {
     },
     /// The audio output is open; the UI reads the position from it.
     Player(player::Player),
+    /// The settings in force: read at start, and after each change.
+    Settings(crate::settings::Settings),
+    /// The output devices' names; empty when they could not be listed.
+    Devices(Vec<String>),
     Error(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),

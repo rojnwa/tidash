@@ -39,7 +39,7 @@ pub async fn fetch(c: &Client, route: &Route) -> tidal::Result<PageData> {
             CollectionTab::Mixes => items(c.favorite_mixes().await?, Item::Mix),
         },
         // No page; `Model::needs_load` never asks for one.
-        Route::Login | Route::Search => PageData::Items(Vec::new()),
+        Route::Login | Route::Search | Route::Settings => PageData::Items(Vec::new()),
     })
 }
 

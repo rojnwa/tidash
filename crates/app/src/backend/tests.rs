@@ -264,7 +264,8 @@ fn a_stream_load_in_flight_at_logout_stops_before_the_cache_clear() {
         };
         b.log_in(session("a"));
         let (output, _, _renderer) = player::Player::spawn_manual();
-        b.playback = Some(Playback::new(output, b.emit.clone(), b.msgs.clone()));
+        let audio = Default::default();
+        b.playback = Some(Playback::new(output, b.emit.clone(), b.msgs.clone(), audio));
         let tracks = vec![track()];
         b.handle(Action::PlayTracks { tracks, start: 0 }).await;
         let sent = async {
@@ -298,7 +299,7 @@ fn an_expired_session_is_removed_and_shown_once() {
     let store = Arc::new(Calls::default());
     let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(Some(session("a"))));
     let (output, _, _renderer) = player::Player::spawn_manual();
-    let mut p = Playback::new(output, b.emit.clone(), b.msgs.clone());
+    let mut p = Playback::new(output, b.emit.clone(), b.msgs.clone(), Default::default());
     let tracks = vec![track()];
     p.handle(None, Action::PlayTracks { tracks, start: 0 });
     let playing = player::PlayerEvent::State(player::PlayState::Playing);
@@ -430,6 +431,33 @@ fn unreadable_store_warns_and_stays_logged_out() {
     let events = startup(Err(tidal::Error::Store("denied".into())));
     assert!(
         matches!(events[..], [Event::CredentialsNotPersistent]),
+        "{events:?}"
+    );
+}
+
+/// The change is saved (creating the config dir) and the model told.
+#[test]
+fn set_audio_saves_and_announces() {
+    let dir = std::env::temp_dir().join(format!("tidash-backend-settings-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let file = dir.join("config").join("settings.json");
+    let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+    b.settings_path = Some(file.clone());
+    let audio = crate::settings::Audio {
+        exclusive: true,
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(b.handle(Action::SetAudio(audio.clone())));
+    let saved = std::fs::read_to_string(&file).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(saved.contains(r#""exclusive": true"#), "{saved}");
+    let events: Vec<_> = events.try_iter().collect();
+    assert!(
+        matches!(&events[..], [Event::Settings(s)] if s.audio == audio),
         "{events:?}"
     );
 }

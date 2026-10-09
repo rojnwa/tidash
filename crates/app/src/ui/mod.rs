@@ -13,6 +13,7 @@ mod playlist;
 mod queue_panel;
 mod rows;
 mod search;
+mod settings;
 mod shelf;
 mod sidebar;
 mod tracks;
@@ -33,6 +34,8 @@ pub struct UiState {
     scrolling: fastframe_scroll::Scrolling,
     /// The queue panel shows; the player bar toggles it.
     pub queue_open: bool,
+    /// The Settings view asked for the devices on this visit.
+    settings_listed: bool,
 }
 
 impl Default for UiState {
@@ -45,6 +48,7 @@ impl Default for UiState {
             player: None,
             scrolling: Default::default(),
             queue_open: false,
+            settings_listed: false,
         }
     }
 }
@@ -280,6 +284,9 @@ pub fn draw(
     if *model.route() != Route::Login {
         shortcuts(ui, model, tx, &mut events);
     }
+    if *model.route() != Route::Settings {
+        state.settings_listed = false; // the next visit lists them again
+    }
     let mut logout = false;
     if !model.errors.is_empty() || model.logged_in {
         egui::Panel::top("top").show(ui, |ui| {
@@ -337,6 +344,7 @@ pub fn draw(
             Route::Playlist(_) => playlist::show(ui, &mut ctx, route),
             Route::Mix(_) => mix::show(ui, &mut ctx, route),
             Route::Collection(_) => collection::show(ui, &mut ctx, route),
+            Route::Settings => settings::show(ui, &mut ctx, &mut state.settings_listed),
         }
     });
     events

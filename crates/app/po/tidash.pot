@@ -249,3 +249,60 @@ msgstr ""
 #: src/ui/queue_panel.rs
 msgid "Remove"
 msgstr ""
+
+#: src/ui/sidebar.rs
+#: src/ui/settings.rs
+msgid "Settings"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Audio"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Output device"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "System default"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Exclusive mode"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Bit-perfect: each track plays at its own sample rate and bit depth, without other apps' sound and without volume control. Falls back to shared mode when the device refuses."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Quality"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Hi-Res (up to 24-bit, 192 kHz)"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Lossless (16-bit, 44.1 kHz)"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Normalization"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Off"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Track"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Album"
+msgstr ""
+
+#: src/backend.rs
+msgid "Settings could not be saved"
+msgstr ""

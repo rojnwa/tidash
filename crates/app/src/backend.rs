@@ -4,6 +4,7 @@ use crate::i18n::tr;
 use crate::images::Artwork;
 use crate::model::{Action, Event, Redirect};
 use crate::playback::{Msg, Playback};
+use crate::settings::Settings;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, OnceLock};
@@ -12,9 +13,10 @@ use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::task::{AbortHandle, JoinSet};
 
-/// Spawns the backend. Before it handles actions it opens the audio output and reads the
-/// stored session, off the UI thread: both can take a while. Every event sent is followed by
-/// `waker()`. Without an audio device the app runs, and play actions report the missing output.
+/// Spawns the backend. Before it handles actions it reads the settings and the stored session
+/// and opens the audio output, off the UI thread: all can take a while. Every event sent is
+/// followed by `waker()`. Without an audio device the app runs, and play actions report the
+/// missing output.
 /// It also opens the images cache, set in `images` for the media controls before any track.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
@@ -40,8 +42,13 @@ pub fn start(
                     return;
                 }
             };
-            // The store blocks: read it before the runtime runs on this thread. Logging in
-            // first lets the UI leave the login page before the device is open.
+            // The settings file and the store block: read them before the runtime runs on
+            // this thread. Logging in first lets the UI leave the login page before the device
+            // is open.
+            let settings_path = crate::settings::path();
+            let settings = settings_path.as_deref().map(Settings::load);
+            let settings = settings.unwrap_or_default();
+            emit.send(Event::Settings(settings.clone()));
             let (msg_tx, msg_rx) = unbounded_channel();
             let mut backend = Backend::new(
                 Arc::clone(&emit),
@@ -50,10 +57,12 @@ pub fn start(
                 open_api_cache(),
             );
             backend.artwork = Artwork::new(crate::images::open_cache(&images));
-            backend.playback = open_player(&msg_tx).map(|p| {
+            backend.playback = open_player(&msg_tx, settings.audio.output()).map(|p| {
                 emit.send(Event::Player(p.clone()));
-                Playback::new(p, emit, msg_tx)
+                Playback::new(p, emit, msg_tx, settings.audio.clone())
             });
+            backend.settings = settings;
+            backend.settings_path = settings_path;
             rt.block_on(backend.run(action_rx, msg_rx));
         });
     if let Err(e) = spawned {
@@ -75,9 +84,12 @@ fn open_api_cache() -> Option<Arc<DiskCache>> {
         .map(Arc::new)
 }
 
-/// The audio output, its events forwarded to `msgs`; `None` without a device.
-fn open_player(msgs: &UnboundedSender<Msg>) -> Option<player::Player> {
-    let (player, events) = player::Player::spawn(player::OutputConfig::default())
+/// The audio output on `config`, its events forwarded to `msgs`; `None` without a device.
+fn open_player(
+    msgs: &UnboundedSender<Msg>,
+    config: player::OutputConfig,
+) -> Option<player::Player> {
+    let (player, events) = player::Player::spawn(config)
         .inspect_err(|e| log::warn!("no audio output: {e}"))
         .ok()?;
     let tx = msgs.clone();
@@ -146,6 +158,9 @@ struct Backend {
     artwork: Artwork,
     /// `None` without an audio device.
     playback: Option<Playback>,
+    settings: Settings,
+    /// Where `settings` are saved; `None` without a config dir (nothing is saved).
+    settings_path: Option<PathBuf>,
 }
 
 impl Backend {
@@ -176,6 +191,8 @@ impl Backend {
             api_cache,
             artwork: Artwork::new(None),
             playback: None,
+            settings: Settings::default(),
+            settings_path: None,
         };
         backend.resume(stored);
         backend
@@ -355,6 +372,33 @@ impl Backend {
                     let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
                     self.spawn(crate::pages::set_favorite(c, item, on, emit, msgs));
                 }
+            }
+            Action::SetAudio(audio) => {
+                self.settings.audio = audio.clone();
+                // Awaited, so two quick changes land in order.
+                if let Some(path) = self.settings_path.clone() {
+                    let settings = self.settings.clone();
+                    let saved = tokio::task::spawn_blocking(move || settings.save(&path)).await;
+                    if let Err(e) = saved.unwrap_or_else(|e| Err(std::io::Error::other(e))) {
+                        self.emit.send(Event::Error(format!(
+                            "{}: {e}",
+                            tr("Settings could not be saved")
+                        )));
+                    }
+                }
+                self.emit.send(Event::Settings(self.settings.clone()));
+                if let Some(p) = &mut self.playback {
+                    p.set_audio(audio);
+                }
+            }
+            Action::ListDevices => {
+                let emit = self.emit.clone();
+                tokio::task::spawn_blocking(move || {
+                    let names = fastframe_audio::output_device_names()
+                        .inspect_err(|e| log::warn!("could not list the output devices: {e}"))
+                        .unwrap_or_default();
+                    emit.send(Event::Devices(names));
+                });
             }
             Action::LoadImage { image, px } => {
                 let (base, emit) = (&self.cfg.image_base, self.emit.clone());

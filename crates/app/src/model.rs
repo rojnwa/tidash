@@ -4,6 +4,7 @@
 use crate::i18n::tr;
 pub use crate::messages::{Action, Event, Redirect};
 use crate::queue::Repeat;
+use crate::settings::Settings;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -27,6 +28,7 @@ pub enum Route {
     /// A v1 `apiPath`; Explore is `pages/explore`.
     Page(String),
     ViewAll(String),
+    Settings,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -122,6 +124,10 @@ pub struct Model {
     pub errors: Vec<(u64, String)>,
     /// The last id given to an error; kept across logout, as the errors are.
     error_id: u64,
+    /// The app's, not the session's: kept across logout, as the devices are.
+    pub settings: Settings,
+    /// The output devices' names, as last listed (`Action::ListDevices`).
+    pub devices: Vec<String>,
 }
 
 impl Default for Model {
@@ -144,6 +150,8 @@ impl Default for Model {
             playback: PlaybackSnapshot::default(),
             errors: Vec::new(),
             error_id: 0,
+            settings: Settings::default(),
+            devices: Vec::new(),
         }
     }
 }
@@ -180,6 +188,8 @@ impl Model {
                 *self = Self {
                     errors: std::mem::take(&mut self.errors),
                     error_id: self.error_id,
+                    settings: std::mem::take(&mut self.settings),
+                    devices: std::mem::take(&mut self.devices),
                     ..Self::default()
                 };
             }
@@ -189,6 +199,8 @@ impl Model {
                     playback: std::mem::take(&mut self.playback),
                     errors: std::mem::take(&mut self.errors),
                     error_id: self.error_id,
+                    settings: std::mem::take(&mut self.settings),
+                    devices: std::mem::take(&mut self.devices),
                     ..Self::default()
                 };
                 self.error(tr("Your TIDAL session has expired; please log in again").into_owned());
@@ -254,6 +266,8 @@ impl Model {
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
             Event::Player(_) => {}                                // kept by the UI
             Event::Seeked(_) => {}                                // handled by the media controls
+            Event::Settings(s) => self.settings = s,
+            Event::Devices(d) => self.devices = d,
             Event::Error(e) => self.error(e),
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {
@@ -310,9 +324,9 @@ impl Model {
     }
 
     /// Whether the app should ask for `r`: never fetched, failed, or stale and not reloading.
-    /// Login and Search have no page.
+    /// Login, Search and Settings have no page.
     pub fn needs_load(&self, r: &Route, now: Instant) -> bool {
-        if matches!(r, Route::Login | Route::Search) {
+        if matches!(r, Route::Login | Route::Search | Route::Settings) {
             return false;
         }
         self.pages.get(r).is_none_or(|s| {
@@ -421,6 +435,21 @@ mod tests {
         }
     }
 
+    /// The settings and the device list are the app's, not the session's.
+    #[test]
+    fn settings_and_devices_survive_logout() {
+        for out in [Event::LoggedOut, Event::SessionExpired] {
+            let mut m = logged_in();
+            let mut settings = Settings::default();
+            settings.audio.exclusive = true;
+            m.apply(Event::Settings(settings.clone()));
+            m.apply(Event::Devices(vec!["DAC".into()]));
+            m.apply(out);
+            assert_eq!(m.settings, settings);
+            assert_eq!(m.devices, ["DAC"]);
+        }
+    }
+
     #[test]
     fn an_expired_session_keeps_the_queue() {
         let mut m = logged_in();
@@ -501,7 +530,7 @@ mod tests {
         m.apply(Event::Loading(r.clone()));
         assert!(!m.needs_load(&r, now + 6 * min), "stale, already reloading");
         assert!(m.pages[&r].data.is_some(), "the stale copy stays meanwhile");
-        for r in [Route::Search, Route::Login] {
+        for r in [Route::Search, Route::Login, Route::Settings] {
             assert!(!m.needs_load(&r, now), "{r:?}");
         }
     }

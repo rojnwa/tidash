@@ -4596,6 +4596,8 @@ dependencies = [
  "player",
  "rand",
  "reqwest",
+ "serde",
+ "serde_json",
  "tidal",
  "tokio",
  "wiremock",

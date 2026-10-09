@@ -28,6 +28,8 @@ fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 directories = "6"
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 wiremock = "0.6"

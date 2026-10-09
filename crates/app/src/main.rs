@@ -17,6 +17,7 @@ mod now_playing;
 mod pages;
 mod playback;
 mod queue;
+mod settings;
 mod ui;
 
 use model::{Action, Event, Model};

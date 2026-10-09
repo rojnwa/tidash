@@ -5,6 +5,7 @@ use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
 use crate::model::{Action, Event, PlaybackSnapshot};
 use crate::queue::Queue;
+use crate::settings::{self, replay_gain};
 use player::{PlayState, Player, PlayerCmd, PlayerEvent, Source};
 use std::io::{self, Read};
 use std::sync::{Arc, OnceLock};
@@ -60,8 +61,9 @@ impl Read for SegmentReader {
 /// player's download thread; a static is never dropped, so never on a runtime thread either.
 static SEGMENTS: OnceLock<reqwest::blocking::Client> = OnceLock::new();
 
-/// The player source for a track's segment URLs. Call off the async runtime.
-fn segment_source(id: u64, urls: Vec<String>) -> io::Result<Source> {
+/// The player source for a track's segment URLs, at `gain` (linear). Call off the async
+/// runtime.
+fn segment_source(id: u64, urls: Vec<String>, gain: f32) -> io::Result<Source> {
     let http = match SEGMENTS.get() {
         Some(http) => http,
         None => {
@@ -88,7 +90,7 @@ fn segment_source(id: u64, urls: Vec<String>) -> io::Result<Source> {
         id,
         reader: Box::new(SegmentReader::new(urls, open)),
         len: None,
-        gain: 1.0,
+        gain,
     })
 }
 
@@ -205,12 +207,12 @@ pub enum Msg {
 }
 
 /// `stream_info`, retried once after 2 s unless the failure is terminal.
-async fn stream_info(c: &Client, id: u64) -> tidal::Result<StreamInfo> {
-    match c.stream_info(id, Quality::Lossless).await {
+async fn stream_info(c: &Client, id: u64, quality: Quality) -> tidal::Result<StreamInfo> {
+    match c.stream_info(id, quality).await {
         Err(e) if classify(&e) == Failure::Retryable => {
             log::debug!("stream info for {id}: {e}; retrying");
             tokio::time::sleep(Duration::from_secs(2)).await;
-            c.stream_info(id, Quality::Lossless).await
+            c.stream_info(id, quality).await
         }
         r => r,
     }
@@ -245,10 +247,18 @@ pub struct Playback {
     /// Tracks failed in a row.
     failures: u32,
     play: Option<PlayAccounting>,
+    /// The output in use; the quality and normalization of the next stream request.
+    audio: settings::Audio,
 }
 
 impl Playback {
-    pub fn new(player: Player, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) -> Playback {
+    /// `player` plays on `audio.output()` already.
+    pub fn new(
+        player: Player,
+        emit: Arc<Emitter>,
+        msgs: UnboundedSender<Msg>,
+        audio: settings::Audio,
+    ) -> Playback {
         let p = Playback {
             player,
             emit,
@@ -266,9 +276,19 @@ impl Playback {
             last_pos: Duration::ZERO,
             failures: 0,
             play: None,
+            audio,
         };
         p.publish();
         p
+    }
+
+    /// A new output (device or exclusive mode) takes over at once; the quality and the
+    /// normalization apply from the next stream request: the current track plays on.
+    pub fn set_audio(&mut self, audio: settings::Audio) {
+        if audio.output() != self.audio.output() {
+            self.player.send(PlayerCmd::SetOutput(audio.output()));
+        }
+        self.audio = audio;
     }
 
     pub fn is_playing(&self) -> bool {
@@ -511,6 +531,12 @@ impl Playback {
             return self.stop();
         };
         let (id, c, msgs) = (track.id, c.clone(), self.msgs.clone());
+        let quality = if self.audio.hi_res {
+            Quality::HiResLossless
+        } else {
+            Quality::Lossless
+        };
+        let normalization = self.audio.normalization;
         self.supersede();
         let seq = self.seq;
         self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
@@ -521,10 +547,12 @@ impl Playback {
         self.load = Some(tokio::spawn(async move {
             // Typed: a dead session (`tidal::Error::Auth`) is told apart from a failed track.
             let result = async {
-                let info = stream_info(&c, id).await?;
+                let info = stream_info(&c, id, quality).await?;
+                let gain = replay_gain(normalization, &info);
                 let quality = info.quality;
                 let source =
-                    tokio::task::spawn_blocking(move || segment_source(seq, info.urls)).await??;
+                    tokio::task::spawn_blocking(move || segment_source(seq, info.urls, gain))
+                        .await??;
                 Ok::<_, Box<dyn std::error::Error + Send + Sync>>((source, quality))
             }
             .await;

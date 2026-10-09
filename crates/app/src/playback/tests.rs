@@ -136,7 +136,7 @@ fn playback() -> (Playback, std::sync::mpsc::Receiver<Event>) {
         waker: Box::new(|| {}),
     });
     let (msgs, _) = tokio::sync::mpsc::unbounded_channel();
-    (Playback::new(player, emit, msgs), rx)
+    (Playback::new(player, emit, msgs, Default::default()), rx)
 }
 
 /// Only for tests that never let it reach TIDAL.

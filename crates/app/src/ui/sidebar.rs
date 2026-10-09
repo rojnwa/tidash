@@ -35,6 +35,7 @@ pub fn show(ui: &mut egui::Ui, model: &Model, events: &mut Vec<Event>) {
                     matches!(route, Route::Collection(_)),
                     tr("Collection"),
                 ),
+                (Route::Settings, *route == Route::Settings, tr("Settings")),
             ] {
                 if ui.selectable_label(selected, label).clicked() {
                     events.push(Event::Navigate(to));
