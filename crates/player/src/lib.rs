@@ -5,6 +5,7 @@ mod engine;
 mod render;
 mod resample;
 mod stream;
+mod track;
 
 pub use decode::{DecodeError, Decoder, Pcm};
 pub use engine::{PlayState, Player, PlayerCmd, PlayerEvent, Source};
