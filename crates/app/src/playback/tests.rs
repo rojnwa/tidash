@@ -16,6 +16,7 @@ fn track() -> tidal::Track {
             cover: None,
         },
         stream_ready: true,
+        ..Default::default()
     }
 }
 

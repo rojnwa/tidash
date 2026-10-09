@@ -232,6 +232,7 @@ mod tests {
                     cover: None,
                 },
                 stream_ready,
+                ..Default::default()
             })
             .collect()
     }

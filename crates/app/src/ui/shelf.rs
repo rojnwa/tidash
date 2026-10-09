@@ -145,6 +145,7 @@ mod tests {
             name: "n".into(),
             picture: None,
             selected_album_cover_fallback: None,
+            mixes: Default::default(),
         };
         let album = tidal::Album {
             id: 1,

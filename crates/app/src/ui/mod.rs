@@ -477,6 +477,7 @@ mod testing {
             name: format!("Artist {id}"),
             picture: Some("12-34".into()),
             selected_album_cover_fallback: None,
+            mixes: Default::default(),
         }
     }
 
@@ -507,6 +508,7 @@ mod testing {
                 cover: None,
             },
             stream_ready: true,
+            ..Default::default()
         }
     }
 

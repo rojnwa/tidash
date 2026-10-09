@@ -1,4 +1,4 @@
-//! Catalog models and endpoints: search, album, album tracks.
+//! Catalog models and endpoints: search, album, album tracks, one track.
 
 use crate::{Client, Image, ImageKind, Result, browse::tracks};
 use serde::Deserialize;
@@ -13,9 +13,26 @@ pub struct Artist {
     pub picture: Option<String>,
     #[serde(default)]
     pub selected_album_cover_fallback: Option<String>,
+    /// Only the v2 artist page's artist has one (`ARTIST_MIX`).
+    #[serde(default, deserialize_with = "mixes")]
+    pub mixes: Mixes,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+/// Radio mix ids; `mixes: {}`, `null` or none at all is neither.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+pub struct Mixes {
+    #[serde(rename = "TRACK_MIX")]
+    pub track: Option<String>,
+    #[serde(rename = "ARTIST_MIX")]
+    pub artist: Option<String>,
+}
+
+/// v2 lists send `mixes: null`.
+fn mixes<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Mixes, D::Error> {
+    Ok(Option::deserialize(d)?.unwrap_or_default())
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumRef {
     pub id: u64,
@@ -41,7 +58,7 @@ pub struct Album {
     pub release_date: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: u64,
@@ -57,6 +74,8 @@ pub struct Track {
     pub album: AlbumRef,
     #[serde(default)]
     pub stream_ready: bool,
+    #[serde(default, deserialize_with = "mixes")]
+    pub mixes: Mixes,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -296,6 +315,10 @@ impl Client {
 
     pub async fn album(&self, id: u64) -> Result<Album> {
         self.get(&format!("albums/{id}"), &[]).await
+    }
+
+    pub async fn track(&self, id: u64) -> Result<Track> {
+        self.get(&format!("tracks/{id}"), &[]).await
     }
 
     pub async fn album_tracks(&self, id: u64) -> Result<Vec<Track>> {

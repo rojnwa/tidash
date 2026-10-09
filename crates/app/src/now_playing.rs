@@ -219,6 +219,7 @@ mod tests {
                 cover: None,
             },
             stream_ready: true,
+            ..Default::default()
         };
         PlaybackSnapshot {
             state: Some(state),
