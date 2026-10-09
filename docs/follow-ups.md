@@ -44,8 +44,15 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 ## Player
 
 Closed in M3: the stale-decoder seek and the time base (Task 3), the writer panic and EINTR on read
-(Task 1), the resampler's flush and exact lengths (Task 2), the backward-seek cost (Task 11: 127–149 ms
-on a 25-minute 24/192 track, spec §10).
+(Task 1), the resampler's flush and exact lengths (Task 2), the backward-seek cost (Task 11: 126–149 ms
+on a 25-minute 24/192 track, warm page cache, spec §10).
+
+- After a fallback (a refused format, or a lost device that comes back), gapless same-format tracks
+  stay shared until the next load or format change: `seamless()` tests the config, not the open sink
+  (`engine.rs`); retry exclusive on gapless tracks if users ask.
+- `PlayerEvent::Error`'s doc comment ("a preload that fails before it is heard sends none") holds only
+  on the gapless path: after a tail-then-start, a preload whose first packet fails sends
+  `Error { id: next }` and no `TrackEnded` (`engine.rs`; the app handles it).
 
 - Linux: DACs that take only S24_3LE (packed 24-bit) fall back to shared; the `alsa` crate can drive
   them if users ask.

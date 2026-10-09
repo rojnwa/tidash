@@ -81,8 +81,11 @@ tidash/
   - UI (main): egui, event-driven repaint only. While playing, repaint ~4 Hz only if the window is visible. Paused and
     hidden = 0% CPU.
   - Backend: one tokio multi-thread runtime for API, images, cache, scrobbling, Discord.
-  - Player: control thread (commands, preload), decoder thread, OS audio callback (real-time: reads a lock-free ring
-    buffer only; no allocation, no locks).
+  - Player (as built in M3): one `player` thread handles the commands and the decoding; one download thread per open
+    stream (the current track and a preload); the output's real-time side reads a lock-free ring. Exclusive: WASAPI
+    runs its own render thread, cpal (macOS, Linux) its callback; neither allocates nor locks. Shared: fastframe's
+    callback takes its renderer with `try_lock` (silence when contended) and allocates its scratch buffer on the
+    first callback (upstream issue drafted, `docs/follow-ups.md`).
 - **Data flow**
   - UI → backend: `Action` enum over a channel. Backend → UI: `Event`; the UI thread applies it with
     `Model::apply(event)` and requests a repaint.
@@ -110,7 +113,7 @@ byte 0 of the download (cost measured in §10, M3).
 | Mode | Backend | Processing |
 |---|---|---|
 | Shared (default) | cpal 0.18 via fastframe-audio | rubato resample when rates differ, software volume, ReplayGain with peak-based clip prevention |
-| Exclusive (Windows) | `wasapi` 0.25, exclusive, event-driven; the smallest container that holds the source (16, packed 24, 24-in-32, 32) | none |
+| Exclusive (Windows) | `wasapi` 0.25, exclusive, event-driven; the smallest container the device accepts that holds the source (16, packed 24, 24-in-32, 32) | none |
 | Exclusive (macOS) | cpal 0.18 at the track's rate plus `coreaudio-rs` 0.14 hog mode; the device's physical format is set to one that holds the source exactly (16/24/32-bit int, f32 for ≤ 24-bit), else the open is refused | none |
 | Exclusive (Linux) | cpal 0.18 ALSA on a `hw:` device, I32/I24/I16; DACs that take only S24_3LE fall back to shared | none |
 
@@ -119,15 +122,19 @@ ReplayGain; volume fixed at 100% (the slider is disabled; hardware volume is a f
 paused. Closing an exclusive stream (format change, settings change) gives the device about one period to play
 what it has, then releases it. Decided in M3 (2026-10-09): a device that refuses (busy, format or rate unsupported,
 e.g. 88.2 kHz on a 24/96 DAC) plays shared, resampled to the device rate, with one notice per run of refused
-tracks; each new track tries exclusive again.
+tracks. Each track that opens the output (a load, or a format change) tries exclusive again; a gapless
+same-format track stays shared.
 
 **Gapless.** The app preloads the next track 20 s before the end (`PlayerCmd::Preload`: playbackinfo, then the
 download starts; a queue edit cancels a stale preload). The engine opens it once the current track is decoded and
 appends it to the same ring; the renderer moves the clock to it at the exact frame where it begins. Same format, or
-shared mode with only a rate change (the resampler absorbs it): no gap. A channel change, or exclusive with a format
-change: the current track's tail plays out, then the output reopens at the new format (short gap, inherent to
-bit-perfect). A preload that fails before it is heard is dropped: the current track plays out to `TrackEnded`, and
-the app meets the error when it loads that track. No `NearEnd` event: the app reads the position.
+shared mode with only a rate change (the resampler absorbs it): no gap. Otherwise the current track's tail plays
+out, then the next one starts after a short gap: in shared mode with a channel change the ring is flushed (no
+reopen); with exclusive configured and a format change the output reopens at the new format (inherent to
+bit-perfect). A preload that fails before it is heard: on the gapless path it is dropped, the current track plays
+out to `TrackEnded`, and the app meets the error when it loads that track; on the tail-then-start path, a preload
+whose first packet fails sends `Error { id: next }` and no `TrackEnded(current)`, and the app takes that as the
+current track's natural end plus the next one's failure. No `NearEnd` event: the app reads the position.
 
 **Devices.** fastframe-audio lists the output devices (the settings picker); the exclusive backends open the same
 names. Device lost: exclusive falls back to shared (`Fallback`) from the same position; shared opens the configured
@@ -189,8 +196,8 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 - **Keyboard** (Cmd on macOS): space play/pause, Ctrl+→/← next/prev, Ctrl+F search, Alt+←/→ back/forward; shortcut list in Settings.
 - **Theme:** dark default plus light (fastframe-theme). Accessibility via AccessKit. All strings through
   fastframe-i18n.
-- **Settings:** account (login/logout, client ID override), audio (Hi-Res on/off, output device, exclusive,
-  normalization Off/Track/Album, Off by default), behavior (close to tray, start minimized), integrations (Last.fm, ListenBrainz, Discord toggle), updates
+- **Settings:** account (login/logout, client ID override), audio (Hi-Res on by default, output device, exclusive
+  off by default, normalization Off/Track/Album, Off by default), behavior (close to tray, start minimized), integrations (Last.fm, ListenBrainz, Discord toggle), updates
   (check, pre-release channel). Stored as JSON in the config dir; secrets in the credential store.
 
 ## 8. Integrations
@@ -215,7 +222,7 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 | Playback terminal sub-status | Skip to next with a notice; 3 consecutive failures stop playback |
 | Stream interrupted | Re-request from current offset, then retry with backoff |
 | Seek past the end | The track ends as at its natural end (symphonia's `SeekError(OutOfRange)`, rebuilt decoder or not); any other seek failure fails the track |
-| Exclusive refused / format unsupported | Shared output, one notice per run of refused tracks; the next track tries exclusive again |
+| Exclusive refused / format unsupported | Shared output, one notice per run of refused tracks; the next track that opens the output (a load, or a format change) tries exclusive again, a gapless same-format track stays shared |
 | Device lost | Exclusive: shared output (the default device once the DAC is gone) from the same position, notice. Shared: reopens on its own, notice if it cannot |
 | Credential store unavailable | Memory-only session, warning |
 | Client ID revoked | Clear error pointing to the client ID setting |
@@ -274,11 +281,12 @@ user's playlist and a track (no heart on own playlists), queue panel (play next,
 remove, shuffle, repeat), offline (saved pages with the banner, unseen page with Retry): all passed.
 First frame 125 ms. macOS and Linux: build and tests in CI.
 
-M3 backward-seek cost (2026-10-09, Windows, same machine, release build, no audio device): the
-engine's rebuild (a fresh decoder over a forward-only view of the finished download, then a seek)
-on track 473067108, 24/192 FLAC, 25:26, a 954 MB download. Seeking to 24:26 (the last minute):
-127–149 ms over three runs; to 25:21: 127–144 ms; to 0:30: 2 ms. Under the ~300 ms bar, so no
-index or byte-offset seek is needed; the cost scales with the target's byte offset (~0.09 ms per
+M3 backward-seek cost (2026-10-09, Windows, same machine, release build `49009fd` with a throwaway
+tool, no audio device): the engine's rebuild (a fresh decoder over a forward-only view of the
+finished download, then a seek) on track 473067108, 24/192 FLAC, 25:26, a 954 MB download, read
+from the warm page cache (as the app's just-written temp file is). Seeking to 24:26 (the last
+minute): 126–149 ms over three runs; to 25:21: 127–144 ms; to 0:30: 2 ms. Under the ~300 ms bar, so
+no index or byte-offset seek is needed; the cost scales with the target's byte offset (~0.09 ms per
 second of 24/192 audio).
 
 ## 11. Shipping
@@ -295,7 +303,8 @@ second of 24/192 audio).
 
 - `tidal`: sanitized recorded JSON fixtures for models, manifest decoding, PKCE, error classification; no network in
   CI. One `#[ignore]` live smoke test run manually with a real account.
-- `player`: a capturing `Output` implementation. Tests: bit-perfect output is bit-identical to decoded source;
+- `player`: tests drive the engine's `Renderer` directly (`Player::spawn_manual`, no device) and inject a fake
+  exclusive opener; hardware tests are `#[ignore]`. Tests: bit-perfect output is bit-identical to decoded source;
   gapless output equals the concatenation of two tracks' decoded samples; resample and ReplayGain correctness. Small
   FLAC fixtures (16/44.1, 24/96) committed under `crates/player/tests/fixtures`.
 - `app`: queue logic (shuffle, repeat, insert, reorder), scrobble rule, `Model::apply`.
@@ -316,7 +325,7 @@ Implementation plans are written one milestone at a time; the first plan covers 
 
 M3 outcome (2026-10-09, built; human acceptance pending): exclusive output on Windows (WASAPI), macOS
 (cpal plus hog mode) and Linux (cpal on `hw:`) with shared fallback and a notice; device picker;
-gapless with a 20 s preload; ReplayGain Off/Track/Album (Off by default); Hi-Res on/off; format badge
+gapless with a 20 s preload; ReplayGain Off/Track/Album (Off by default); Hi-Res (on by default); format badge
 (`24/96 FLAC · Exclusive`, `24/88.2 FLAC · Shared 96 kHz`) with the volume fixed in exclusive mode. Also
 the M2 player follow-ups: interrupts reach every open file, seeks use the stream's time base, a seek
 past the end ends the track, the resampler counts its output. `cargo test` green on Windows; CI green
