@@ -17,3 +17,6 @@ rubato = "5.0.1"
 rtrb = "0.4"
 fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.25"

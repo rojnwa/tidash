@@ -8,6 +8,9 @@ use fastframe_audio::Device;
 
 use crate::{Format, Renderer};
 
+#[cfg(windows)]
+mod wasapi;
+
 /// An OS backend's open stream; dropping it closes the device.
 trait Stream: Send {
     fn pause(&mut self);
@@ -73,13 +76,23 @@ pub(crate) fn open(
     format: Format,
     renderer: Renderer,
 ) -> Result<Exclusive, String> {
-    let _ = (device, format, renderer);
-    Err("exclusive output is not supported on this platform".into())
+    #[cfg(windows)]
+    {
+        wasapi::open(device, format, renderer)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (device, format, renderer);
+        Err("exclusive output is not supported on this platform".into())
+    }
 }
 
 /// A sample from the ring as the device's left-justified integer, saturating at full scale.
 /// Exact for any sample of up to 24 bits.
-#[cfg_attr(not(test), expect(dead_code, reason = "no OS backend yet"))]
+#[cfg_attr(
+    not(any(test, windows)),
+    expect(dead_code, reason = "no OS backend yet")
+)]
 pub(crate) fn to_i32(v: f32) -> i32 {
     (v * 2_147_483_648.0) as i32
 }
