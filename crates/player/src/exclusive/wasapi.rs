@@ -17,8 +17,11 @@ use wasapi::{
 use super::{Exclusive, Stream, to_i32};
 use crate::{Format, Renderer};
 
-/// How long `open` waits for the device, and the render thread for an event while running.
-const TIMEOUT_MS: u32 = 2000;
+/// How long `open` waits for the device.
+const OPEN_TIMEOUT_MS: u32 = 2000;
+/// How long the render thread waits for an event while running (a period is about 10 ms):
+/// past it, the device is gone, and a close waits no longer than that.
+const EVENT_TIMEOUT_MS: u32 = 500;
 /// `IAudioClient::Initialize`'s AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED.
 const BUFFER_SIZE_NOT_ALIGNED: u32 = 0x8889_0019;
 /// Integer containers, `(store bits, valid bits)`, smallest first.
@@ -94,7 +97,7 @@ pub(super) fn open(
             move || run(&device, format, renderer, &ctl, &failed, &ready)
         })
         .map_err(|e| e.to_string())?;
-    match opened.recv_timeout(Duration::from_millis(TIMEOUT_MS.into())) {
+    match opened.recv_timeout(Duration::from_millis(OPEN_TIMEOUT_MS.into())) {
         Ok(Ok(())) => Ok(Exclusive {
             format,
             stream: Some(Box::new(Wasapi {
@@ -230,7 +233,7 @@ impl Opened {
             self.write(Some(&mut renderer))?;
             self.client.start_stream()?;
             loop {
-                self.event.wait_for_event(TIMEOUT_MS)?;
+                self.event.wait_for_event(EVENT_TIMEOUT_MS)?;
                 if ctl.stop.load(Acquire) {
                     // Silence after the last buffer, so the device plays it out, not stale data.
                     self.write(None)?;
