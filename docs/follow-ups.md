@@ -1,16 +1,25 @@
-# Follow-ups carried out of M0 + M1
+# Follow-ups carried out of M0–M2
 
-Parked by task reviews and the final review. Pick each up in the milestone that touches its code.
+Parked by task reviews and the final reviews. Pick each up in the milestone that touches its code.
 
-## M2 (browse, library, UI)
+## App (UI, playback, caches)
 
-- Idle RAM is over the §10 budget on both OSes: fastframe-fonts reads the system fallback faces
-  whole; mapping them (upstream) saves ~78 MB.
 - Previous on the first track while its stream loads fetches the stream again.
 - Windows shows Buffering as Paused; the overlay shows the old position briefly on a track change.
-- `ClientConfig::default()` duplicated in `now_playing.rs`; unused direct `egui` dependency in
-  `crates/app`.
+- `ClientConfig::default()` built separately in `now_playing.rs` and `backend.rs`.
 - `open::that_detached` runs inside an async handler (move to `spawn_blocking`).
+- `TogglePlay` cannot resume while a stream resolves; adding to a queue that has ended replays the
+  finished track.
+- Favorites: a failed write reverts to `!on`, not to the ids loaded meanwhile; an ids load that
+  answered before a write but arrives after it overwrites the heart.
+- A cache write already inside `spawn_blocking` can still land after Logout's cache clear (one entry).
+- The Offline banner can outlast the outage until the next successful page load; without a disk copy
+  a failed revalidation reports one error per page.
+- The home cache key includes `timeOffset` (a DST change makes the offline Home a miss).
+- `now_playing` caches undecoded cover bytes under the artwork key (a captive-portal page would be
+  retried every 30 s); the old `<cache>/covers` directory is left on disk.
+- View-all and search results are cloned into rows each frame (bounded: ≤ 500 / ≤ 90).
+- Queue rows expose no AccessKit "current" state; the track context menu has no keyboard opener.
 
 ## M3 (player)
 
@@ -32,13 +41,22 @@ Parked by task reviews and the final review. Pick each up in the milestone that 
 - A corrupt `session` chunk count orphans chunks on clear/save.
 - Persistent play-report retry queue, if reports go missing in practice.
 - `reqwest`'s `rustls` feature pulls aws-lc-sys (cmake, NASM); `ring` is the lighter provider.
+- `paged_all` waits for every concurrent page before returning the first error, and trusts
+  `totalNumberOfItems` without a bound; cursor loops don't detect a repeated cursor.
+- Writes go through `send`, so 429/5xx are retried (the official client never retries writes).
 
-## CI
+## CI and dependencies
 
 - Add an MSRV 1.98 job (CI runs stable only).
+- `fastframe-fonts` is pinned to the unmerged crmne/fastframe#17; return to a release tag once it
+  ships.
 
 ## M4 / M5
 
 - Client ID override setting (README promises it as planned).
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
+- PresentMon frame-pacing capture for glow (`TIDASH_AUTOSCROLL`), and macOS RAM with the fonts pin
+  (M5 performance-budget pass).
+- Before the repo goes public: the test fixtures keep the account's personal mix ids and artist-based
+  mix subtitles (listening taste); replace them if that matters.

@@ -243,7 +243,15 @@ loaded, 10 s idle, `TIDASH_REPAINT_LOG=1`): glow 0 repaint passes, 0.0% CPU, 94 
 wgpu on Vulkan 0 egui passes but 100.2% CPU (a full core spinning) and 232 MB; wgpu on DX12 0
 passes, 99.8% CPU, 205 MB. Glow is kept and wgpu dropped: wgpu breaks the 0% idle budget on both
 backends, costs 111–138 MB more RAM, and adds 6.8 MB to the binary (25.8 MB with both renderers,
-19.0 MB with glow alone). PresentMon frame-pacing numbers for glow: pending (M2 acceptance).
+19.0 MB with glow alone). PresentMon frame-pacing numbers for glow were not captured in M2 (deferred
+by the human to M5's performance-budget pass; `TIDASH_AUTOSCROLL` drives that capture).
+
+M2 acceptance (2026-10-09, Windows, release `0c25109`, the human's account): Home → album → artist,
+back/forward by mouse buttons and Alt+←/→, Explore → genre → View all, playlist and mix playback,
+CJK and Arabic names, all five collection tabs, favorite on/off for album, artist, mix, another
+user's playlist and a track (no heart on own playlists), queue panel (play next, add, drag reorder,
+remove, shuffle, repeat), offline (saved pages with the banner, unseen page with Retry): all passed.
+First frame 125 ms. macOS and Linux: build and tests in CI.
 
 ## 11. Shipping
 
@@ -302,7 +310,7 @@ Implementation plans are written one milestone at a time; the first plan covers 
 - 144 Hz frame pacing not demonstrated in S3: keep egui; M2 gets a task to measure the real grid with PresentMon and compare eframe's glow vs wgpu renderer, picking the one that paces; also no repaint while idle and textures uploaded at display size.
   M2 outcome (2026-10-09): glow kept, wgpu dropped. Idle on Home, wgpu spun a full core (99.8–100.2%
   CPU on DX12 and Vulkan, glow 0.0%) and used 111–138 MB more RAM (§10). PresentMon frame-pacing
-  numbers for glow: pending (M2 acceptance).
+  numbers for glow: deferred to M5.
 
 ## 15. Dependencies (latest stable, verified on crates.io 2026-10-07)
 
