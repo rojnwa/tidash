@@ -17,7 +17,9 @@ struct State {
     error: Option<(io::ErrorKind, String)>,
 }
 
-type Shared = Arc<(Mutex<State>, Condvar)>;
+/// A download's state and the condvar its readers wait on.
+type Progress = (Mutex<State>, Condvar);
+type Shared = Arc<Progress>;
 
 /// Payload of the error a waiting read returns while an [`Interrupt`] is raised. Not
 /// `ErrorKind::Interrupted`: std's and symphonia's `read_exact` retry that kind, so the read
@@ -48,8 +50,9 @@ pub struct Interrupt(Arc<Raised>);
 struct Raised {
     /// `interrupt`s not yet `handled`; while any are, waiting reads fail.
     pending: AtomicU32,
-    /// The newest file spawned with this interrupt: the one a waiting read can be blocked on.
-    file: Mutex<Weak<(Mutex<State>, Condvar)>>,
+    /// The files spawned with this interrupt (dead ones pruned at the next spawn): a waiting
+    /// read can be blocked on any of them.
+    file: Mutex<Vec<Weak<Progress>>>,
 }
 
 impl Interrupt {
@@ -57,8 +60,8 @@ impl Interrupt {
     /// bytes (including one waiting already) fails with an interrupt error instead.
     pub fn interrupt(&self) {
         self.0.pending.fetch_add(1, SeqCst);
-        let file = self.0.file.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(file) = file.upgrade() {
+        let files = self.0.file.lock().unwrap_or_else(PoisonError::into_inner);
+        for file in files.iter().filter_map(Weak::upgrade) {
             // Taking the lock orders this after a reader's check of `pending`: no lost wakeup.
             drop(lock(&file));
             file.1.notify_all();
@@ -119,7 +122,10 @@ fn copy_loop(mut src: Box<dyn Read + Send>, file: &File, shared: &Shared) -> io:
         if lock(shared).stop {
             return Ok(());
         }
-        let n = src.read(&mut buf)?;
+        let n = match src.read(&mut buf) {
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            r => r?,
+        };
         if n == 0 {
             return Ok(());
         }
@@ -129,6 +135,21 @@ fn copy_loop(mut src: Box<dyn Read + Send>, file: &File, shared: &Shared) -> io:
         off += n as u64;
         lock(shared).downloaded = off;
         shared.1.notify_all();
+    }
+}
+
+/// Held by the writer thread. Wakes the readers when it ends; if it ends without finishing or
+/// failing (it panicked), fails them, so no read waits forever.
+struct WriterEnded(Shared);
+
+impl Drop for WriterEnded {
+    fn drop(&mut self) {
+        let mut st = lock(&self.0);
+        if !st.done && st.error.is_none() {
+            st.error = Some((io::ErrorKind::Other, "download thread panicked".into()));
+        }
+        drop(st);
+        self.0.1.notify_all();
     }
 }
 
@@ -164,20 +185,21 @@ impl ProgressiveFile {
         std::thread::Builder::new()
             .name("progressive-file".into())
             .spawn(move || {
-                let res = copy_loop(reader, &writer, &thread_shared);
-                let mut st = lock(&thread_shared);
+                let ended = WriterEnded(thread_shared);
+                let res = copy_loop(reader, &writer, &ended.0);
+                let mut st = lock(&ended.0);
                 match res {
                     Ok(()) => st.done = true,
                     Err(e) => st.error = Some((e.kind(), e.to_string())),
                 }
-                drop(st);
-                thread_shared.1.notify_all();
             })?;
-        *interrupt
+        let mut files = interrupt
             .0
             .file
             .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Arc::downgrade(&shared);
+            .unwrap_or_else(PoisonError::into_inner);
+        files.retain(|f| f.strong_count() > 0);
+        files.push(Arc::downgrade(&shared));
         Ok(Self {
             reader: read_handle,
             pos: 0,
@@ -325,6 +347,7 @@ mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use symphonia::core::io::MediaSource;
 
@@ -434,25 +457,44 @@ mod tests {
         }
     }
 
+    /// Runs `f` on a thread. Wait on the result with `recv_timeout`, so a read that never
+    /// returns fails the test instead of hanging it.
+    fn on_thread<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> mpsc::Receiver<T> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(f());
+        });
+        rx
+    }
+
     fn read_on_thread(
         mut f: ProgressiveFile,
-    ) -> std::thread::JoinHandle<(ProgressiveFile, io::Result<usize>, Instant)> {
-        std::thread::spawn(move || {
+    ) -> mpsc::Receiver<(ProgressiveFile, io::Result<usize>, Instant)> {
+        on_thread(move || {
             let r = f.read(&mut [0u8; 16]);
             (f, r, Instant::now())
         })
     }
 
+    fn read_to_end_on_thread(mut f: ProgressiveFile) -> mpsc::Receiver<io::Result<Vec<u8>>> {
+        on_thread(move || {
+            let mut out = Vec::new();
+            f.read_to_end(&mut out).map(|_| out)
+        })
+    }
+
+    const STUCK: Duration = Duration::from_secs(2);
+
     #[test]
     fn interrupt_unblocks_a_waiting_read_until_handled() {
-        let (go, gate) = std::sync::mpsc::channel();
+        let (go, gate) = mpsc::channel();
         let interrupt = Interrupt::default();
         let f = ProgressiveFile::spawn(Box::new(Gate(gate)), None, &interrupt).unwrap();
         let waiting = read_on_thread(f);
         std::thread::sleep(Duration::from_millis(50)); // let it block
         let at = Instant::now();
         interrupt.interrupt();
-        let (f, r, done) = waiting.join().unwrap();
+        let (f, r, done) = waiting.recv_timeout(STUCK).unwrap();
         assert!(is_interrupt(&r.unwrap_err()));
         assert!(done - at < Duration::from_millis(100), "{:?}", done - at);
         // Handled: reads wait for bytes again rather than failing.
@@ -460,8 +502,73 @@ mod tests {
         let waiting = read_on_thread(f);
         std::thread::sleep(Duration::from_millis(50));
         go.send(()).unwrap();
-        let (_, r, _) = waiting.join().unwrap();
+        let (_, r, _) = waiting.recv_timeout(STUCK).unwrap();
         assert_eq!(r.unwrap(), 4);
+    }
+
+    #[test]
+    fn interrupt_wakes_a_reader_on_an_older_file() {
+        let interrupt = Interrupt::default();
+        let (_go_a, gate_a) = mpsc::channel();
+        let (_go_b, gate_b) = mpsc::channel();
+        let a = ProgressiveFile::spawn(Box::new(Gate(gate_a)), None, &interrupt).unwrap();
+        let _b = ProgressiveFile::spawn(Box::new(Gate(gate_b)), None, &interrupt).unwrap();
+        let waiting = read_on_thread(a);
+        std::thread::sleep(Duration::from_millis(50)); // let it block
+        let at = Instant::now();
+        interrupt.interrupt();
+        let (_, r, done) = waiting.recv_timeout(STUCK).unwrap();
+        assert!(is_interrupt(&r.unwrap_err()));
+        assert!(done - at < Duration::from_millis(100), "{:?}", done - at);
+    }
+
+    /// Panics on every read.
+    struct Panics;
+
+    impl Read for Panics {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            panic!("boom")
+        }
+    }
+
+    #[test]
+    fn a_panicking_source_fails_reads() {
+        let f = spawn(Box::new(io::repeat(1).take(10).chain(Panics)), None).unwrap();
+        let t = Instant::now();
+        let e = read_to_end_on_thread(f)
+            .recv_timeout(STUCK)
+            .unwrap()
+            .unwrap_err();
+        assert!(t.elapsed() < Duration::from_secs(1), "{:?}", t.elapsed());
+        assert_eq!(e.kind(), io::ErrorKind::Other);
+        assert!(e.to_string().contains("panicked"), "{e}");
+    }
+
+    /// Fails its first read with `ErrorKind::Interrupted`, then is at EOF.
+    struct EintrOnce(bool);
+
+    impl Read for EintrOnce {
+        fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+            if std::mem::replace(&mut self.0, true) {
+                Ok(0)
+            } else {
+                Err(io::ErrorKind::Interrupted.into())
+            }
+        }
+    }
+
+    #[test]
+    fn eintr_is_retried() {
+        let src = pseudo_random(200_000);
+        let reader = io::Cursor::new(src[..100_000].to_vec())
+            .chain(EintrOnce(false))
+            .chain(io::Cursor::new(src[100_000..].to_vec()));
+        let f = spawn(Box::new(reader), None).unwrap();
+        let out = read_to_end_on_thread(f)
+            .recv_timeout(STUCK)
+            .unwrap()
+            .unwrap();
+        assert_eq!(out, src);
     }
 
     struct Endless(Arc<AtomicBool>);
