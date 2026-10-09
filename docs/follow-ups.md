@@ -56,7 +56,9 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 - Client ID override setting (README promises it as planned).
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
-- PresentMon frame-pacing capture for glow (`TIDASH_AUTOSCROLL`), and macOS RAM with the fonts pin
-  (M5 performance-budget pass).
+- macOS RAM with the fonts pin (M5 performance-budget pass).
+- glow presents through `Composed: Copy with GPU GDI` (~20 ms to display, 0–4 dropped frames per
+  20 s scroll); revisit if users report judder (flip model needs wgpu, whose idle spin would need a
+  fix first).
 - Before the repo goes public: the test fixtures keep the account's personal mix ids and artist-based
   mix subtitles (listening taste); replace them if that matters.

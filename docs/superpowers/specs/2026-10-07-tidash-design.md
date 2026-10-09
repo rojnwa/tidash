@@ -243,8 +243,15 @@ loaded, 10 s idle, `TIDASH_REPAINT_LOG=1`): glow 0 repaint passes, 0.0% CPU, 94 
 wgpu on Vulkan 0 egui passes but 100.2% CPU (a full core spinning) and 232 MB; wgpu on DX12 0
 passes, 99.8% CPU, 205 MB. Glow is kept and wgpu dropped: wgpu breaks the 0% idle budget on both
 backends, costs 111–138 MB more RAM, and adds 6.8 MB to the binary (25.8 MB with both renderers,
-19.0 MB with glow alone). PresentMon frame-pacing numbers for glow were not captured in M2 (deferred
-by the human to M5's performance-budget pass; `TIDASH_AUTOSCROLL` drives that capture).
+19.0 MB with glow alone).
+
+M2 frame pacing with glow (PresentMon 2.x console, 144 Hz monitor, window maximized,
+`TIDASH_AUTOSCROLL=1500`, three 20 s runs each on Collection → Tracks and Home): 144.0 presents/s,
+`MsBetweenDisplayChange` p50 6.94 ms, p99 7.11–7.19 ms, max 13.2–18.5 ms; 4–7 frames per run
+(0.14–0.24%) over 1.5 × the refresh interval; 0–4 of ~2,877 frames dropped per run. Present mode is
+`Composed: Copy with GPU GDI` on every frame (OpenGL in a window blits through DWM), so latency to
+display is ~20 ms (p50). Verdict: paces at the refresh rate with rare single missed vblanks, not the
+strict "no dropped frames"; the flip model would need wgpu, rejected above for its idle CPU.
 
 M2 acceptance (2026-10-09, Windows, release `0c25109`, the human's account): Home → album → artist,
 back/forward by mouse buttons and Alt+←/→, Explore → genre → View all, playlist and mix playback,
@@ -309,8 +316,8 @@ Implementation plans are written one milestone at a time; the first plan covers 
 - LOSSLESS/HI_RES_LOSSLESS arrive as unencrypted MPEG-DASH (FLAC in fMP4), not BTS: approved; the plan is amended (DASH segment URLs, fMP4 decoding); continue to M1.
 - 144 Hz frame pacing not demonstrated in S3: keep egui; M2 gets a task to measure the real grid with PresentMon and compare eframe's glow vs wgpu renderer, picking the one that paces; also no repaint while idle and textures uploaded at display size.
   M2 outcome (2026-10-09): glow kept, wgpu dropped. Idle on Home, wgpu spun a full core (99.8–100.2%
-  CPU on DX12 and Vulkan, glow 0.0%) and used 111–138 MB more RAM (§10). PresentMon frame-pacing
-  numbers for glow: deferred to M5.
+  CPU on DX12 and Vulkan, glow 0.0%) and used 111–138 MB more RAM (§10). PresentMon: glow paces at
+  144 Hz (p50 6.94 ms, 0–4 drops per 20 s run; §10).
 
 ## 15. Dependencies (latest stable, verified on crates.io 2026-10-07)
 
