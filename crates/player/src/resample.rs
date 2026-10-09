@@ -13,11 +13,13 @@ const CHUNK_HINT: usize = 1024;
 /// high quality, cheaper than sinc, and has a fixed input/output chunk size.
 pub struct Resampler {
     inner: Option<Inner>,
+    ch: usize,
+    /// Input frames fed so far (passthrough included).
+    in_frames: u64,
 }
 
 struct Inner {
     fft: Fft<f32>,
-    ch: usize,
     ratio: f64,
     /// Buffered input not yet forming a full chunk (interleaved).
     pending: Vec<f32>,
@@ -25,7 +27,6 @@ struct Inner {
     in_buf: Vec<f32>,
     /// Startup-delay output frames still to drop.
     skip: usize,
-    in_frames: u64,
     out_frames: u64,
 }
 
@@ -33,30 +34,32 @@ impl Resampler {
     #[must_use]
     pub fn new(from: u32, to: u32, channels: u16) -> Resampler {
         let ch = usize::from(channels.max(1));
+        let mut r = Resampler {
+            inner: None,
+            ch,
+            in_frames: 0,
+        };
         if from == to {
-            return Resampler { inner: None };
+            return r;
         }
         let Ok(fft) = Fft::<f32>::new(from as usize, to as usize, CHUNK_HINT, ch, FixedSync::Both)
         else {
             // ponytail: only a zero rate can fail here; release falls back to passthrough.
             debug_assert!(false, "invalid sample rates {from} -> {to}");
-            return Resampler { inner: None };
+            return r;
         };
         let in_buf = vec![0.0; fft.input_frames_max() * ch];
         let out_buf = vec![0.0; fft.output_frames_max() * ch];
-        Resampler {
-            inner: Some(Inner {
-                skip: fft.output_delay(),
-                ratio: f64::from(to) / f64::from(from),
-                pending: Vec::with_capacity(in_buf.len() * 2),
-                fft,
-                ch,
-                in_buf,
-                out_buf,
-                in_frames: 0,
-                out_frames: 0,
-            }),
-        }
+        r.inner = Some(Inner {
+            skip: fft.output_delay(),
+            ratio: f64::from(to) / f64::from(from),
+            pending: Vec::with_capacity(in_buf.len() * 2),
+            fft,
+            in_buf,
+            out_buf,
+            out_frames: 0,
+        });
+        r
     }
 
     #[must_use]
@@ -64,38 +67,49 @@ impl Resampler {
         self.inner.is_none()
     }
 
+    /// Output frames the input fed so far will produce once flushed:
+    /// `round(in_frames * to / from)`. `flush` emits exactly this many.
+    #[must_use]
+    pub fn expected_out(&self) -> u64 {
+        match &self.inner {
+            None => self.in_frames,
+            Some(s) => (self.in_frames as f64 * s.ratio).round() as u64,
+        }
+    }
+
     /// Append resampled frames for `input` (interleaved) to `out`; partial
     /// chunks are buffered until the next call.
     pub fn process(&mut self, input: &[f32], out: &mut Vec<f32>) {
+        let ch = self.ch;
+        debug_assert!(
+            input.len().is_multiple_of(ch),
+            "input not a whole number of frames"
+        );
+        self.in_frames += (input.len() / ch) as u64;
         let Some(s) = &mut self.inner else {
             out.extend_from_slice(input);
             return;
         };
-        debug_assert!(
-            input.len().is_multiple_of(s.ch),
-            "input not a whole number of frames"
-        );
         s.pending.extend_from_slice(input);
-        s.in_frames += (input.len() / s.ch) as u64;
         loop {
-            let need = s.fft.input_frames_next() * s.ch;
+            let need = s.fft.input_frames_next() * ch;
             if s.pending.len() < need {
                 break;
             }
             s.in_buf[..need].copy_from_slice(&s.pending[..need]);
             s.pending.drain(..need);
-            if !s.run(None, out) {
+            if !s.run(ch, None, out) {
                 break;
             }
         }
     }
 
-    /// Emit the buffered tail so total output is ~ input frames * to/from.
+    /// Emit the buffered tail so total output is exactly `expected_out()` frames.
     /// The resampler is left drained; do not reuse it for another stream.
     pub fn flush(&mut self, out: &mut Vec<f32>) {
+        let target = self.expected_out();
+        let ch = self.ch;
         let Some(s) = &mut self.inner else { return };
-        let target = (s.in_frames as f64 * s.ratio).round() as u64;
-        let ch = s.ch;
         let mut left = s.pending.len() / ch;
         let base = out.len();
         // Zero-padded final chunk(s); enough of them to push the filter delay out.
@@ -114,20 +128,24 @@ impl Resampler {
             s.in_buf[..n * ch].copy_from_slice(&s.pending[..n * ch]);
             s.pending.drain(..n * ch);
             left -= n;
-            if !s.run(Some(n), out) {
+            if !s.run(ch, Some(n), out) {
                 break; // rubato error: stop rather than spin
             }
         }
         let extra = s.out_frames.saturating_sub(target);
         out.truncate(out.len().saturating_sub(extra as usize * ch).max(base));
         s.out_frames = s.out_frames.min(target);
+        debug_assert!(
+            s.out_frames >= target,
+            "flush shortfall: {} of {target} frames",
+            s.out_frames
+        );
     }
 }
 
 impl Inner {
     /// Resample one chunk from `in_buf`, dropping startup delay, appending to `out`.
-    fn run(&mut self, partial: Option<usize>, out: &mut Vec<f32>) -> bool {
-        let ch = self.ch;
+    fn run(&mut self, ch: usize, partial: Option<usize>, out: &mut Vec<f32>) -> bool {
         let in_frames = self.in_buf.len() / ch;
         let out_frames = self.out_buf.len() / ch;
         let (Ok(inp), Ok(mut outp)) = (
@@ -181,15 +199,61 @@ mod tests {
         assert_eq!(out, input);
     }
 
-    #[test]
-    fn ratio_44100_to_48000_length() {
-        let mut r = Resampler::new(44_100, 48_000, 2);
+    /// One second of stereo at `from`, resampled in one go and flushed:
+    /// (output frames, `expected_out()`).
+    fn one_second(from: u32, to: u32) -> (usize, u64) {
+        let mut r = Resampler::new(from, to, 2);
         assert!(!r.is_passthrough());
         let mut out = Vec::new();
-        r.process(&sine(44_100, 44_100.0), &mut out);
+        r.process(&sine(from as usize, from as f32), &mut out);
         r.flush(&mut out);
-        let frames = out.len() / 2;
-        assert!((47_520..=48_480).contains(&frames), "frames = {frames}");
+        (out.len() / 2, r.expected_out())
+    }
+
+    /// Feed `input` (stereo) in 37 chunks of odd frame counts; the last takes the rest.
+    fn process_odd_chunks(r: &mut Resampler, input: &[f32], out: &mut Vec<f32>) {
+        let n = input.len() / 2;
+        let mut pos = 0;
+        for i in 0..37 {
+            let frames = if i == 36 { n - pos } else { 1001 + 2 * i };
+            r.process(&input[pos * 2..(pos + frames) * 2], out);
+            pos += frames;
+        }
+    }
+
+    #[test]
+    fn exact_length_48000_to_44100() {
+        assert_eq!(one_second(48_000, 44_100), (44_100, 44_100));
+    }
+
+    #[test]
+    fn exact_length_96000_to_48000() {
+        assert_eq!(one_second(96_000, 48_000), (48_000, 48_000));
+    }
+
+    #[test]
+    fn exact_length_44100_to_48000() {
+        assert_eq!(one_second(44_100, 48_000), (48_000, 48_000));
+    }
+
+    #[test]
+    fn expected_out_tracks_input() {
+        let mut out = Vec::new();
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        r.process(&sine(1000, 44_100.0), &mut out);
+        assert_eq!(r.expected_out(), 1088); // round(1000 * 48000/44100), before any flush
+        let mut r = Resampler::new(48_000, 48_000, 2);
+        r.process(&sine(1000, 48_000.0), &mut out);
+        assert_eq!(r.expected_out(), 1000);
+    }
+
+    #[test]
+    fn expected_out_matches_flushed_output() {
+        let mut r = Resampler::new(44_100, 48_000, 2);
+        let mut out = Vec::new();
+        process_odd_chunks(&mut r, &sine(44_100, 44_100.0), &mut out);
+        r.flush(&mut out);
+        assert_eq!(out.len() as u64 / 2, r.expected_out());
     }
 
     #[test]
@@ -214,14 +278,7 @@ mod tests {
 
         let mut chunked = Vec::new();
         let mut r = Resampler::new(44_100, 48_000, 2);
-        let n = input.len() / 2;
-        // 37 chunks of odd frame counts; last takes the rest.
-        let mut pos = 0;
-        for i in 0..37 {
-            let frames = if i == 36 { n - pos } else { 1001 + 2 * i };
-            r.process(&input[pos * 2..(pos + frames) * 2], &mut chunked);
-            pos += frames;
-        }
+        process_odd_chunks(&mut r, &input, &mut chunked);
         r.flush(&mut chunked);
         let diff = (whole.len() as i64 - chunked.len() as i64).abs() / 2;
         assert!(
@@ -262,15 +319,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(debug_assertions, should_panic(expected = "shortfall"))]
     fn flush_stops_when_target_unreachable() {
         let mut r = Resampler::new(44_100, 48_000, 2);
         let mut out = Vec::new();
         r.process(&[0.1; 20], &mut out);
         // Corrupt bookkeeping so the target can never be reached.
-        if let Some(i) = r.inner.as_mut() {
-            i.in_frames = u64::MAX / 4;
-        }
-        r.flush(&mut out); // must terminate without panic or underflow
+        r.in_frames = u64::MAX / 4;
+        r.flush(&mut out); // must terminate without underflow; debug builds flag the shortfall
         assert!(out.len() < 100_000);
     }
 }
