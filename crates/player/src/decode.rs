@@ -19,6 +19,14 @@ pub struct Pcm {
     pub samples: Vec<i32>,
 }
 
+/// A track's own sample format: what exclusive output holds the device at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Format {
+    pub rate: u32,
+    pub bits: u16,
+    pub channels: u16,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeError {
     #[error("io: {0}")]
@@ -114,6 +122,14 @@ impl Decoder {
 
     pub fn bits(&self) -> u16 {
         self.bits
+    }
+
+    pub fn format(&self) -> Format {
+        Format {
+            rate: self.rate,
+            bits: self.bits,
+            channels: self.channels,
+        }
     }
 
     /// Next decoded packet; `None` at end of stream.

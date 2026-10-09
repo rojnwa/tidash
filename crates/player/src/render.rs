@@ -12,6 +12,8 @@ use rtrb::{Consumer, Producer, RingBuffer};
 pub(crate) struct Shared {
     /// Linear gain, as `f32` bits.
     pub(crate) volume: AtomicU32,
+    /// The output is exclusive: bit-perfect, so the renderer ignores `volume`.
+    pub(crate) exclusive: AtomicBool,
     pub(crate) paused: AtomicBool,
     /// Flush generations. The player thread stores `pending_base_ns` and `channels`, then bumps
     /// `flush_req`; the renderer discards the ring, takes them and stores that generation in
@@ -40,6 +42,7 @@ impl Default for Shared {
     fn default() -> Self {
         Self {
             volume: AtomicU32::new(1.0f32.to_bits()),
+            exclusive: AtomicBool::new(false),
             paused: AtomicBool::new(false),
             flush_req: AtomicU64::new(0),
             flush_ack: AtomicU64::new(0),
@@ -98,15 +101,19 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Carries on the player's clock and flushes from where they stand, so any number can be
+    /// made over a player's life, one in use at a time.
     pub(crate) fn new(shared: Arc<Shared>, rings: Sender<NewRing>) -> Self {
+        let acked = shared.flush_ack.load(Acquire);
+        let src_channels = (shared.channels.load(Relaxed) as usize).max(1);
         Self {
             shared,
             ring: None,
             rings,
             rate: 0,
             channels: 2,
-            src_channels: 2,
-            acked: 0,
+            src_channels,
+            acked,
         }
     }
 }
@@ -120,8 +127,8 @@ impl fastframe_audio::Render for Renderer {
             return;
         }
         let s = &*self.shared;
-        // Keep position() continuous across the rate change.
-        let heard = frames_to_ns(s.frames.swap(0, Relaxed), self.rate);
+        // Keep position() continuous across the rate change, whichever renderer counted them.
+        let heard = frames_to_ns(s.frames.swap(0, Relaxed), s.device_rate.load(Relaxed));
         s.base_ns.fetch_add(heard, Relaxed);
         s.device_rate.store(sample_rate, Relaxed);
         s.device_channels.store(channels as u32, Relaxed);
@@ -157,7 +164,11 @@ impl fastframe_audio::Render for Renderer {
         let Ok(chunk) = ring.read_chunk(n * src) else {
             return;
         };
-        let volume = f32::from_bits(s.volume.load(Relaxed));
+        let volume = if s.exclusive.load(Relaxed) {
+            1.0
+        } else {
+            f32::from_bits(s.volume.load(Relaxed))
+        };
         let mut samples = chunk.into_iter();
         for frame in out.chunks_exact_mut(dev).take(n) {
             // Source channel i -> device channel i; extra device channels stay silent.

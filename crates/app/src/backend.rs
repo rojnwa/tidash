@@ -77,7 +77,7 @@ fn open_api_cache() -> Option<Arc<DiskCache>> {
 
 /// The audio output, its events forwarded to `msgs`; `None` without a device.
 fn open_player(msgs: &UnboundedSender<Msg>) -> Option<player::Player> {
-    let (player, events) = player::Player::spawn(fastframe_audio::OutputOptions::default())
+    let (player, events) = player::Player::spawn(player::OutputConfig::default())
         .inspect_err(|e| log::warn!("no audio output: {e}"))
         .ok()?;
     let tx = msgs.clone();

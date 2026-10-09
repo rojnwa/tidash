@@ -6,13 +6,18 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
-use fastframe_audio::{Maintained, OpenError, Output, OutputOptions};
+use fastframe_audio::{Device, Maintained, OpenError, Output};
 use rtrb::Producer;
 
+use crate::exclusive::{self, Exclusive};
 use crate::render::{NewRing, Renderer, Shared};
 use crate::stream::is_interrupt;
 use crate::track::{Next, Track, resampler};
-use crate::{DecodeError, Decoder, Interrupt, ProgressiveFile};
+use crate::{DecodeError, Decoder, Format, Interrupt, ProgressiveFile};
+
+#[path = "sink.rs"]
+mod sink;
+use sink::{Sink, shared_options};
 
 /// How long the thread sleeps on the command channel when there is nothing to decode.
 const IDLE_WAIT: Duration = Duration::from_millis(50);
@@ -46,6 +51,18 @@ pub enum PlayerCmd {
     /// earlier preload; dropped when nothing is loaded. `None` cancels a preload not switched
     /// to yet. `Load` and `Stop` drop any preload.
     Preload(Option<Source>),
+    /// Play this way from now on. A loaded track moves to it at once, from its position;
+    /// with none, shared output opens on the device now, and exclusive at the next `Load`.
+    SetOutput(OutputConfig),
+}
+
+/// Which device to play on, and how.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OutputConfig {
+    pub device: Device,
+    /// Hold the device at each track's own format (bit-perfect: no resampling, volume or
+    /// gain), when it lets us; shared output otherwise.
+    pub exclusive: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,6 +88,16 @@ pub enum PlayerEvent {
     /// The output could not be opened again; sent on the first failed reopen, not on the retries
     /// after it. The output keeps trying, and a loaded track plays on once it is back.
     OutputLost,
+    /// What is heard and how: the track's own format, whether the device is held exclusively,
+    /// and the rate it runs at. Sent with every `TrackStarted`, and whenever the output under
+    /// a started track changes.
+    Format {
+        track: Format,
+        exclusive: bool,
+        device_rate: u32,
+    },
+    /// Exclusive output was refused or lost (the reason): shared output plays now.
+    Fallback(String),
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -90,18 +117,22 @@ pub struct Player {
 }
 
 impl Player {
-    /// Opens the audio output (on the player thread; it can take a moment). Fails when the
-    /// device cannot be opened. The output is paused until a track is loaded.
-    pub fn spawn(options: OutputOptions) -> io::Result<(Player, Receiver<PlayerEvent>)> {
+    /// Opens shared output on the device (on the player thread; it can take a moment). Fails
+    /// when the device cannot be opened. The output is paused until a track is loaded; with
+    /// `exclusive`, that track then holds the device at its own format if it lets us.
+    pub fn spawn(config: OutputConfig) -> io::Result<(Player, Receiver<PlayerEvent>)> {
         let (player, events, renderer, engine) = parts();
         let (ready, opened) = mpsc::channel();
+        let options = shared_options(&config.device);
         std::thread::Builder::new()
             .name("player".into())
             .spawn(move || match Output::open(options, renderer) {
                 Ok(output) => {
                     let _ = ready.send(Ok(()));
                     Engine {
-                        output: Some(output),
+                        sink: Some(Sink::Shared(Box::new(output))),
+                        manual: false,
+                        config,
                         ..engine
                     }
                     .run();
@@ -164,20 +195,22 @@ impl std::fmt::Debug for Player {
     }
 }
 
+/// A player and its engine, in manual mode: the returned renderer is the shared output.
 fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
     let shared = Arc::new(Shared::default());
     let interrupt = Interrupt::default();
     let loads = Arc::new(Mutex::new(0));
     let (cmds, cmd_rx) = mpsc::channel();
     let (events, event_rx) = mpsc::channel();
-    let (rings, ring_rx) = mpsc::channel();
+    let (ring_tx, rings) = mpsc::channel();
     let engine = Engine {
         shared: Arc::clone(&shared),
         interrupt: interrupt.clone(),
         loads: Arc::clone(&loads),
         cmds: cmd_rx,
         events,
-        rings: ring_rx,
+        rings,
+        ring_tx,
         ring: None,
         rate: 0,
         track: None,
@@ -186,13 +219,16 @@ fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
         switches_seen: 0,
         state: PlayState::Stopped,
         scratch: Vec::new(),
-        output: None,
+        sink: None,
+        manual: true,
+        config: OutputConfig::default(),
+        open_exclusive: Box::new(exclusive::open),
         output_lost: false,
         pause_by: None,
         callbacks_seen: 0,
         callback_at: Instant::now(),
     };
-    let renderer = Renderer::new(Arc::clone(&shared), rings);
+    let renderer = engine.renderer();
     let player = Player {
         cmds,
         shared,
@@ -209,10 +245,14 @@ fn superseded(e: &DecodeError, interrupt: &Interrupt) -> bool {
     matches!(e, DecodeError::Io(e) if is_interrupt(e)) || interrupt.raised()
 }
 
-/// Whether `next` can play on in `current`'s ring, with no flush between them.
-fn seamless(current: &Track, next: &Decoder) -> bool {
+/// Whether `next` can play on in `current`'s ring, with no flush between them. An exclusive
+/// device stays at one format.
+fn seamless(current: &Track, next: &Decoder, exclusive: bool) -> bool {
     current.channels == usize::from(next.channels().max(1))
+        && (!exclusive || current.decoder.format() == next.format())
 }
+
+type OpenExclusive = Box<dyn FnMut(&Device, Format, Renderer) -> Result<Exclusive, String> + Send>;
 
 struct Engine {
     shared: Arc<Shared>,
@@ -221,6 +261,8 @@ struct Engine {
     cmds: Receiver<(PlayerCmd, bool)>,
     events: Sender<PlayerEvent>,
     rings: Receiver<NewRing>,
+    /// For each new renderer: where it sends its rings.
+    ring_tx: Sender<NewRing>,
     ring: Option<Producer<f32>>,
     /// Device rate the ring and resampler are built for (0 before the first `configure`).
     rate: u32,
@@ -234,7 +276,13 @@ struct Engine {
     switches_seen: u64,
     state: PlayState,
     scratch: Vec<f32>,
-    output: Option<Output<Renderer>>,
+    /// None only in manual mode, or after shared output failed to open.
+    sink: Option<Sink>,
+    /// No device of our own for shared output: the caller renders (tests).
+    manual: bool,
+    config: OutputConfig,
+    /// `exclusive::open`; tests put a fake device here.
+    open_exclusive: OpenExclusive,
     output_lost: bool,
     /// Set by a stop: the latest moment to pause the device (see `output_action`).
     pause_by: Option<Instant>,
@@ -321,15 +369,17 @@ impl Engine {
 
     fn sync_output(&mut self) {
         let action = self.output_action();
-        let Some(out) = &mut self.output else { return };
+        let Some(sink) = &mut self.sink else { return };
         match action {
             Some(true) => {
-                if out.is_paused() {
+                if sink.is_paused() {
                     self.callback_at = Instant::now(); // expect callbacks from now on
                 }
-                out.resume();
+                sink.resume();
             }
-            Some(false) => out.pause(),
+            // ponytail: exclusive device held while paused; release after a long pause like
+            // shared if users ask
+            Some(false) => sink.pause(),
             None => {}
         }
     }
@@ -353,6 +403,7 @@ impl Engine {
             PlayerCmd::Seek(to) => self.seek(to),
             PlayerCmd::SetVolume(v) => self.shared.volume.store(v.to_bits(), Relaxed),
             PlayerCmd::Preload(src) => self.preload(src),
+            PlayerCmd::SetOutput(config) => self.set_output(config),
         }
     }
 
@@ -397,6 +448,8 @@ impl Engine {
     /// track starts but one that follows gaplessly.
     fn begin(&mut self, id: u64, file: ProgressiveFile, gain: f32) -> Result<(), DecodeError> {
         let decoder = Decoder::new(Box::new(file.forward()?))?;
+        self.track = None; // any track before has played out
+        self.use_output(decoder.format()); // a new output's ring is adopted: its rate is ours
         self.track = Some(Track::new(id, file, decoder, gain, self.rate));
         self.flush(Duration::ZERO); // again, now with the track's channels
         Ok(())
@@ -455,22 +508,58 @@ impl Engine {
         self.stop(Duration::ZERO);
     }
 
-    /// A ring from `configure` (first open, or a device rate/channel change): what the old
-    /// ring held is gone, so play on from what was heard, resampled for the new rate.
-    fn adopt_ring(&mut self) {
+    /// A ring from `configure` (an output opened, or a device rate/channel change): what the
+    /// old ring held is gone, so play on from what was heard, resampled for the new rate.
+    /// False when there was none.
+    fn adopt_ring(&mut self) -> bool {
         let Some((ring, rate)) = self.rings.try_iter().last() else {
-            return;
+            return false;
         };
         self.ring = Some(ring);
         self.rate = rate;
         if self.track.is_some() {
             self.poll_switch(); // one made before `configure`: the position is the new track's
             self.seek(self.shared.position());
+            self.format_event();
+        }
+        true
+    }
+
+    /// What is heard and how, once its track has started.
+    fn format_event(&self) {
+        let Some(t) = self.ending.as_ref().or(self.track.as_ref()) else {
+            return;
+        };
+        if t.started {
+            self.emit(PlayerEvent::Format {
+                track: t.decoder.format(),
+                exclusive: self.shared.exclusive.load(Relaxed),
+                device_rate: self.rate,
+            });
         }
     }
 
     fn maintain(&mut self) {
-        let Some(out) = &mut self.output else { return };
+        let out = match &mut self.sink {
+            Some(Sink::Shared(out)) => out,
+            Some(Sink::Exclusive(x)) => {
+                if x.failed() {
+                    self.sink = None;
+                    self.fallback("audio device lost".into());
+                    self.sink_changed();
+                }
+                return;
+            }
+            None if self.manual => return,
+            None => {
+                // Shared output failed to open: again, until it does.
+                self.open_shared();
+                if self.sink.is_some() {
+                    self.sink_changed();
+                }
+                return;
+            }
+        };
         // A reopen at another rate calls `configure`, which `adopt_ring` picks up.
         let failed = match out.maintain() {
             Maintained::Failed(e) => Some(e),
@@ -520,6 +609,7 @@ impl Engine {
                 t.started = true;
                 let id = t.id;
                 self.emit(PlayerEvent::TrackStarted(id));
+                self.format_event();
                 self.set_state(if self.shared.paused.load(Acquire) {
                     PlayState::Paused
                 } else {
@@ -552,7 +642,9 @@ impl Engine {
             Ok(Some(pcm)) => {
                 let ch = t.channels;
                 let frames = pcm.samples.len() / ch;
-                let (drop, gain) = (t.skip.min(frames), t.gain);
+                let drop = t.skip.min(frames);
+                let bit_perfect = self.shared.exclusive.load(Relaxed);
+                let gain = if bit_perfect { 1.0 } else { t.gain };
                 t.skip -= drop;
                 self.scratch.clear();
                 self.scratch.extend(
@@ -612,7 +704,7 @@ impl Engine {
                 return false; // dropped
             }
         };
-        if !seamless(a, &decoder) {
+        if !seamless(a, &decoder, self.config.exclusive) {
             self.next = Some(Next {
                 after_tail: true,
                 ..next
@@ -653,6 +745,7 @@ impl Engine {
             && let Some(t) = &self.track
         {
             self.emit(PlayerEvent::TrackStarted(t.id));
+            self.format_event();
         }
     }
 
