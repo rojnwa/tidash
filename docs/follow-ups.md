@@ -20,6 +20,9 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
   retried every 30 s); the old `<cache>/covers` directory is left on disk.
 - View-all and search results are cloned into rows each frame (bounded: ≤ 500 / ≤ 90).
 - Queue rows expose no AccessKit "current" state; the track context menu has no keyboard opener.
+- A captive portal (a non-JSON 200) during a refresh shows a per-page error, not the Offline banner.
+- A failed `favorite_ids` load at login is only logged and not retried in-session (hearts stay empty).
+- Empty page-store slots accumulate, one per visited route (`evict` counts only slots with data).
 
 ## M3 (player)
 
