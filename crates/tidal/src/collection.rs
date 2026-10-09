@@ -196,8 +196,8 @@ impl Client {
             .collect())
     }
 
-    /// Every entry of `page[key]` across a v2 list's pages, following `cursor` until null. The
-    /// first request sends an empty `cursor`, as the official client does.
+    /// Every entry of `page[key]` across a v2 list's pages, following `cursor` until null or
+    /// repeated. The first request sends an empty `cursor`, as the official client does.
     async fn cursor_all(
         &self,
         path: &str,
@@ -207,11 +207,11 @@ impl Client {
         let (mut items, mut cursor) = (Vec::new(), String::new());
         for _ in 0..CURSOR_PAGES {
             let mut q = query.to_vec();
-            q.push(("cursor", cursor));
+            q.push(("cursor", cursor.clone()));
             let mut page: Value = self.get_v2(path, &q).await?;
             items.extend(take_list(&mut page, key));
             match page["cursor"].as_str() {
-                Some(next) if !next.is_empty() => cursor = next.to_owned(),
+                Some(next) if !next.is_empty() && next != cursor => cursor = next.to_owned(),
                 _ => break,
             }
         }

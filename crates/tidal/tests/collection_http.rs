@@ -118,6 +118,26 @@ async fn favorite_mixes_page_by_cursor() {
     assert_eq!(mixes[2].title, "My Mix 3");
 }
 
+/// A cursor that answers with itself forever: its page is taken once, then the list ends.
+#[tokio::test]
+async fn a_repeated_cursor_ends_the_list() {
+    let server = MockServer::start().await;
+    let page =
+        |id: &str| json!({"items": [{"id": id, "title": id, "subTitle": ""}], "cursor": "stuck"});
+    for (cursor, id) in [("", "first"), ("stuck", "second")] {
+        Mock::given(method("GET"))
+            .and(path("/v2/favorites/mixes"))
+            .and(query_param("cursor", cursor))
+            .respond_with(ResponseTemplate::new(200).set_body_json(page(id)))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let mixes = setup(&server).favorite_mixes().await.unwrap();
+    let ids: Vec<&str> = mixes.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["first", "second"]);
+}
+
 #[tokio::test]
 async fn favorite_playlists_skip_folders() {
     let server = MockServer::start().await;

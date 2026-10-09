@@ -42,7 +42,7 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 - Persistent play-report retry queue, if reports go missing in practice.
 - `reqwest`'s `rustls` feature pulls aws-lc-sys (cmake, NASM); `ring` is the lighter provider.
 - `paged_all` waits for every concurrent page before returning the first error, and trusts
-  `totalNumberOfItems` without a bound; cursor loops don't detect a repeated cursor.
+  `totalNumberOfItems` without a bound; a cursor cycle longer than one page runs to the 200-page cap.
 - Writes go through `send`, so 429/5xx are retried (the official client never retries writes).
 
 ## CI and dependencies
