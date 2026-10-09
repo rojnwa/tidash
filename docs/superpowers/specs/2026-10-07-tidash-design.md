@@ -281,7 +281,7 @@ user's playlist and a track (no heart on own playlists), queue panel (play next,
 remove, shuffle, repeat), offline (saved pages with the banner, unseen page with Retry): all passed.
 First frame 125 ms. macOS and Linux: build and tests in CI.
 
-M3 backward-seek cost (2026-10-09, Windows, same machine, release build `49009fd` with a throwaway
+M3 backward-seek cost (2026-10-09, Windows, same machine, release build `500720b` with a throwaway
 tool, no audio device): the engine's rebuild (a fresh decoder over a forward-only view of the
 finished download, then a seek) on track 473067108, 24/192 FLAC, 25:26, a 954 MB download, read
 from the warm page cache (as the app's just-written temp file is). Seeking to 24:26 (the last
@@ -329,7 +329,7 @@ gapless with a 20 s preload; ReplayGain Off/Track/Album (Off by default); Hi-Res
 (`24/96 FLAC · Exclusive`, `24/88.2 FLAC · Shared 96 kHz`) with the volume fixed in exclusive mode. Also
 the M2 player follow-ups: interrupts reach every open file, seeks use the stream's time base, a seek
 past the end ends the track, the resampler counts its output. `cargo test` green on Windows; CI green
-on all three OSes at `c054f36` (the last player commit); the WASAPI hardware test passes on the FiiO
+on all three OSes at `e635314` (the last player commit); the WASAPI hardware test passes on the FiiO
 E10 (24/96). The exit criterion, bit-perfect 24/192 on each OS, awaits the acceptance session (the
 Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, else CI only).
 
