@@ -47,19 +47,27 @@
       }
     },
     {
-      "trn": "trn:folder:f0000000-0000-4000-8000-000000000001",
+      "trn": "trn:folder:f0000000-0000-4000-8000-000000000002",
       "itemType": "FOLDER",
-      "addedAt": "2026-10-09T23:35:29.042+0000",
-      "lastModifiedAt": "2026-10-09T23:35:34.893+0000",
-      "name": "Tidash probe folder",
-      "parent": null,
-      "data": {
-        "trn": "trn:folder:f0000000-0000-4000-8000-000000000001",
-        "name": "Tidash probe folder",
-        "createdAt": "2026-10-09T23:35:29.042+0000",
-        "lastModifiedAt": "2026-10-09T23:35:34.893+0000",
-        "totalNumberOfItems": 1,
+      "addedAt": "2026-10-09T23:35:54.080+0000",
+      "lastModifiedAt": "2026-10-09T23:35:54.080+0000",
+      "name": "Tidash probe subfolder",
+      "parent": {
         "id": "f0000000-0000-4000-8000-000000000001",
+        "name": "Tidash probe folder",
+        "atRoot": false,
+        "parentId": "f0000000-0000-4000-8000-000000000001",
+        "parentIdAsNodeId": "f0000000-0000-4000-8000-000000000001",
+        "parentIdAsReferenceId": "trn:folder:f0000000-0000-4000-8000-000000000001",
+        "parentIdAsTidalResourceName": "trn:folder:f0000000-0000-4000-8000-000000000001"
+      },
+      "data": {
+        "trn": "trn:folder:f0000000-0000-4000-8000-000000000002",
+        "name": "Tidash probe subfolder",
+        "createdAt": "2026-10-09T23:35:54.080+0000",
+        "lastModifiedAt": "2026-10-09T23:35:54.080+0000",
+        "totalNumberOfItems": 0,
+        "id": "f0000000-0000-4000-8000-000000000002",
         "itemType": "FOLDER"
       }
     }

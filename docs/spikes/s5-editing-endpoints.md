@@ -1,12 +1,12 @@
 # S5: TIDAL editing endpoints
 
-Live probing on 2026-10-10 with the human's subscribed account (country NG) and the `android` client token (scopes `r_usr w_usr w_sub`), using the recorder, which now sends writes: `cargo run -p tidal --example record -- <v1|v2|openapi> <path?query> <name> [--method M] [--form k=v]… [--json '<body>'] [--header 'k: v']…` (`crates/tidal/examples/record.rs`). Fixtures: `crates/tidal/tests/fixtures/` (sanitized, see the end).
+Live probing on 2026-10-10 with the human's subscribed account and the `android` client token (scopes `r_usr w_usr w_sub`), using the recorder, which now sends writes: `cargo run -p tidal --example record -- <v1|v2|openapi> <path?query> <name> [--method M] [--form k=v]… [--json '<body>'] [--header 'k: v']…` (`crates/tidal/examples/record.rs`). Fixtures: `crates/tidal/tests/fixtures/` (sanitized, see the end).
 
 Every write named only a playlist or folder created in the same run: the playlist `Tidash probe`, the folder `Tidash probe folder` and two subfolders. All of them were deleted. Afterwards the account's own-playlist list (v1 `users/{uid}/playlists`) was byte-identical to before, and the root folder listing held the same items.
 
 What the official client does comes from reading the official desktop web client builds 2026.09.30 (the one Tidash mirrors) and 2026.10.08, python-tidal and SONE, without network calls. Rows marked *official client, not probed* rest on that reading alone.
 
-Test ids, all Daft Punk because they resolve in NG: track 20115564 "Get Lucky" (no lyrics in NG), 1550546 "One More Time", 20115561 "Instant Crush", album 20115556 *Random Access Memories*, artist 8847. Track 283039788 (Mahler) has no mix.
+Test ids, all Daft Punk because they resolve in the account's country: track 20115564 "Get Lucky" (no lyrics there), 1550546 "One More Time", 20115561 "Instant Crush", album 20115556 *Random Access Memories*, artist 8847. Track 283039788 (Mahler) has no mix.
 
 ## Request conventions for writes
 
@@ -184,16 +184,16 @@ Sanitized from the raw recordings, which were deleted afterwards.
 - Lists are cut to ≤ 3 items and lyrics to 6 cues (and the first 6 lines of `lyrics`). Paged lists have `totalNumberOfItems` set to the kept count.
 - The account's user id → `12345`; other users' ids → `67890` (S4 mapped both to 12345, which hides the own/favorited split). User names → `User`; `countryCode` → `US`; user playlist descriptions → `""`.
 - Playlists keep S4's placeholders where S4 already named them (`…0002` Playlist B, `…0003` Playlist C). The two own playlists S4 did not have are `…0007` Playlist G and `…0008` Playlist H.
-- The probe playlist is `00000000-0000-4000-8000-000000000001` and its folder is `f0000000-0000-4000-8000-000000000001`, keeping their titles. In S4's `playlists_flattened.json` and `favorites_ids.json`, `…0001` is Playlist A. `folder_root.json` drops the root's first item (Playlist A) so that no M4 fixture gives `…0001` to two playlists.
+- The probe playlist is `00000000-0000-4000-8000-000000000001`, its folder is `f0000000-0000-4000-8000-000000000001` and the subfolder is `f0000000-0000-4000-8000-000000000002`, keeping their titles. In S4's `playlists_flattened.json` and `favorites_ids.json`, `…0001` is Playlist A. `folder_root.json` drops the root's first item (Playlist A) so that no M4 fixture gives `…0001` to two playlists.
 - Catalog ids, titles and image uuids are kept.
 
 | fixture | source |
 |---|---|
 | `lyrics.json` | v1 `tracks/1550546/lyrics` (One More Time) |
-| `lyrics_404.json` | v1 `tracks/20115564/lyrics` (Get Lucky, none in NG): the 404 body |
+| `lyrics_404.json` | v1 `tracks/20115564/lyrics` (Get Lucky, none in the account's country): the 404 body |
 | `track_credits.json` | v1 `tracks/20115564/credits?limit=100&includeContributors=true` |
 | `track.json` | v1 `tracks/20115564`, with `mixes.TRACK_MIX` |
 | `own_playlists.json` | v1 `users/{uid}/playlists?order=DATE_UPDATED&orderDirection=DESC&limit=50`: 3 own playlists |
 | `folder_root.json` | v2 root listing before the probe: items 2–4 (2 own, 1 favorited) |
-| `folder_items.json` | v2 listing of the probe folder (the probe playlist, with `parent`), plus the FOLDER item as the root listing showed it (`parent: null`, `totalNumberOfItems: 1`); `totalNumberOfItems` 2 |
+| `folder_items.json` | v2 listing of the probe folder `f…0001`: the probe playlist and the subfolder `f0000000-0000-4000-8000-000000000002` "Tidash probe subfolder" (moved in, as in row 19), both with the `parent` object of `f…0001`; `totalNumberOfItems` 2 |
 | `openapi_playlist_created.json` | openapi `POST playlists` (201) |
