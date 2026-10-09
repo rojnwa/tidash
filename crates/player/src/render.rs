@@ -25,6 +25,11 @@ pub(crate) struct Shared {
     pub(crate) base_ns: AtomicU64,
     /// Frames of the current track rendered since `base_ns`.
     pub(crate) frames: AtomicU64,
+    /// The `frames` count where the next track starts in the ring (gapless), `u64::MAX` for
+    /// none. Once it is rendered, the renderer restarts the clock there at 0, clears it and
+    /// bumps `switches`. Every flush clears it first.
+    pub(crate) boundary: AtomicU64,
+    pub(crate) switches: AtomicU64,
     pub(crate) device_rate: AtomicU32,
     pub(crate) device_channels: AtomicU32,
     /// Render calls so far: tells the player thread whether the device is calling back.
@@ -42,6 +47,8 @@ impl Default for Shared {
             channels: AtomicU32::new(2),
             base_ns: AtomicU64::new(0),
             frames: AtomicU64::new(0),
+            boundary: AtomicU64::new(u64::MAX),
+            switches: AtomicU64::new(0),
             device_rate: AtomicU32::new(0),
             device_channels: AtomicU32::new(0),
             callbacks: AtomicU64::new(0),
@@ -164,6 +171,14 @@ impl fastframe_audio::Render for Renderer {
             }
         }
         drop(samples); // commits what was read
-        s.frames.fetch_add(n as u64, Relaxed);
+        let frames = s.frames.fetch_add(n as u64, Relaxed) + n as u64;
+        let boundary = s.boundary.load(Acquire);
+        if frames >= boundary {
+            // The next track began `frames - boundary` frames ago: its clock starts there.
+            s.base_ns.store(0, Relaxed);
+            s.frames.store(frames - boundary, Relaxed);
+            s.boundary.store(u64::MAX, Relaxed);
+            s.switches.fetch_add(1, Release);
+        }
     }
 }

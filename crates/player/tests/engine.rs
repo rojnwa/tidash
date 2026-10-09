@@ -29,6 +29,7 @@ fn source(id: u64, name: &str) -> Source {
         id,
         reader: Box::new(file),
         len: Some(len),
+        gain: 1.0,
     }
 }
 
@@ -58,6 +59,21 @@ fn render_until(
     events: &Receiver<PlayerEvent>,
     want: &PlayerEvent,
 ) -> (Vec<f32>, Vec<PlayerEvent>) {
+    render_paced(renderer, events, want, Duration::from_millis(1))
+}
+
+/// A pause between blocks that renders at ~2x real time, not ~6x as `render_until` does: for
+/// tests that must not underrun (a debug build resamples barely faster than 6x, a busy machine
+/// slower) or that time the player thread.
+const PACE: Duration = Duration::from_millis(4);
+
+/// `render_until`, with `pause` between the 10 ms blocks.
+fn render_paced(
+    renderer: &mut Renderer,
+    events: &Receiver<PlayerEvent>,
+    want: &PlayerEvent,
+    pause: Duration,
+) -> (Vec<f32>, Vec<PlayerEvent>) {
     let deadline = Instant::now() + DEADLINE;
     let (mut out, mut seen) = (Vec::new(), Vec::new());
     loop {
@@ -69,7 +85,10 @@ fn render_until(
             }
         }
         assert!(Instant::now() < deadline, "no {want:?}; saw {seen:?}");
-        out.extend(render_ms(renderer, 10));
+        let mut block = [0.0f32; BLOCK];
+        renderer.render(&mut block);
+        out.extend_from_slice(&block);
+        std::thread::sleep(pause);
     }
 }
 
@@ -114,6 +133,57 @@ fn nonsilent_frames(samples: &[f32]) -> usize {
 
 fn peak(samples: &[f32]) -> f32 {
     samples.iter().fold(0.0, |m, s| m.max(s.abs()))
+}
+
+/// The fixture's `.raw` reference (interleaved `i32`), scaled to `f32` as the engine does.
+fn raw(name: &str) -> Vec<f32> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(format!("{name}.raw"));
+    let bytes = std::fs::read(path).unwrap();
+    let (words, _) = bytes.as_chunks::<4>();
+    words
+        .iter()
+        .map(|b| i32::from_le_bytes(*b) as f32 / 2_147_483_648.0)
+        .collect()
+}
+
+/// Stereo samples without their leading and trailing all-zero frames.
+fn trimmed(samples: &[f32]) -> &[f32] {
+    let frames = samples.as_chunks::<2>().0;
+    let sound = |f: &[f32; 2]| f.iter().any(|s| *s != 0.0);
+    let start = frames.iter().position(sound).unwrap_or(frames.len());
+    let end = frames.iter().rposition(sound).map_or(start, |i| i + 1);
+    &samples[start * 2..end * 2]
+}
+
+fn assert_same(got: &[f32], want: &[f32]) {
+    let first = got.iter().zip(want).position(|(g, w)| g != w);
+    assert!(
+        got.len() == want.len() && first.is_none(),
+        "{} vs {} samples; first difference at {first:?}",
+        got.len(),
+        want.len()
+    );
+}
+
+/// Configures the renderer at `rate`, loads `s16_44100` as track 1, preloads `next` and plays.
+fn start_with_preload(rate: u32, next: Source) -> (Player, Receiver<PlayerEvent>, Renderer) {
+    let (player, events, mut renderer) = Player::spawn_manual();
+    renderer.configure(rate, 2);
+    player.send(PlayerCmd::Load(source(1, "s16_44100")));
+    player.send(PlayerCmd::Preload(Some(next)));
+    player.send(PlayerCmd::Play);
+    (player, events, renderer)
+}
+
+/// Waits (without rendering) until the position reads `target`.
+fn wait_position(player: &Player, target: Duration) {
+    let deadline = Instant::now() + DEADLINE;
+    while player.position() != target {
+        assert!(Instant::now() < deadline, "at {:?}", player.position());
+        std::thread::sleep(Duration::from_millis(1));
+    }
 }
 
 #[test]
@@ -265,6 +335,7 @@ impl Cut {
             id,
             reader: Box::new(Cut { file, left, stall }),
             len: None,
+            gain: 1.0,
         }
     }
 }
@@ -361,6 +432,7 @@ fn starts_before_download_completes() {
             last: Arc::clone(&last),
         }),
         len: None, // as with DASH
+        gain: 1.0,
     }));
     player.send(PlayerCmd::Play);
     render_until(&mut r, &events, &TrackStarted(1));
@@ -410,6 +482,7 @@ fn second_forward_seek_after_interrupted_seek() {
             gate: Some(gate),
         }),
         len: None,
+        gain: 1.0,
     }));
     player.send(PlayerCmd::Play);
     let (_, mut seen) = render_until(&mut r, &events, &State(Playing));
@@ -452,6 +525,7 @@ fn pause_and_volume_act_while_the_player_waits_on_a_read() {
             gate: Some(gate),
         }),
         len: None,
+        gain: 1.0,
     }));
     player.send(PlayerCmd::Play);
     render_until(&mut r, &events, &State(Playing));
@@ -542,4 +616,148 @@ fn stream_error_emits_error() {
         .unwrap_or_else(|| panic!("no error in {seen:?}"));
     assert_eq!(seen.last(), Some(&State(Stopped)));
     assert!(err < seen.len() - 1);
+}
+
+/// Plays `s16_44100` twice (ids 1, 2) at `rate`, gaplessly: what was rendered until the stop,
+/// and the events. Compared sample for sample, the output must not underrun: the ring fills
+/// before rendering goes on, at `PACE`.
+fn play_gapless(rate: u32) -> (Vec<f32>, Vec<PlayerEvent>) {
+    let (_player, events, mut r) = start_with_preload(rate, source(2, "s16_44100"));
+    let (mut out, mut seen) = render_until(&mut r, &events, &TrackStarted(1));
+    std::thread::sleep(Duration::from_millis(200));
+    let (rest, more) = render_paced(&mut r, &events, &State(Stopped), PACE);
+    out.extend(rest);
+    seen.extend(more);
+    (out, seen)
+}
+
+#[test]
+fn gapless_is_sample_exact() {
+    let (out, seen) = play_gapless(44_100);
+    assert_in_order(&seen, &[TrackStarted(1), TrackStarted(2), TrackEnded(2)]);
+    assert!(!seen.contains(&TrackEnded(1)), "{seen:?}");
+    let want = [raw("s16_44100"), raw("s16_44100")].concat();
+    assert_same(trimmed(&out), trimmed(&want));
+}
+
+#[test]
+fn gapless_resampled_matches_one_resample() {
+    let (out, _) = play_gapless(48_000);
+    let mut want = Vec::new();
+    let mut resampler = player::Resampler::new(44_100, 48_000, 2);
+    resampler.process(&[raw("s16_44100"), raw("s16_44100")].concat(), &mut want);
+    resampler.flush(&mut want);
+    assert_same(trimmed(&out), trimmed(&want));
+}
+
+#[test]
+fn position_restarts_at_the_boundary() {
+    let (player, events, mut r) = start_with_preload(48_000, source(2, "s16_44100"));
+    render_paced(&mut r, &events, &TrackStarted(2), PACE);
+    let at = player.position();
+    assert!(at <= Duration::from_millis(100), "started at {at:?}");
+    render_paced(&mut r, &events, &TrackEnded(2), PACE);
+    let at = player.position();
+    let diff = at.abs_diff(Duration::from_millis(500));
+    assert!(diff <= Duration::from_millis(10), "ended at {at:?}");
+}
+
+#[test]
+fn a_late_preload_still_follows() {
+    let (player, events, mut r) = start("s16_44100");
+    let mut out = render_ms(&mut r, 100); // A is fully decoded by then
+    player.send(PlayerCmd::Preload(Some(source(2, "s16_44100"))));
+    let (rest, seen) = render_until(&mut r, &events, &State(Stopped));
+    out.extend(rest);
+    assert!(seen.contains(&TrackStarted(2)), "{seen:?}");
+    assert!(!seen.contains(&TrackEnded(1)), "{seen:?}");
+    let frames = nonsilent_frames(&out);
+    assert!((47_520..=48_480).contains(&frames), "frames = {frames}"); // 1 s ± 1%
+}
+
+#[test]
+fn seek_before_the_boundary_stays_in_the_ending_track() {
+    let (player, events, mut r) = start_with_preload(48_000, source(2, "s16_44100"));
+    render_ms(&mut r, 50); // the switch to B is decoded, not heard
+    let target = Duration::from_millis(100);
+    player.send(PlayerCmd::Seek(target));
+    wait_position(&player, target);
+    let (out, seen) = render_until(&mut r, &events, &State(Stopped));
+    assert!(seen.contains(&TrackStarted(2)), "{seen:?}");
+    let frames = nonsilent_frames(&out);
+    assert!((42_768..=43_632).contains(&frames), "frames = {frames}"); // 900 ms ± 1%
+}
+
+#[test]
+fn cancelled_preload_is_not_played() {
+    let (player, events, mut r) = start("s16_44100");
+    player.send(PlayerCmd::Preload(Some(source(2, "s16_44100"))));
+    player.send(PlayerCmd::Preload(None));
+    let (_, seen) = render_until(&mut r, &events, &State(Stopped));
+    assert!(seen.contains(&TrackEnded(1)), "{seen:?}");
+    assert!(!seen.contains(&TrackStarted(2)), "{seen:?}");
+}
+
+#[test]
+fn preload_after_the_end_is_dropped() {
+    let (player, events, mut r) = start("s16_44100");
+    render_until(&mut r, &events, &State(Stopped));
+    player.send(PlayerCmd::Preload(Some(source(2, "s16_44100"))));
+    let until = Instant::now() + Duration::from_millis(200);
+    let mut seen = Vec::new();
+    while Instant::now() < until {
+        render_ms(&mut r, 10);
+        seen.extend(events.try_iter());
+    }
+    assert!(!seen.contains(&TrackStarted(2)), "{seen:?}");
+}
+
+#[test]
+fn a_preload_that_fails_to_open_ends_the_track_normally() {
+    let broken = Source {
+        id: 2,
+        reader: Box::new(io::empty()),
+        len: None,
+        gain: 1.0,
+    };
+    let (_player, events, mut r) = start_with_preload(48_000, broken);
+    let (_, seen) = render_until(&mut r, &events, &State(Stopped));
+    assert!(seen.contains(&TrackEnded(1)), "{seen:?}");
+    assert!(
+        !seen.iter().any(|e| matches!(e, PlayerEvent::Error { .. })),
+        "{seen:?}"
+    );
+}
+
+#[test]
+fn a_mono_track_follows_after_a_flush() {
+    let (_player, events, mut r) = start_with_preload(48_000, source(2, "s16_44100_mono"));
+    let (head, mut seen) = render_until(&mut r, &events, &TrackStarted(2));
+    let (tail, rest) = render_until(&mut r, &events, &State(Stopped));
+    seen.extend(rest);
+    assert!(!seen.contains(&TrackEnded(1)), "{seen:?}");
+    // B's frames: those after the silent block of the flush between the tracks, and on.
+    let gap = head
+        .chunks(BLOCK)
+        .rposition(|b| nonsilent_frames(b) == 0)
+        .unwrap();
+    let frames = nonsilent_frames(&head[(gap + 1) * BLOCK..]) + nonsilent_frames(&tail);
+    assert!((23_760..=24_240).contains(&frames), "frames = {frames}"); // 500 ms ± 1%
+}
+
+#[test]
+fn gain_scales_output() {
+    let run = |gain: f32| {
+        let (player, events, mut r) = Player::spawn_manual();
+        r.configure(48_000, 2);
+        player.send(PlayerCmd::Load(Source {
+            gain,
+            ..source(1, "s16_44100")
+        }));
+        player.send(PlayerCmd::Play);
+        peak(&render_until(&mut r, &events, &TrackEnded(1)).0)
+    };
+    let (full, half) = (run(1.0), run(0.5));
+    assert!(full > 0.05, "full = {full}");
+    assert!((half / full - 0.5).abs() <= 0.01, "{half} / {full}");
 }

@@ -88,6 +88,7 @@ fn segment_source(id: u64, urls: Vec<String>) -> io::Result<Source> {
         id,
         reader: Box::new(SegmentReader::new(urls, open)),
         len: None,
+        gain: 1.0,
     })
 }
 

@@ -9,6 +9,7 @@ fn fixture(id: u64) -> Source {
         id,
         reader: Box::new(file),
         len: Some(len),
+        gain: 1.0,
     }
 }
 
@@ -41,6 +42,7 @@ fn output_runs_only_with_an_unpaused_track() {
         id: 2,
         reader: Box::new(io::empty()),
         len: None,
+        gain: 1.0,
     };
     e.command(PlayerCmd::Load(broken));
     r.render(&mut block);
@@ -87,6 +89,19 @@ fn stale_decoder_resumes_seamlessly() {
     let straight = decode_all(None);
     assert_eq!(straight.len(), 22_050 * 2);
     assert!(decode_all(Some(5)) == straight, "resumed decode differs");
+}
+
+/// A decoder gone stale at the very end is rebuilt there and finds nothing left: the end of
+/// the stream, not an error.
+#[test]
+fn a_stale_decoder_at_the_end_ends_the_stream() {
+    let (_player, _events, _r, mut e) = parts();
+    e.command(PlayerCmd::Load(fixture(1)));
+    let t = e.track.as_mut().unwrap();
+    while t.next().unwrap().is_some() {}
+    t.stale = true;
+    let next = t.next().map(|p| p.is_some());
+    assert!(matches!(next, Ok(false)), "{next:?}");
 }
 
 /// Only a forward seek can be refused for lying past the end. A backward one that fails

@@ -11,13 +11,15 @@ use rtrb::Producer;
 
 use crate::render::{NewRing, Renderer, Shared};
 use crate::stream::is_interrupt;
-use crate::track::Track;
-use crate::{DecodeError, Decoder, Interrupt, ProgressiveFile, Resampler};
+use crate::track::{Next, Track, resampler};
+use crate::{DecodeError, Decoder, Interrupt, ProgressiveFile};
 
 /// How long the thread sleeps on the command channel when there is nothing to decode.
 const IDLE_WAIT: Duration = Duration::from_millis(50);
 /// The same, while a running output is about to take a flush (start, seek): resume quickly.
 const FLUSH_WAIT: Duration = Duration::from_millis(5);
+/// The same, while the renderer is about to reach the next track: tell its start promptly.
+const SWITCH_WAIT: Duration = Duration::from_millis(1);
 /// Callbacks this recent mean the device is running (and will take a pending flush soon).
 const CALLBACK_RECENT: Duration = Duration::from_millis(100);
 /// Longest the device keeps running after a stop, waiting for the renderer to take the flush.
@@ -29,6 +31,8 @@ pub struct Source {
     pub id: u64,
     pub reader: Box<dyn Read + Send>,
     pub len: Option<u64>,
+    /// Linear, multiplies every decoded sample (ReplayGain); 1.0 leaves them unchanged.
+    pub gain: f32,
 }
 
 pub enum PlayerCmd {
@@ -38,6 +42,10 @@ pub enum PlayerCmd {
     Stop,
     Seek(Duration),
     SetVolume(f32),
+    /// `Some`: play this right after the current track (gapless when it can), replacing any
+    /// earlier preload; dropped when nothing is loaded. `None` cancels a preload not switched
+    /// to yet. `Load` and `Stop` drop any preload.
+    Preload(Option<Source>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,7 +60,10 @@ pub enum PlayState {
 pub enum PlayerEvent {
     /// Sent only when the state actually changes.
     State(PlayState),
+    /// The track is heard from now on. If another track was playing, that one ended here
+    /// (gapless, or after a short gap).
     TrackStarted(u64),
+    /// Playback stopped at the track's natural end, with no preload after it.
     TrackEnded(u64),
     Error {
         id: u64,
@@ -171,6 +182,9 @@ fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
         ring: None,
         rate: 0,
         track: None,
+        ending: None,
+        next: None,
+        switches_seen: 0,
         state: PlayState::Stopped,
         scratch: Vec::new(),
         output: None,
@@ -189,22 +203,16 @@ fn parts() -> (Player, Receiver<PlayerEvent>, Renderer, Engine) {
     (player, event_rx, renderer, engine)
 }
 
-/// Track rate -> device rate. Before the first `configure` there is no device rate:
-/// passthrough until `adopt_ring` rebuilds it.
-fn resampler(decoder: &Decoder, device_rate: u32) -> Resampler {
-    let to = if device_rate == 0 {
-        decoder.rate()
-    } else {
-        device_rate
-    };
-    Resampler::new(decoder.rate(), to, decoder.channels())
-}
-
 /// An error caused by a Load, Stop or Seek arriving (a read given up): not reported, that
 /// command decides what happens next. symphonia's probe turns a failed read into "no format
 /// found", so any error while an interrupt is pending counts; a real one comes back after.
 fn superseded(e: &DecodeError, interrupt: &Interrupt) -> bool {
     matches!(e, DecodeError::Io(e) if is_interrupt(e)) || interrupt.raised()
+}
+
+/// Whether `next` can play on in `current`'s ring, with no flush between them.
+fn seamless(current: &Track, next: &Decoder) -> bool {
+    current.channels == usize::from(next.channels().max(1))
 }
 
 struct Engine {
@@ -218,6 +226,13 @@ struct Engine {
     /// Device rate the ring and resampler are built for (0 before the first `configure`).
     rate: u32,
     track: Option<Track>,
+    /// Gapless: the track still heard while `track` follows it in the ring, until the
+    /// renderer reaches the boundary between them.
+    ending: Option<Track>,
+    /// The preloaded track to play after `track`.
+    next: Option<Next>,
+    /// `Shared::switches` as last seen.
+    switches_seen: u64,
     state: PlayState,
     scratch: Vec<f32>,
     output: Option<Output<Renderer>>,
@@ -234,11 +249,16 @@ impl Engine {
         let mut idle = false;
         loop {
             self.sync_output();
-            let wait = if idle {
-                self.idle_wait()
-            } else {
-                Duration::ZERO // a try_recv: commands first
-            };
+            let mut wait = Duration::ZERO; // a try_recv: commands first
+            if idle {
+                wait = self.idle_wait();
+                if wait < IDLE_WAIT {
+                    // A timed wait on the channel is only as fine as the OS timer (15.6 ms on
+                    // Windows): sleep through a short one, then take commands.
+                    std::thread::sleep(wait);
+                    wait = Duration::ZERO;
+                }
+            }
             match self.cmds.recv_timeout(wait) {
                 Ok((cmd, raised)) => {
                     if raised {
@@ -256,22 +276,25 @@ impl Engine {
                 self.maintain();
             }
             self.adopt_ring();
+            self.poll_switch(); // apart from `step`, which waits while the ring is full
             idle = !self.step();
         }
     }
 
-    /// Poll fast only while a flush is about to be taken: the output should run and has
-    /// called back lately. A device that is gone (no callbacks) gets the normal wait.
+    /// Poll fast only while a flush is about to be taken or the next track to be reached:
+    /// the output should run and has called back lately. A device that is gone (no
+    /// callbacks) gets the normal wait.
     fn idle_wait(&mut self) -> Duration {
         let n = self.shared.callbacks.load(Relaxed);
         if n != self.callbacks_seen {
             self.callbacks_seen = n;
             self.callback_at = Instant::now();
         }
-        if self.shared.flush_pending()
-            && self.output_wanted()
-            && self.callback_at.elapsed() < CALLBACK_RECENT
-        {
+        if !self.output_wanted() || self.callback_at.elapsed() >= CALLBACK_RECENT {
+            IDLE_WAIT
+        } else if self.ending.is_some() {
+            SWITCH_WAIT
+        } else if self.shared.flush_pending() {
             FLUSH_WAIT
         } else {
             IDLE_WAIT
@@ -330,18 +353,34 @@ impl Engine {
             PlayerCmd::Stop => self.stop(Duration::ZERO),
             PlayerCmd::Seek(to) => self.seek(to),
             PlayerCmd::SetVolume(v) => self.shared.volume.store(v.to_bits(), Relaxed),
+            PlayerCmd::Preload(src) => self.preload(src),
         }
     }
 
+    /// Starts downloading `src` to follow the current track; it is opened once that track's
+    /// decoder is done. No track: dropped.
+    fn preload(&mut self, src: Option<Source>) {
+        self.next = src.filter(|_| self.track.is_some()).and_then(|src| {
+            let file = ProgressiveFile::spawn(src.reader, src.len, &self.interrupt)
+                .inspect_err(|e| log::warn!("preload of track {}: {e}", src.id))
+                .ok()?;
+            Some(Next {
+                id: src.id,
+                file,
+                gain: src.gain,
+                after_tail: false,
+            })
+        });
+    }
+
     fn load(&mut self, src: Source) {
-        self.track = None;
+        (self.track, self.ending, self.next) = (None, None, None);
         self.adopt_ring(); // so the resampler is built for the current device rate
         self.flush(Duration::ZERO); // the old track stops now, not after the probe
         self.set_state(PlayState::Buffering);
         let opened = ProgressiveFile::spawn(src.reader, src.len, &self.interrupt)
-            .and_then(|file| Ok((file.forward()?, file)))
             .map_err(DecodeError::Io)
-            .and_then(|(view, file)| Ok((Decoder::new(Box::new(view))?, file)));
+            .and_then(|file| self.begin(src.id, file, src.gain));
         // This Load's probe is over: Seeks may interrupt reads again. Decide whether a failure
         // was superseded while still holding the lock, so a Seek sent after it cannot have
         // raised the interrupt (and so hide a real probe error).
@@ -350,28 +389,22 @@ impl Engine {
         let opened = opened.map_err(|e| (superseded(&e, &self.interrupt), e));
         drop(loads);
         match opened {
-            Ok((decoder, file)) => {
-                self.track = Some(Track {
-                    id: src.id,
-                    resampler: resampler(&decoder, self.rate),
-                    channels: usize::from(decoder.channels().max(1)),
-                    file,
-                    decoder,
-                    decoded: 0,
-                    stale: false,
-                    skip: 0,
-                    pending: Vec::new(),
-                    eof: false,
-                    started: false,
-                });
-                self.flush(Duration::ZERO); // again, now with the track's channels
-            }
-            Err((true, _)) => {}
+            Ok(()) | Err((true, _)) => {}
             Err((false, e)) => self.fail(src.id, e.to_string()),
         }
     }
 
+    /// Opens `file` and makes it the current track, from its start, behind a flush: how every
+    /// track starts but one that follows gaplessly.
+    fn begin(&mut self, id: u64, file: ProgressiveFile, gain: f32) -> Result<(), DecodeError> {
+        let decoder = Decoder::new(Box::new(file.forward()?))?;
+        self.track = Some(Track::new(id, file, decoder, gain, self.rate));
+        self.flush(Duration::ZERO); // again, now with the track's channels
+        Ok(())
+    }
+
     fn seek(&mut self, to: Duration) {
+        self.undo_switch();
         let Some(t) = &mut self.track else { return };
         match t.seek(to) {
             Ok(at) => {
@@ -380,6 +413,7 @@ impl Engine {
                 t.pending.clear();
                 t.eof = false;
                 t.resampler = resampler(&t.decoder, self.rate);
+                t.out_mark = 0;
                 self.flush(to);
             }
             Err(e) if superseded(&e, &self.interrupt) => {} // the next command re-seeks or drops the track
@@ -404,13 +438,14 @@ impl Engine {
         if let Some(t) = &self.track {
             s.channels.store(t.channels as u32, Relaxed);
         }
+        s.boundary.store(u64::MAX, Relaxed); // gone with the ring
         s.flush_req.fetch_add(1, Release);
     }
 
     /// Drop the track and flush (the clock then reads `at`); the device pauses once the
     /// renderer took that flush (`output_action`).
     fn stop(&mut self, at: Duration) {
-        self.track = None;
+        (self.track, self.ending, self.next) = (None, None, None);
         self.flush(at);
         self.pause_by = Some(Instant::now() + STOP_GRACE);
         self.set_state(PlayState::Stopped);
@@ -430,6 +465,7 @@ impl Engine {
         self.ring = Some(ring);
         self.rate = rate;
         if self.track.is_some() {
+            self.poll_switch(); // one made before `configure`: the position is the new track's
             self.seek(self.shared.position());
         }
     }
@@ -447,7 +483,7 @@ impl Engine {
             log::warn!("audio output: {e}");
         }
         if let Some(e) = errors.iter().find(|e| e.is_fatal())
-            && let Some(t) = &self.track
+            && let Some(t) = self.ending.as_ref().or(self.track.as_ref())
         {
             let id = t.id;
             self.fail(id, e.to_string());
@@ -494,10 +530,21 @@ impl Engine {
             return true;
         }
         if t.eof {
-            if ring.slots() < ring.buffer().capacity() {
+            let (id, drained) = (t.id, ring.slots() == ring.buffer().capacity());
+            if drained {
+                self.switched(); // the ring ran dry: the renderer passed any boundary in it
+            }
+            if self.follow() {
+                return true;
+            }
+            if !drained {
                 return false; // still playing out
             }
-            let id = t.id;
+            if let Some(n) = self.next.take()
+                && self.begin(n.id, n.file, n.gain).is_ok()
+            {
+                return true; // its TrackStarted comes with its first samples, as after a Load
+            }
             self.emit(PlayerEvent::TrackEnded(id));
             self.stop(self.shared.position()); // the clock stays at the end
             return true;
@@ -506,19 +553,23 @@ impl Engine {
             Ok(Some(pcm)) => {
                 let ch = t.channels;
                 let frames = pcm.samples.len() / ch;
-                let drop = t.skip.min(frames);
+                let (drop, gain) = (t.skip.min(frames), t.gain);
                 t.skip -= drop;
                 self.scratch.clear();
                 self.scratch.extend(
                     pcm.samples[drop * ch..]
                         .iter()
-                        .map(|&s| s as f32 / 2_147_483_648.0),
+                        .map(|&s| s as f32 / 2_147_483_648.0 * gain),
                 );
                 t.resampler.process(&self.scratch, &mut t.pending);
             }
             Ok(None) => {
-                t.resampler.flush(&mut t.pending);
-                t.eof = true;
+                if !self.follow()
+                    && let Some(t) = &mut self.track
+                {
+                    t.resampler.flush(&mut t.pending);
+                    t.eof = true;
+                }
             }
             // The interrupting command is queued (or about to be): wait for it, not spin.
             Err(e) if superseded(&e, &self.interrupt) => return false,
@@ -528,6 +579,87 @@ impl Engine {
             }
         }
         true
+    }
+
+    /// The current track's decoder is done and a preload waits: open it. When it can play on
+    /// in the same ring, it becomes the current track at once, its samples queued behind the
+    /// boundary, and the ending one stays heard until the renderer gets there. True when it
+    /// switched; otherwise the current track ends as before.
+    fn follow(&mut self) -> bool {
+        if self.ending.is_some() || !self.next.as_ref().is_some_and(|n| !n.after_tail) {
+            return false; // a boundary is pending already, or nothing new to open
+        }
+        let (Some(a), Some(next)) = (&mut self.track, self.next.take()) else {
+            return false;
+        };
+        let opened = (next.file.forward())
+            .map_err(DecodeError::Io)
+            .and_then(|view| Decoder::new(Box::new(view)));
+        let decoder = match opened {
+            Ok(decoder) => decoder,
+            Err(e) => {
+                if !superseded(&e, &self.interrupt) {
+                    log::warn!("preloaded track {}: {e}", next.id);
+                }
+                return false; // dropped
+            }
+        };
+        if !seamless(a, &decoder) {
+            self.next = Some(Next {
+                after_tail: true,
+                ..next
+            });
+            return false;
+        }
+        // In the renderer's count of `a`'s frames; taken before anything moves.
+        let boundary = a.resampler.expected_out().saturating_sub(a.out_mark);
+        let mut b = Track::new(next.id, next.file, decoder, next.gain, self.rate);
+        b.pending = std::mem::take(&mut a.pending);
+        if !a.eof && a.decoder.rate() == b.decoder.rate() {
+            // One resampler goes through both tracks' samples, as through one stream.
+            b.out_mark = a.resampler.expected_out();
+            std::mem::swap(&mut a.resampler, &mut b.resampler);
+        } else if !a.eof {
+            a.resampler.flush(&mut b.pending);
+        }
+        b.started = true; // its TrackStarted comes with the switch
+        // Before arming: a switch counted until now raced a flush and is not this one.
+        self.switches_seen = self.shared.switches.load(Acquire);
+        self.shared.boundary.store(boundary, Release);
+        self.ending = self.track.replace(b);
+        true
+    }
+
+    /// The renderer reached the boundary: the current track is heard from now on.
+    fn poll_switch(&mut self) {
+        let n = self.shared.switches.load(Acquire);
+        if n != self.switches_seen {
+            self.switches_seen = n;
+            self.switched();
+        }
+    }
+
+    /// The ending track is over. With none (an undone switch), nothing happens.
+    fn switched(&mut self) {
+        if self.ending.take().is_some()
+            && let Some(t) = &self.track
+        {
+            self.emit(PlayerEvent::TrackStarted(t.id));
+        }
+    }
+
+    /// A seek (or device change) before the renderer reached the boundary: the ending track
+    /// is the one heard, so it is current again, and the next goes back to being a preload.
+    fn undo_switch(&mut self) {
+        let Some(a) = self.ending.take() else { return };
+        if let Some(b) = self.track.replace(a) {
+            self.next = Some(Next {
+                id: b.id,
+                file: b.file,
+                gain: b.gain,
+                after_tail: false,
+            });
+        }
     }
 
     fn emit(&self, event: PlayerEvent) {
