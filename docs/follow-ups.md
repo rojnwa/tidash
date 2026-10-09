@@ -1,4 +1,4 @@
-# Follow-ups carried out of M0–M2
+# Follow-ups carried out of M0–M3
 
 Parked by task reviews and the final reviews. Pick each up in the milestone that touches its code.
 
@@ -27,16 +27,58 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
   cursor repeats the shelves up to 5 times).
 - The login paste box keeps its undo history across logout (the pasted code is single-use and
   PKCE-bound); clear its `TextEditState` like the search box's.
+- Changing Hi-Res or normalization keeps a preload made under the old settings, so the next track
+  plays at the old quality and gain; drop the preload record in `set_audio` (`playback.rs`).
+- A refusal after Exclusive off/on, or on another refusing device, shows no second notice; reset
+  `fallback_shown` in `set_audio` when exclusive or the device changes.
+- The volume slider is enabled while no output is known (briefly on exclusive loads); a fast double
+  click on a settings checkbox can be lost (the UI toggles from the model's last value).
+- Settings `save` renames without `sync_all` (its comment claims crash safety); `LoggedOut` and
+  `SessionExpired` repeat the list of kept fields (`model.rs`).
+- The badge hover joins the msgid fragment "resampled to {rate} kHz" in code (whole sentences for
+  translators).
+- Untested: the `Error` of a cancelled preload and its stop-when-nothing-follows branch, the stale
+  drop in `RemoveFromQueue`, a normal load not counting play time while Buffering (the `playing()`
+  helper sets Playing early), `start_current` clearing the output and gapless keeping it.
 
-## M3 (player)
+## Player
 
-- A forward seek on a stale decoder whose rebuild fails reports `TrackEnded` (`engine.rs` seek path).
-- A writer-thread panic in `ProgressiveFile` leaves readers blocked (store an error on unwind); EINTR
-  not retried.
-- `decoded` mixes seek-landing timestamps with decoded frame counts; timebase assumed `1/rate`.
-- Backward-seek cost grows with position (rebuild from byte 0), unmeasured on long tracks.
-- Resampler: `debug_assert` on flush shortfall; exact-length tests for 48→44.1 and 96→48 kHz.
-- fastframe-audio v0.4.1 allocates in the render callback (raise upstream).
+Closed in M3: the stale-decoder seek and the time base (Task 3), the writer panic and EINTR on read
+(Task 1), the resampler's flush and exact lengths (Task 2), the backward-seek cost (Task 11: 127–149 ms
+on a 25-minute 24/192 track, spec §10).
+
+- Linux: DACs that take only S24_3LE (packed 24-bit) fall back to shared; the `alsa` crate can drive
+  them if users ask.
+- Exclusive volume is fixed at 100%; use the hardware volume where there is one (WASAPI endpoint,
+  CoreAudio, ALSA mixer).
+- The exclusive device stays held while paused; release it after a long pause, as shared output
+  does after 5 minutes.
+- Exclusive on Linux with the Default device always fails as "device … not found" (the ALSA default
+  is never `hw:`), so it falls back with a misleading reason and the hardware test's doc cannot be met
+  there (`cpal.rs`); on Windows, `Named` reports every lookup error as "not found" (`wasapi.rs`).
+- macOS: the physical format stays changed after hog mode ends (other apps then run at it); a matched
+  physical format with another or any rate is set as is (check the nominal rate after the build, or
+  it can time out or resample silently); `set_physical` stops at the first failed set instead of
+  trying the next; hog mode leaks if `toggle_hog_mode` fails reading it back after setting it (heals
+  on the next open).
+- Windows: an init finishing after the 2 s open timeout holds the device briefly before its thread
+  drops it; a device unplugged while paused is noticed only on resume, after one period; `wasapi`'s
+  `trace!` in `write_to_device` runs in the render loop (set `log`'s `release_max_level_debug` in the
+  app so it compiles out).
+- Engine races at the track boundary (rare): `set_output` and the preload-error path read the
+  position around `poll_switch`, so a boundary crossed in between opens exclusive at A's format while
+  B plays, or re-seeks A near 0; a superseded seek in the preload-error arm undoes the switch without
+  a flush (B's leftover frames are heard until the next flush); the drain path has a theoretical race
+  when B is shorter than a device period and `Preload(C)` lands in the window (`engine.rs`).
+- `SWITCH_WAIT` polls every 1 ms; 5 ms cuts the wakes five-fold (CPU budget, `engine.rs`).
+- A failed positional write stores its `Interrupted` kind as the download error, and `read_exact`
+  retries that forever: map it to `Other`, or retry in `write_all_at` (`stream.rs`).
+- A long Hi-Res track is a large temp file: 954 MB for 25 minutes of 24/192, two during a preload;
+  `/tmp` is RAM (tmpfs) on many Linux distributions.
+- Tests that miss their path: `a_lost_exclusive_device_falls_back_and_continues` renders nothing
+  after `maintain`; the preload-fails-before-heard test checks events, not A's tail;
+  `preload_after_the_end_is_dropped` cannot fail on its filter; the eof-branch late preload relies on
+  a 200 ms sleep; the WASAPI hardware test runs 1.03–1.05 s (limit 1 s).
 
 ## tidal crate
 
@@ -57,6 +99,8 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 - Add an MSRV 1.98 job (CI runs stable only).
 - `fastframe-fonts` is pinned to the unmerged crmne/fastframe#17; return to a release tag once it
   ships.
+- fastframe-audio v0.4.1 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
+  issue is drafted (M3 Task 11) and waits for the human's go-ahead to file.
 
 ## M4 / M5
 
