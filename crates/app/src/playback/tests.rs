@@ -449,6 +449,205 @@ fn removing_current_while_playing_loads_next() {
     assert!(!p.loading, "none left: stopped");
 }
 
+/// Playing track 0 of three, 200 s each, its play started. Needs a runtime entered.
+fn playing(c: &Arc<Client>) -> (Playback, std::sync::mpsc::Receiver<Event>) {
+    let (mut p, rx) = playback();
+    let (tracks, start) = (tracks(3), 0);
+    p.handle(Some(c), Action::PlayTracks { tracks, start });
+    (p.loading, p.state) = (false, PlayState::Playing);
+    let id = p.seq;
+    p.on_msg(Some(c), Msg::Player(PlayerEvent::TrackStarted(id)));
+    (p, rx)
+}
+
+/// A stream for `id` resolved: as a load's or a preload's result.
+fn resolved(c: &Arc<Client>, id: u64) -> Msg {
+    let source = Source {
+        id,
+        reader: Box::new(Cursor::new(Vec::new())),
+        len: None,
+        gain: 1.0,
+    };
+    Msg::Loaded {
+        seq: id,
+        client: c.clone(),
+        result: Ok(Resolved {
+            source,
+            quality: "HI_RES_LOSSLESS".into(),
+            codec: "flac".into(),
+        }),
+    }
+}
+
+/// Requests the next track's stream 15 s before the end and hands it to the player: its id.
+fn sent_preload(p: &mut Playback, c: &Arc<Client>) -> u64 {
+    p.maybe_preload(c, S * 185);
+    let id = p.preload.as_ref().expect("a preload").id;
+    p.on_msg(Some(c), resolved(c, id));
+    assert!(p.preload.as_ref().is_some_and(|pre| pre.sent));
+    id
+}
+
+#[test]
+fn preloads_the_next_track_near_the_end() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    p.maybe_preload(&c, S * 170);
+    assert!(p.preload.is_none(), "30 s left");
+    p.maybe_preload(&c, S * 185);
+    let pre = p.preload.as_ref().expect("a preload");
+    assert_eq!((pre.track_id, pre.sent), (1, false));
+    assert_ne!(pre.id, p.seq, "an id of its own");
+    let id = pre.id;
+    p.maybe_preload(&c, S * 186);
+    assert_eq!(
+        p.preload.as_ref().map(|pre| pre.id),
+        Some(id),
+        "requested once"
+    );
+}
+
+#[test]
+fn a_preloaded_track_starts_without_a_load() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    let x = sent_preload(&mut p, &c);
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::TrackStarted(x)));
+    assert_eq!(current_id(&p), Some(1));
+    assert_eq!(p.seq, x);
+    assert!(!p.loading);
+    assert!(p.preload.is_none());
+    assert_eq!(
+        (p.quality.as_str(), p.codec.as_str()),
+        ("HI_RES_LOSSLESS", "flac")
+    );
+    assert_eq!(
+        p.play.as_ref().map(|play| play.track_id),
+        Some(1),
+        "a new play"
+    );
+}
+
+fn track_9() -> Vec<tidal::Track> {
+    vec![tidal::Track { id: 9, ..track() }]
+}
+
+#[test]
+fn a_queue_edit_cancels_a_stale_preload() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    let x = sent_preload(&mut p, &c);
+    p.handle(Some(&c), Action::PlayNext(track_9()));
+    assert!(p.preload.is_none());
+    assert_eq!(p.cancelled, Some(x));
+    // The player went on before the cancel landed: the current track has ended.
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::TrackStarted(x)));
+    assert_eq!(current_id(&p), Some(9));
+    assert!(p.loading, "loads it");
+}
+
+#[test]
+fn a_late_preload_result_is_dropped() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    p.maybe_preload(&c, S * 185);
+    let x = p.preload.as_ref().expect("a preload").id;
+    p.handle(Some(&c), Action::PlayNext(track_9()));
+    assert!(p.preload.is_none());
+    let seq = p.seq;
+    p.on_msg(Some(&c), resolved(&c, x));
+    assert!(p.preload.is_none() && p.cancelled.is_none(), "nothing sent");
+    assert_eq!((p.seq, p.loading), (seq, false), "nor loaded");
+    p.maybe_preload(&c, S * 186);
+    let next = p.preload.as_ref().map(|pre| pre.track_id);
+    assert_eq!(next, Some(9), "the new next track instead");
+}
+
+#[test]
+fn repeat_one_preloads_the_same_track() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    p.handle(Some(&c), Action::SetRepeat(crate::queue::Repeat::One));
+    let x = sent_preload(&mut p, &c);
+    assert_eq!(p.preload.as_ref().map(|pre| pre.track_id), Some(0));
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::TrackStarted(x)));
+    assert_eq!((current_id(&p), p.seq, p.loading), (Some(0), x, false));
+}
+
+/// A preload behind a format change fails on its first packet: the player stopped on it.
+#[test]
+fn an_error_from_the_preloaded_track_moves_to_it() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, rx) = playing(&c);
+    let x = sent_preload(&mut p, &c);
+    p.last_pos = S * 199; // the ended track's
+    let message = "bad frame".into();
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::Error { id: x, message }));
+    assert_eq!(current_id(&p), Some(1));
+    assert!(p.loading, "restarted");
+    assert_eq!(p.restarted_at, Some(Duration::ZERO), "from its start");
+    assert!(errors(&rx).is_empty());
+}
+
+/// The stream request asks for the quality the settings choose.
+#[test]
+fn a_stream_request_asks_for_the_chosen_quality() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(async {
+        let server = MockServer::start().await;
+        let gated = ResponseTemplate::new(200).set_delay(Duration::from_secs(600)); // never answers
+        Mock::given(method("GET"))
+            .respond_with(gated)
+            .mount(&server)
+            .await;
+        let api_base = format!("{}/v1/", server.uri()).parse().expect("a URL");
+        let c = client_with(tidal::ClientConfig {
+            api_base,
+            ..Default::default()
+        });
+        let (mut p, _rx) = playback();
+        for (n, hi_res) in [(1, true), (2, false)] {
+            p.audio.hi_res = hi_res;
+            let _request = p.request(&c, 7, n);
+            let sent = async {
+                while server.received_requests().await.map_or(0, |r| r.len()) < n as usize {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            };
+            tokio::time::timeout(Duration::from_secs(5), sent)
+                .await
+                .expect("the request is sent");
+        }
+        let requests = server.received_requests().await.expect("recorded");
+        let asked: Vec<_> = requests
+            .iter()
+            .map(|r| {
+                let mut q = r.url.query_pairs();
+                q.find(|(k, _)| k == "audioquality")
+                    .map(|(_, v)| v.into_owned())
+            })
+            .collect();
+        let want = ["HI_RES_LOSSLESS", "LOSSLESS"].map(|q| Some(q.to_string()));
+        assert_eq!(asked, want);
+    });
+}
+
 #[test]
 fn toggle_play_pauses_and_resumes() {
     let (mut p, _rx) = playback();

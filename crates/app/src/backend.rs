@@ -200,7 +200,8 @@ impl Backend {
 
     /// Until the UI drops its sender (app closing); then the current play is reported.
     async fn run(mut self, mut rx: UnboundedReceiver<Action>, mut msgs: UnboundedReceiver<Msg>) {
-        // Samples the position for a resume after a player error; only ticks while playing.
+        // Samples the position for a resume after a player error, and preloads the next track
+        // near the end; only ticks while playing.
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         self.load_favorites(); // the stored session's
@@ -222,7 +223,7 @@ impl Backend {
                 },
                 _ = tick.tick(), if playing => {
                     if let Some(p) = &mut self.playback {
-                        p.tick();
+                        p.tick(self.client.as_ref());
                     }
                 }
             }

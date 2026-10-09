@@ -65,6 +65,15 @@ impl Queue {
         }
     }
 
+    /// What `advance` would make current, moving nothing.
+    pub fn peek_advance(&self) -> Option<&Track> {
+        if self.repeat == Repeat::One {
+            return self.current();
+        }
+        let i = self.following(self.current? + 1)?;
+        self.entries.get(i).map(|e| &e.track)
+    }
+
     /// The previous playable track becomes current; `None` (staying put) at the start.
     pub fn previous(&mut self) -> Option<&Track> {
         let before = self.entries.get(..self.current?)?;
@@ -394,6 +403,26 @@ mod tests {
         assert_eq!(id(q.advance()), Some(1));
         assert_eq!(id(q.next()), Some(2), "a skip moves on");
         assert_eq!(id(q.next()), Some(1), "and wraps, as with all");
+    }
+
+    #[test]
+    fn peek_advance_matches_advance() {
+        for repeat in [Repeat::Off, Repeat::All, Repeat::One] {
+            // Mid-queue, with an unavailable track next; and at the end.
+            for start in [1, 3] {
+                let queue = || {
+                    let mut q = Queue::default();
+                    q.set_repeat(repeat);
+                    q.replace(tracks(&[true, true, false, true]), start);
+                    q
+                };
+                let q = queue();
+                let before = (ids(&q), q.snapshot().current);
+                let want = queue().advance().cloned();
+                assert_eq!(q.peek_advance().cloned(), want, "{repeat:?} from {start}");
+                assert_eq!((ids(&q), q.snapshot().current), before, "nothing moved");
+            }
+        }
     }
 
     #[test]

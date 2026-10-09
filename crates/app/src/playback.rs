@@ -196,11 +196,11 @@ fn now_ms() -> u64 {
 /// What reaches the backend besides actions.
 pub enum Msg {
     Player(PlayerEvent),
-    /// A `start_current` resolved its stream (source and quality) with `client`, or failed.
+    /// A `request` for the load or preload `seq` resolved its stream with `client`, or failed.
     Loaded {
         seq: u64,
         client: Arc<Client>,
-        result: Result<(Source, String), Box<dyn std::error::Error + Send + Sync>>,
+        result: Result<Resolved, Box<dyn std::error::Error + Send + Sync>>,
     },
     /// This client's session is dead (`backend::session_expired`).
     SessionExpired(Arc<Client>),
@@ -218,8 +218,29 @@ async fn stream_info(c: &Client, id: u64, quality: Quality) -> tidal::Result<Str
     }
 }
 
+/// A track's stream, ready for the player.
+pub struct Resolved {
+    source: Source,
+    quality: String,
+    codec: String,
+}
+
 /// A player error this far from where the track was last restarted is a new hiccup.
 const RECOVERED: Duration = Duration::from_secs(10);
+
+/// The next track's stream is requested this long before the current one ends.
+const PRELOAD_LEAD: Duration = Duration::from_secs(20);
+
+/// The next track's stream, requested to follow the current one gaplessly.
+struct Preload {
+    /// Its player source id.
+    id: u64,
+    track_id: u64,
+    /// Handed to the player.
+    sent: bool,
+    quality: String,
+    codec: String,
+}
 
 /// Backend-side playback: the queue, the player, and the current play's report.
 pub struct Playback {
@@ -227,19 +248,26 @@ pub struct Playback {
     emit: Arc<Emitter>,
     msgs: UnboundedSender<Msg>,
     queue: Queue,
-    /// The current load's generation, used as the player `Source` id: older results and
-    /// player events are stale.
+    /// The current track's player `Source` id: other results and player events are stale.
     seq: u64,
+    /// The last id `fresh_id` gave out.
+    last_id: u64,
     /// The current track's stream info is being fetched.
     loading: bool,
-    /// The latest load's task; a superseded one is aborted.
+    /// The latest stream request's task, a load's or a preload's; a superseded one is aborted.
     load: Option<tokio::task::JoinHandle<()>>,
+    preload: Option<Preload>,
+    /// A sent preload taken back, which the player may have gone on to before the cancel.
+    cancelled: Option<u64>,
     /// Play, not pause, once the current track is loaded.
     want_play: bool,
     /// Where the current track was last restarted after a player error, if it was.
     restarted_at: Option<Duration>,
     resume_at: Option<Duration>,
     quality: String,
+    /// The current track's codec ("flac"), as TIDAL names it.
+    #[allow(dead_code, reason = "shown from Task 10 on")]
+    codec: String,
     state: PlayState,
     volume: f32,
     /// Position sampled while playing: a player error resets the player's own clock.
@@ -265,12 +293,16 @@ impl Playback {
             msgs,
             queue: Queue::default(),
             seq: 0,
+            last_id: 0,
             loading: false,
             load: None,
+            preload: None,
+            cancelled: None,
             want_play: false,
             restarted_at: None,
             resume_at: None,
             quality: String::new(),
+            codec: String::new(),
             state: PlayState::Stopped,
             volume: 1.0,
             last_pos: Duration::ZERO,
@@ -295,9 +327,39 @@ impl Playback {
         self.state == PlayState::Playing
     }
 
-    /// Samples the position; called every second while playing.
-    pub fn tick(&mut self) {
-        self.position();
+    /// Samples the position, and near the end preloads the next track; called every second
+    /// while playing.
+    pub fn tick(&mut self, c: Option<&Arc<Client>>) {
+        let position = self.position();
+        if let Some(c) = c {
+            self.maybe_preload(c, position);
+        }
+    }
+
+    /// At `position`, `PRELOAD_LEAD` or less before the current track's end, requests the
+    /// track `advance` would go to, once.
+    fn maybe_preload(&mut self, c: &Arc<Client>, position: Duration) {
+        let (Some(current), Some(next)) = (self.queue.current(), self.queue.peek_advance()) else {
+            return;
+        };
+        let left = Duration::from_secs(current.duration.into()).saturating_sub(position);
+        if self.state != PlayState::Playing
+            || self.loading
+            || self.preload.is_some()
+            || left > PRELOAD_LEAD
+        {
+            return;
+        }
+        let track_id = next.id;
+        let id = self.fresh_id();
+        self.load = Some(self.request(c, track_id, id));
+        self.preload = Some(Preload {
+            id,
+            track_id,
+            sent: false,
+            quality: String::new(),
+            codec: String::new(),
+        });
     }
 
     pub fn handle(&mut self, c: Option<&Arc<Client>>, action: Action) {
@@ -338,6 +400,7 @@ impl Playback {
             Action::RemoveFromQueue(i) => {
                 let active = self.loading || self.state != PlayState::Stopped;
                 let was_current = self.queue.remove(i);
+                self.drop_stale_preload();
                 self.publish_queue();
                 self.publish();
                 if was_current && active {
@@ -388,6 +451,9 @@ impl Playback {
             }
             Msg::SessionExpired(_) => {}
         }
+        if let Msg::Player(PlayerEvent::TrackStarted(id) | PlayerEvent::Error { id, .. }) = &msg {
+            self.went_on(c, *id);
+        }
         match msg {
             Msg::Loaded {
                 seq,
@@ -396,10 +462,10 @@ impl Playback {
             } if seq == self.seq => {
                 self.loading = false;
                 match result {
-                    Ok((source, quality)) => {
-                        self.quality = quality;
+                    Ok(r) => {
+                        (self.quality, self.codec) = (r.quality, r.codec);
                         self.state = PlayState::Buffering; // what the Load turns the player to
-                        self.player.send(PlayerCmd::Load(source));
+                        self.player.send(PlayerCmd::Load(r.source));
                         if let Some(at) = self.resume_at.take() {
                             self.player.send(PlayerCmd::Seek(at));
                         }
@@ -413,6 +479,21 @@ impl Playback {
                         log::warn!("stream for track {}: {e}", self.track_id());
                         self.fail_track(c);
                     }
+                }
+            }
+            Msg::Loaded {
+                seq,
+                client,
+                result,
+            } if let Some(pre) = self.preload.as_mut().filter(|pre| pre.id == seq) => {
+                match result {
+                    Ok(r) => {
+                        (pre.sent, pre.quality, pre.codec) = (true, r.quality, r.codec);
+                        self.player.send(PlayerCmd::Preload(Some(r.source)));
+                    }
+                    Err(e) if session_expired(&*e, &client, &self.msgs) => {}
+                    // Kept, so not retried: the track loads at the end instead.
+                    Err(e) => log::debug!("preload of track {}: {e}", pre.track_id),
                 }
             }
             Msg::Loaded { .. } => {}     // superseded
@@ -439,11 +520,8 @@ impl Playback {
                 }
             }
             Msg::Player(PlayerEvent::TrackEnded(id)) if id == self.seq => {
-                self.end_play(c, End::Natural);
-                if self.queue.advance().is_some() {
-                    self.publish_queue();
-                    self.start_current(c, None);
-                } // else the player stopped itself; the queue stays on its last track
+                // Without a next track the player stopped itself; the queue stays on its last.
+                self.natural_end(c);
             }
             Msg::Player(PlayerEvent::Error { id, message }) if id == self.seq => {
                 log::warn!("playback of track {}: {message}", self.track_id());
@@ -527,43 +605,94 @@ impl Playback {
 
     /// Fetches the current track's stream and loads it; `resume_at` restarts it after an error.
     fn start_current(&mut self, c: Option<&Arc<Client>>, resume_at: Option<Duration>) {
-        let (Some(c), Some(track)) = (c, self.queue.current()) else {
+        let (Some(c), Some(track_id)) = (c, self.queue.current().map(|t| t.id)) else {
             return self.stop();
         };
-        let (id, c, msgs) = (track.id, c.clone(), self.msgs.clone());
+        self.supersede();
+        self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
+        self.loading = true;
+        self.restarted_at = resume_at;
+        self.resume_at = resume_at;
+        self.last_pos = resume_at.unwrap_or_default();
+        self.load = Some(self.request(c, track_id, self.seq));
+        self.publish();
+    }
+
+    /// Resolves the track's stream, at the quality and normalization set, as player source
+    /// `id`; the result comes back as `Msg::Loaded`.
+    fn request(&self, c: &Arc<Client>, track_id: u64, id: u64) -> tokio::task::JoinHandle<()> {
+        let (c, msgs) = (c.clone(), self.msgs.clone());
         let quality = if self.audio.hi_res {
             Quality::HiResLossless
         } else {
             Quality::Lossless
         };
         let normalization = self.audio.normalization;
-        self.supersede();
-        let seq = self.seq;
-        self.player.send(PlayerCmd::Stop); // the old track goes silent while this one resolves
-        self.loading = true;
-        self.restarted_at = resume_at;
-        self.resume_at = resume_at;
-        self.last_pos = resume_at.unwrap_or_default();
-        self.load = Some(tokio::spawn(async move {
+        tokio::spawn(async move {
             // Typed: a dead session (`tidal::Error::Auth`) is told apart from a failed track.
             let result = async {
-                let info = stream_info(&c, id, quality).await?;
+                let info = stream_info(&c, track_id, quality).await?;
                 let gain = replay_gain(normalization, &info);
-                let quality = info.quality;
+                let (quality, codec) = (info.quality, info.codec);
                 let source =
-                    tokio::task::spawn_blocking(move || segment_source(seq, info.urls, gain))
+                    tokio::task::spawn_blocking(move || segment_source(id, info.urls, gain))
                         .await??;
-                Ok::<_, Box<dyn std::error::Error + Send + Sync>>((source, quality))
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(Resolved {
+                    source,
+                    quality,
+                    codec,
+                })
             }
             .await;
             let loaded = Msg::Loaded {
-                seq,
+                seq: id,
                 client: c,
                 result,
             };
             let _ = msgs.send(loaded); // backend gone = app closing
-        }));
-        self.publish();
+        })
+    }
+
+    /// The player started, or failed on, `id`. The sent preload: the current track ended there
+    /// and the preloaded one is current from now on. The cancelled one: the player went on to
+    /// it before the cancel landed, so the current track ended and the queue's next one loads.
+    fn went_on(&mut self, c: Option<&Arc<Client>>, id: u64) {
+        if let Some(pre) = self.preload.take_if(|pre| pre.sent && pre.id == id) {
+            self.end_play(c, End::Natural);
+            self.queue.advance();
+            (self.seq, self.quality, self.codec) = (pre.id, pre.quality, pre.codec);
+            (self.last_pos, self.restarted_at, self.resume_at) = (Duration::ZERO, None, None);
+            self.publish_queue();
+            self.publish();
+        } else if self.cancelled == Some(id) && !self.natural_end(c) {
+            self.stop(); // nothing follows: what it went on to stops
+        }
+    }
+
+    /// The current play ended at the track's end and the queue's next one loads; false, the
+    /// queue staying put, when there is none.
+    fn natural_end(&mut self, c: Option<&Arc<Client>>) -> bool {
+        self.end_play(c, End::Natural);
+        let next = self.queue.advance().is_some();
+        if next {
+            self.publish_queue();
+            self.start_current(c, None);
+        }
+        next
+    }
+
+    /// After a queue change, a preload no longer next is dropped, and taken back if sent.
+    fn drop_stale_preload(&mut self) {
+        let next = self.queue.peek_advance().map(|t| t.id);
+        let Some(pre) = self.preload.take_if(|pre| Some(pre.track_id) != next) else {
+            return;
+        };
+        if pre.sent {
+            self.player.send(PlayerCmd::Preload(None));
+            self.cancelled = Some(pre.id);
+        } else if let Some(load) = self.load.take() {
+            load.abort(); // its request, still resolving
+        }
     }
 
     /// The current track cannot play: tell the user and go on, or stop after three in a row.
@@ -599,13 +728,21 @@ impl Playback {
         self.publish();
     }
 
-    /// A new load generation: older load results and the old track's events are dropped, and
-    /// the load still running stops spending network and CPU on them.
+    /// A new load generation: older results and the old track's events are dropped, and the
+    /// request still running stops spending network and CPU on them. The player drops its
+    /// preload at the Load or Stop that comes with this.
     fn supersede(&mut self) {
-        self.seq += 1;
+        self.seq = self.fresh_id();
+        (self.preload, self.cancelled) = (None, None);
         if let Some(load) = self.load.take() {
             load.abort();
         }
+    }
+
+    /// Loads and preloads share these ids, so none repeats.
+    fn fresh_id(&mut self) -> u64 {
+        self.last_id += 1;
+        self.last_id
     }
 
     /// Ends the current play where the player is now.
@@ -654,6 +791,7 @@ impl Playback {
     /// Changes the queue and shows it; an empty queue's added track shows as current.
     fn edit_queue(&mut self, edit: impl FnOnce(&mut Queue)) {
         edit(&mut self.queue);
+        self.drop_stale_preload();
         self.publish_queue();
         self.publish();
     }
