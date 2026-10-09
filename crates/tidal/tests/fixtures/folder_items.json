@@ -1,0 +1,69 @@
+{
+  "items": [
+    {
+      "trn": "trn:playlist:00000000-0000-4000-8000-000000000001",
+      "itemType": "PLAYLIST",
+      "addedAt": "2026-10-09T23:35:34.893+0000",
+      "lastModifiedAt": "2026-10-09T23:35:06.979+0000",
+      "name": "Tidash probe",
+      "parent": {
+        "id": "f0000000-0000-4000-8000-000000000001",
+        "name": "Tidash probe folder",
+        "atRoot": false,
+        "parentId": "f0000000-0000-4000-8000-000000000001",
+        "parentIdAsNodeId": "f0000000-0000-4000-8000-000000000001",
+        "parentIdAsReferenceId": "trn:folder:f0000000-0000-4000-8000-000000000001",
+        "parentIdAsTidalResourceName": "trn:folder:f0000000-0000-4000-8000-000000000001"
+      },
+      "data": {
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "type": "USER",
+        "creator": {
+          "id": 12345,
+          "name": null,
+          "picture": null,
+          "type": "USER"
+        },
+        "curators": [],
+        "contentBehavior": "UNRESTRICTED",
+        "sharingLevel": "PRIVATE",
+        "status": "READY",
+        "source": "DEFAULT",
+        "title": "Tidash probe",
+        "description": "",
+        "image": "3ae71ded-18e5-4036-bb78-56e69b251259",
+        "squareImage": "b6146a33-f41e-4ff2-b25b-766af527f983",
+        "customImageUrl": null,
+        "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000001",
+        "created": "2026-10-09T23:32:49.113+0000",
+        "lastUpdated": "2026-10-09T23:35:06.979+0000",
+        "lastItemAddedAt": "2026-10-09T23:34:49.759+0000",
+        "duration": 370,
+        "numberOfTracks": 1,
+        "numberOfVideos": 0,
+        "promotedArtists": [],
+        "trn": "trn:playlist:00000000-0000-4000-8000-000000000001",
+        "itemType": "PLAYLIST"
+      }
+    },
+    {
+      "trn": "trn:folder:f0000000-0000-4000-8000-000000000001",
+      "itemType": "FOLDER",
+      "addedAt": "2026-10-09T23:35:29.042+0000",
+      "lastModifiedAt": "2026-10-09T23:35:34.893+0000",
+      "name": "Tidash probe folder",
+      "parent": null,
+      "data": {
+        "trn": "trn:folder:f0000000-0000-4000-8000-000000000001",
+        "name": "Tidash probe folder",
+        "createdAt": "2026-10-09T23:35:29.042+0000",
+        "lastModifiedAt": "2026-10-09T23:35:34.893+0000",
+        "totalNumberOfItems": 1,
+        "id": "f0000000-0000-4000-8000-000000000001",
+        "itemType": "FOLDER"
+      }
+    }
+  ],
+  "lastModifiedAt": "2026-10-09T23:35:34.894+0000",
+  "totalNumberOfItems": 2
+}

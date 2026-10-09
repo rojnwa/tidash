@@ -1,0 +1,80 @@
+{
+  "id": 20115564,
+  "title": "Get Lucky",
+  "duration": 370,
+  "replayGain": -7.55,
+  "peak": 0.997345,
+  "allowStreaming": true,
+  "streamReady": true,
+  "payToStream": false,
+  "adSupportedStreamReady": true,
+  "djReady": true,
+  "stemReady": false,
+  "streamStartDate": "2013-05-20T00:00:00.000+0000",
+  "premiumStreamingOnly": false,
+  "trackNumber": 8,
+  "volumeNumber": 1,
+  "version": "feat. Pharrell Williams and Nile Rodgers",
+  "popularity": 90,
+  "copyright": "(P) 2013 Daft Life Limited under exclusive license to Columbia Records, a Division of Sony Music Entertainment",
+  "bpm": 116,
+  "key": "B",
+  "keyScale": "MINOR",
+  "url": "http://www.tidal.com/track/20115564",
+  "isrc": "USQX91300108",
+  "editable": false,
+  "explicit": false,
+  "audioQuality": "LOSSLESS",
+  "audioModes": [
+    "STEREO"
+  ],
+  "mediaMetadata": {
+    "tags": [
+      "LOSSLESS"
+    ]
+  },
+  "upload": false,
+  "accessType": "PUBLIC",
+  "spotlighted": false,
+  "ai": false,
+  "artist": {
+    "id": 8847,
+    "name": "Daft Punk",
+    "handle": null,
+    "type": "MAIN",
+    "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+  },
+  "artists": [
+    {
+      "id": 8847,
+      "name": "Daft Punk",
+      "handle": null,
+      "type": "MAIN",
+      "picture": "65d23ddc-7b3b-4b17-bc84-b02832ddc204"
+    },
+    {
+      "id": 4900204,
+      "name": "Pharrell Williams",
+      "handle": null,
+      "type": "MAIN",
+      "picture": "90f70b7f-5393-4f14-ae85-c88890f00610"
+    },
+    {
+      "id": 30528,
+      "name": "Nile Rodgers",
+      "handle": null,
+      "type": "MAIN",
+      "picture": "55749e09-2a7f-4a29-bfe6-689da65b80f4"
+    }
+  ],
+  "album": {
+    "id": 20115556,
+    "title": "Random Access Memories",
+    "cover": "b66a5c40-c34d-4507-a0dc-5f98e46fdd20",
+    "vibrantColor": "#efdd83",
+    "videoCover": null
+  },
+  "mixes": {
+    "TRACK_MIX": "001a520287326eaf8639f1b722a74f"
+  }
+}

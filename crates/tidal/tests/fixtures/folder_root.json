@@ -1,0 +1,120 @@
+{
+  "items": [
+    {
+      "trn": "trn:playlist:00000000-0000-4000-8000-000000000002",
+      "itemType": "PLAYLIST",
+      "addedAt": "2026-01-05T17:58:23.839+0000",
+      "lastModifiedAt": "2026-01-05T17:58:26.268+0000",
+      "name": "Playlist B",
+      "parent": null,
+      "data": {
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "type": "USER",
+        "creator": {
+          "id": 12345,
+          "name": null,
+          "picture": null,
+          "type": "USER"
+        },
+        "curators": [],
+        "contentBehavior": "UNRESTRICTED",
+        "sharingLevel": "PRIVATE",
+        "status": "READY",
+        "source": "PLAYLIST_IMPORTER",
+        "title": "Playlist B",
+        "description": "",
+        "image": "08c2b59b-b8f5-468c-8cc5-815934c06347",
+        "squareImage": "4ae69409-591c-4f61-9065-64757a2b6d1c",
+        "customImageUrl": null,
+        "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000002",
+        "created": "2026-01-05T17:58:23.839+0000",
+        "lastUpdated": "2026-01-05T17:58:26.268+0000",
+        "lastItemAddedAt": "2026-01-05T17:58:26.268+0000",
+        "duration": 45517,
+        "numberOfTracks": 175,
+        "numberOfVideos": 0,
+        "promotedArtists": [],
+        "trn": "trn:playlist:00000000-0000-4000-8000-000000000002",
+        "itemType": "PLAYLIST"
+      }
+    },
+    {
+      "trn": "trn:playlist:00000000-0000-4000-8000-000000000003",
+      "itemType": "PLAYLIST",
+      "addedAt": "2025-07-31T09:34:55.178+0000",
+      "lastModifiedAt": "2022-11-24T15:00:35.600+0000",
+      "name": "Playlist C",
+      "parent": null,
+      "data": {
+        "uuid": "00000000-0000-4000-8000-000000000003",
+        "type": "USER",
+        "creator": {
+          "id": 67890,
+          "name": null,
+          "picture": null,
+          "type": "USER"
+        },
+        "curators": [],
+        "contentBehavior": "UNRESTRICTED",
+        "sharingLevel": "PUBLIC",
+        "status": "READY",
+        "source": "DEFAULT",
+        "title": "Playlist C",
+        "description": "",
+        "image": "4bbda642-00c9-4245-91d1-1954257617c9",
+        "squareImage": "54912ed6-9412-47c9-a225-2fa85924a960",
+        "customImageUrl": null,
+        "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000003",
+        "created": "2022-02-03T14:56:17.090+0000",
+        "lastUpdated": "2022-11-24T15:00:35.600+0000",
+        "lastItemAddedAt": "2022-02-03T14:56:21.921+0000",
+        "duration": 2760,
+        "numberOfTracks": 22,
+        "numberOfVideos": 0,
+        "promotedArtists": [],
+        "trn": "trn:playlist:00000000-0000-4000-8000-000000000003",
+        "itemType": "PLAYLIST"
+      }
+    },
+    {
+      "trn": "trn:playlist:00000000-0000-4000-8000-000000000007",
+      "itemType": "PLAYLIST",
+      "addedAt": "2024-10-18T17:43:56.306+0000",
+      "lastModifiedAt": "2024-11-12T23:51:38.224+0000",
+      "name": "Playlist G",
+      "parent": null,
+      "data": {
+        "uuid": "00000000-0000-4000-8000-000000000007",
+        "type": "USER",
+        "creator": {
+          "id": 12345,
+          "name": null,
+          "picture": null,
+          "type": "USER"
+        },
+        "curators": [],
+        "contentBehavior": "UNRESTRICTED",
+        "sharingLevel": "PRIVATE",
+        "status": "READY",
+        "source": "PLAYLIST_IMPORTER",
+        "title": "Playlist G",
+        "description": "",
+        "image": "67f48154-ea94-4500-b2a5-4bd3f836fba6",
+        "squareImage": "4d4e58d3-bfed-4c17-8e35-7109482287ca",
+        "customImageUrl": null,
+        "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000007",
+        "created": "2024-10-18T17:43:56.306+0000",
+        "lastUpdated": "2024-11-12T23:51:38.224+0000",
+        "lastItemAddedAt": "2024-10-18T17:43:57.191+0000",
+        "duration": 20774,
+        "numberOfTracks": 101,
+        "numberOfVideos": 0,
+        "promotedArtists": [],
+        "trn": "trn:playlist:00000000-0000-4000-8000-000000000007",
+        "itemType": "PLAYLIST"
+      }
+    }
+  ],
+  "lastModifiedAt": "2026-05-29T06:46:33.312+0000",
+  "totalNumberOfItems": 3
+}

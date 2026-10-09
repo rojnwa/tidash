@@ -1,0 +1,45 @@
+{
+  "data": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "type": "playlists",
+    "attributes": {
+      "name": "Tidash probe",
+      "description": "",
+      "bounded": false,
+      "externalLinks": [
+        {
+          "href": "https://listen.tidal.com/playlist/00000000-0000-4000-8000-000000000001",
+          "meta": {
+            "type": "TIDAL_SHARING"
+          }
+        },
+        {
+          "href": "https://tidal.com/playlist/00000000-0000-4000-8000-000000000001?play=true",
+          "meta": {
+            "type": "TIDAL_AUTOPLAY_ANDROID"
+          }
+        },
+        {
+          "href": "https://tidal.com/playlist/00000000-0000-4000-8000-000000000001?play=true",
+          "meta": {
+            "type": "TIDAL_AUTOPLAY_IOS"
+          }
+        },
+        {
+          "href": "https://listen.tidal.com/playlist/00000000-0000-4000-8000-000000000001?play=true",
+          "meta": {
+            "type": "TIDAL_AUTOPLAY_WEB"
+          }
+        }
+      ],
+      "createdAt": "2026-10-09T23:32:49.113485Z",
+      "lastModifiedAt": "2026-10-09T23:32:49.114352Z",
+      "accessType": "UNLISTED",
+      "playlistType": "USER",
+      "numberOfFollowers": 0
+    }
+  },
+  "links": {
+    "self": "/playlists/00000000-0000-4000-8000-000000000001?countryCode=US"
+  }
+}

@@ -1,0 +1,49 @@
+[
+  {
+    "type": "Producer",
+    "contributors": [
+      {
+        "name": "Thomas Bangalter",
+        "id": 3538385
+      },
+      {
+        "name": "Guy-Manuel de Homem-Christo",
+        "id": 6135140
+      }
+    ]
+  },
+  {
+    "type": "Composer",
+    "contributors": [
+      {
+        "name": "Thomas Bangalter",
+        "id": 3538385
+      },
+      {
+        "name": "Guy-Manuel de Homem-Christo",
+        "id": 6135140
+      },
+      {
+        "name": "Pharrell Williams",
+        "id": 4900204
+      }
+    ]
+  },
+  {
+    "type": "Lyricist",
+    "contributors": [
+      {
+        "name": "Nile Rodgers",
+        "id": 30528
+      },
+      {
+        "name": "Thomas Bangalter",
+        "id": 3538385
+      },
+      {
+        "name": "Guy-Manuel de Homem-Christo",
+        "id": 6135140
+      }
+    ]
+  }
+]

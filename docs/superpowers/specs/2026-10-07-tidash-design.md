@@ -159,14 +159,18 @@ none is available, tokens stay in memory with a visible warning — no plaintext
 401; all other requests run concurrently (no global client mutex). Concurrency cap ~6 in-flight requests; honor
 `Retry-After` on 429.
 
-**Endpoints.** Exactly the set the official desktop client uses (S4): Home is the v2 feed
+**Endpoints.** Exactly the set the official desktop client uses (S4, S5): Home is the v2 feed
 `api.tidal.com/v2/home/feed/static` (cursor pages, a `view-all` per shelf); the artist page is v2 `artist/{id}`;
 Explore, genre/mood pages and the mix page are v1 `pages/*` documents; playlists, favorite tracks/albums/artists and
 favorite ids are v1; favorite mixes and the playlist list are v2 (`favorites/mixes`, `my-collection/playlists/folders`).
-Also search, album, playlist edits, radio, lyrics, credits, playbackinfo, user, event batch. v1 requests add
+M4 (S5): lyrics v1 `tracks/{id}/lyrics` (404 = none); credits v1 `tracks/{id}/credits`; radio is the mix page for the
+item's `TRACK_MIX`/`ARTIST_MIX` id (v1 `tracks|artists/{id}/mix` when the entity lacks it); the "Add to playlist" list is
+v1 `users/{uid}/playlists`; playlist item add/remove/move are v1, guarded by the playlist's ETag in `If-None-Match`;
+folders, moves and playlist delete are v2 `my-collection/playlists/folders/*` PUTs; playlist create and rename are
+openapi (JSON:API, `Idempotency-Key`). Also search, album, playbackinfo, user, event batch. v1 requests add
 `countryCode`, `locale=en_US` and `deviceType=DESKTOP`; v2 requests also add `platform=DESKTOP` and the header
-`x-tidal-client-version` (required). The public `openapi.tidal.com/v2` API accepts our token and is the fallback if the
-internal endpoints break; M2 does not use it.
+`x-tidal-client-version` (required). The public `openapi.tidal.com/v2` API accepts our token for reads and playlist
+writes; beyond create and rename it is the fallback if the internal endpoints break.
 
 **Models.** Hand-written serde structs with only the fields we use; unknown fields ignored; enums carry
 `#[serde(other)] Unknown` so new values never break parsing.
@@ -341,8 +345,9 @@ Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, els
 | S2 Audio | symphonia decode from a progressive temp file; WASAPI exclusive at 24/96 and 24/192 via `wasapi`; gapless append between two FLACs | Bit-identical capture and audible gapless on Windows; notes for macOS/Linux |
 | S3 UI | egui virtualized grid of 10 000 covers at 320 px with async decode | RAM and frame-time numbers recorded |
 | S4 Library (M2) | Which endpoints and response shapes do Home, Explore, artist, playlist, mix and the collection use, with which page sizes and cache headers? | Live recordings, sanitized fixtures, written answers |
+| S5 Editing (M4) | Do the official client's playlist and folder writes answer our token, with which statuses, ETag rules and shapes? Where do lyrics, credits and radio mix ids come from? | Live writes on a throwaway playlist and folder only, sanitized fixtures, written answers |
 
-**Findings (M0, 2026-10-07; S4, 2026-10-08)**
+**Findings (M0, 2026-10-07; S4, 2026-10-08; S5, 2026-10-10)**
 
 | Spike | Result |
 |---|---|
@@ -350,6 +355,7 @@ Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, els
 | [S2](../../spikes/s2-audio.md) | WASAPI exclusive works on the test DAC (24/96 USB, accepts 24-bit packed at 44.1/48/96 kHz only). Gapless a→b: 0 underruns, output sample-equal to the source. fMP4 FLAC decodes bit-exact via symphonia, but `num_frames = 0` (duration from the MPD) and `tfdt` is ignored (add segment start to pts). Pre-open the next track before EOF; the probe's 118–154 µs open was a warm local file. Unsupported source rates exist (88.2 kHz on a 24/96 DAC) → M3 decision. |
 | [S3](../../spikes/s3-grid.md) | 10 000-cell grid: working set 90–114 MB, app CPU ~0.3 ms/frame; 144 Hz pacing not demonstrated (stalls up to 59 ms, mostly in frames with 0 uploads; cause not isolated, driver/DWM suspected); idle repaints from the egui scrollbar fade while the pointer hovers; 200 px display-size textures save ~60 MB. Verdict: keep egui. |
 | [S4](../../spikes/s4-library-endpoints.md) | All probed endpoints answer the android token. Home = v2 feed (cursor; 10 + 8 modules), artist = v2 `artist/{id}` (discography as separate shelves, no tabs seen), Explore/genre/mix = v1 `pages/*`. v2 rejects requests without `x-tidal-client-version`; `DESKTOP` and `BROWSER`/`WEB` return the same. Page caps: playlist items 100, v1 `pages/data` 50, v2 folders 50; favorites pages run short mid-list (unavailable items dropped), so offsets step by `limit` up to the total. v1 pages, playlists and favorites honour `If-None-Match` (304); v2 home/artist are `no-store` with no ETag. Favorited playlists are `itemType: PLAYLIST` in the flattened list. `openapi.tidal.com/v2` accepts the token. |
+| [S5](../../spikes/s5-editing-endpoints.md) | The android token writes to openapi (create 201; PATCH 200, but its body is the pre-PATCH state). v1 item writes need the playlist's ETag in `If-None-Match`: missing, `""` or stale → 412 (7002), while `*` passes; dupes → 409 (7008) unless `onDupes=SKIP`; `toIndex` counts after removal; remove positions follow `order`. v2 folder PUTs answer 204 (`create-folder` 200 with the item); `create-folder` ignores a non-root parent (nest by `move`). `folders/remove` on a playlist deletes it. Lyrics are v1 LRC in centiseconds, 404 = none; no track with only unsynced lyrics was found. |
 
 **Gate decisions (human, 2026-10-07)**
 

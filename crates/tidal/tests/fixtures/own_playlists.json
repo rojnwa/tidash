@@ -1,0 +1,73 @@
+{
+  "limit": 50,
+  "offset": 0,
+  "totalNumberOfItems": 3,
+  "items": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "title": "Playlist B",
+      "numberOfTracks": 175,
+      "numberOfVideos": 0,
+      "creator": {
+        "id": 12345
+      },
+      "description": "",
+      "duration": 45517,
+      "lastUpdated": "2026-01-05T17:58:26.268+0000",
+      "created": "2026-01-05T17:58:23.839+0000",
+      "type": "USER",
+      "publicPlaylist": false,
+      "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000002",
+      "image": "08c2b59b-b8f5-468c-8cc5-815934c06347",
+      "popularity": 0,
+      "squareImage": "4ae69409-591c-4f61-9065-64757a2b6d1c",
+      "customImageUrl": null,
+      "promotedArtists": [],
+      "lastItemAddedAt": "2026-01-05T17:58:26.268+0000"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000007",
+      "title": "Playlist G",
+      "numberOfTracks": 101,
+      "numberOfVideos": 0,
+      "creator": {
+        "id": 12345
+      },
+      "description": "",
+      "duration": 20774,
+      "lastUpdated": "2024-11-12T23:51:38.224+0000",
+      "created": "2024-10-18T17:43:56.306+0000",
+      "type": "USER",
+      "publicPlaylist": false,
+      "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000007",
+      "image": "67f48154-ea94-4500-b2a5-4bd3f836fba6",
+      "popularity": 0,
+      "squareImage": "4d4e58d3-bfed-4c17-8e35-7109482287ca",
+      "customImageUrl": null,
+      "promotedArtists": [],
+      "lastItemAddedAt": "2024-10-18T17:43:57.191+0000"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000008",
+      "title": "Playlist H",
+      "numberOfTracks": 100,
+      "numberOfVideos": 0,
+      "creator": {
+        "id": 12345
+      },
+      "description": "",
+      "duration": 18405,
+      "lastUpdated": "2024-11-12T23:51:38.191+0000",
+      "created": "2024-10-18T17:43:53.481+0000",
+      "type": "USER",
+      "publicPlaylist": false,
+      "url": "http://www.tidal.com/playlist/00000000-0000-4000-8000-000000000008",
+      "image": "3123b04d-b2fb-4c82-812b-11f848f9ca57",
+      "popularity": 0,
+      "squareImage": "9e7f110a-fd23-4694-b813-89932e7e3068",
+      "customImageUrl": null,
+      "promotedArtists": [],
+      "lastItemAddedAt": "2024-10-18T17:43:54.534+0000"
+    }
+  ]
+}
