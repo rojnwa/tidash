@@ -23,6 +23,10 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 - A captive portal (a non-JSON 200) during a refresh shows a per-page error, not the Offline banner.
 - A failed `favorite_ids` load at login is only logged and not retried in-session (hearts stay empty).
 - Empty page-store slots accumulate, one per visited route (`evict` counts only slots with data).
+- The home-feed cursor loop (`browse.rs`) has no repeated-cursor guard (capped at 5 requests, so a stuck
+  cursor repeats the shelves up to 5 times).
+- The login paste box keeps its undo history across logout (the pasted code is single-use and
+  PKCE-bound); clear its `TextEditState` like the search box's.
 
 ## M3 (player)
 
