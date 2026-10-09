@@ -611,3 +611,77 @@ fn toggle_play_pauses_and_resumes() {
         assert_eq!(p.want_play, plays, "{state:?}, loading: {loading}");
     }
 }
+
+/// The output under a started 24/96 track, as the player tells it.
+fn format(exclusive: bool) -> Msg {
+    let track = player::Format {
+        rate: 96_000,
+        bits: 24,
+        channels: 2,
+    };
+    let device_rate = if exclusive { 96_000 } else { 48_000 };
+    Msg::Player(PlayerEvent::Format {
+        track,
+        exclusive,
+        device_rate,
+    })
+}
+
+/// The `output` of each snapshot published since the last call.
+fn outputs(rx: &std::sync::mpsc::Receiver<Event>) -> Vec<Option<OutputInfo>> {
+    rx.try_iter()
+        .filter_map(|e| match e {
+            Event::Playback(s) => Some(s.output),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn format_event_fills_the_snapshot() {
+    let (mut p, rx) = playback();
+    p.codec = "flac".into();
+    p.on_msg(None, format(true));
+    let want = OutputInfo {
+        codec: "FLAC".into(),
+        format: player::Format {
+            rate: 96_000,
+            bits: 24,
+            channels: 2,
+        },
+        exclusive: true,
+        device_rate: 96_000,
+    };
+    assert_eq!(outputs(&rx).last(), Some(&Some(want)));
+    p.stop();
+    assert_eq!(outputs(&rx).last(), Some(&None), "stopped: no output shown");
+}
+
+/// At the queue's end the player stops itself: no `stop` runs, its State tells.
+#[test]
+fn a_stopped_player_shows_no_output() {
+    let (mut p, rx) = playback();
+    p.on_msg(None, format(false));
+    p.on_msg(None, Msg::Player(PlayerEvent::State(PlayState::Stopped)));
+    assert_eq!(outputs(&rx).last(), Some(&None));
+}
+
+#[test]
+fn fallback_notice_once_per_streak() {
+    let (mut p, rx) = playback();
+    let refused = || Msg::Player(PlayerEvent::Fallback("no 96 kHz".into()));
+    p.on_msg(None, refused());
+    p.on_msg(None, format(false)); // the shared output that took over
+    p.on_msg(None, refused()); // the next track, refused again
+    assert_eq!(
+        errors(&rx),
+        ["Exclusive output unavailable (no 96 kHz); playing in shared mode"]
+    );
+    p.on_msg(None, format(true));
+    p.on_msg(None, refused());
+    assert_eq!(
+        errors(&rx).len(),
+        1,
+        "exclusive worked in between: a new streak"
+    );
+}

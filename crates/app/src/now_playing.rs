@@ -224,6 +224,7 @@ mod tests {
             state: Some(state),
             track: Some(track),
             volume: 1.0,
+            output: None,
         }
     }
 

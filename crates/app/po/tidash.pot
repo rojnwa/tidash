@@ -306,3 +306,35 @@ msgstr ""
 #: src/backend.rs
 msgid "Settings could not be saved"
 msgstr ""
+
+#: src/playback.rs
+msgid "Exclusive output unavailable ({reason}); playing in shared mode"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Volume is fixed in exclusive mode"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Exclusive"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Shared {rate} kHz"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Shared"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Exclusive: bit-perfect, volume fixed"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Shared: mixed with other apps"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "resampled to {rate} kHz"
+msgstr ""

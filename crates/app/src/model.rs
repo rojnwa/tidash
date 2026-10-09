@@ -92,11 +92,23 @@ pub struct QueueSnapshot {
     pub repeat: Repeat,
 }
 
+/// What is heard and how: the stream's codec ("FLAC"), the track's format, and the output.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputInfo {
+    pub codec: String,
+    pub format: player::Format,
+    /// The device is held at the track's format: bit-perfect, volume fixed.
+    pub exclusive: bool,
+    pub device_rate: u32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct PlaybackSnapshot {
     pub state: Option<player::PlayState>,
     pub track: Option<tidal::Track>,
     pub volume: f32,
+    /// Known once the current track is heard.
+    pub output: Option<OutputInfo>,
 }
 
 pub struct Model {

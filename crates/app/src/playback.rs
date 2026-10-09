@@ -5,7 +5,7 @@ mod stream;
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
-use crate::model::{Action, Event, PlaybackSnapshot};
+use crate::model::{Action, Event, OutputInfo, PlaybackSnapshot};
 use crate::queue::Queue;
 use crate::settings::{self, replay_gain};
 use player::{PlayState, Player, PlayerCmd, PlayerEvent};
@@ -168,8 +168,11 @@ pub struct Playback {
     resume_at: Option<Duration>,
     quality: String,
     /// The current track's codec ("flac"), as TIDAL names it.
-    #[allow(dead_code, reason = "shown from Task 10 on")]
     codec: String,
+    /// What the player last said is heard, until the track stops or another loads.
+    output: Option<OutputInfo>,
+    /// A fallback notice was shown since exclusive output last worked.
+    fallback_shown: bool,
     state: PlayState,
     volume: f32,
     /// Position sampled while playing: a player error resets the player's own clock.
@@ -205,6 +208,8 @@ impl Playback {
             resume_at: None,
             quality: String::new(),
             codec: String::new(),
+            output: None,
+            fallback_shown: false,
             state: PlayState::Stopped,
             volume: 1.0,
             last_pos: Duration::ZERO,
@@ -402,6 +407,9 @@ impl Playback {
             Msg::SessionExpired(_) => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
+                if s == PlayState::Stopped {
+                    self.output = None; // also at the queue's end, where no `stop` runs
+                }
                 if let Some(p) = &mut self.play {
                     p.set_playing(s == PlayState::Playing, Instant::now());
                 }
@@ -440,6 +448,31 @@ impl Playback {
             Msg::Player(PlayerEvent::OutputLost) => self.emit.send(Event::Error(
                 tr("Audio output lost; playback resumes when it is back").into_owned(),
             )),
+            Msg::Player(PlayerEvent::Format {
+                track,
+                exclusive,
+                device_rate,
+            }) => {
+                if exclusive {
+                    self.fallback_shown = false;
+                }
+                self.output = Some(OutputInfo {
+                    codec: self.codec.to_uppercase(),
+                    format: track,
+                    exclusive,
+                    device_rate,
+                });
+                self.publish();
+            }
+            // A device that keeps refusing would repeat this on every track.
+            Msg::Player(PlayerEvent::Fallback(reason)) => {
+                if !std::mem::replace(&mut self.fallback_shown, true) {
+                    self.emit.send(Event::Error(
+                        tr("Exclusive output unavailable ({reason}); playing in shared mode")
+                            .replace("{reason}", &reason),
+                    ));
+                }
+            }
             Msg::Player(_) => {} // an earlier load's
         }
     }
@@ -633,12 +666,12 @@ impl Playback {
         self.publish();
     }
 
-    /// A new load generation: older results and the old track's events are dropped, and the
-    /// request still running stops spending network and CPU on them. The player drops its
-    /// preload at the Load or Stop that comes with this.
+    /// A new load generation: older results and the old track's events and output are
+    /// dropped, and the request still running stops spending network and CPU on them. The
+    /// player drops its preload at the Load or Stop that comes with this.
     fn supersede(&mut self) {
         self.seq = self.fresh_id();
-        (self.preload, self.cancelled) = (None, None);
+        (self.preload, self.cancelled, self.output) = (None, None, None);
         if let Some(load) = self.load.take() {
             load.abort();
         }
@@ -686,6 +719,7 @@ impl Playback {
             state: Some(self.shown()),
             track: self.queue.current().cloned(),
             volume: self.volume,
+            output: self.output.clone(),
         }));
     }
 
