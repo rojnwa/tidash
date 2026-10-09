@@ -328,75 +328,15 @@ mod tests {
         assert_eq!(all(24), [(24, 24), (32, 24), (32, 32)]);
     }
 
-    /// Info and above to stderr, past the test harness's capture.
-    struct Stderr;
-
-    impl log::Log for Stderr {
-        fn enabled(&self, _: &log::Metadata) -> bool {
-            true
-        }
-
-        fn log(&self, r: &log::Record) {
-            use std::io::Write;
-            let _ = writeln!(
-                std::io::stderr(),
-                "{} {}: {}",
-                r.level(),
-                r.target(),
-                r.args()
-            );
-        }
-
-        fn flush(&self) {}
-    }
-
     /// Silence, on the default device and on it by its name (as fastframe lists it).
     #[test]
     #[ignore = "holds the default audio device exclusively (silence, under 1 s)"]
     fn exclusive_opens_the_default_device() {
-        use std::sync::atomic::Ordering::Relaxed;
-
-        use crate::render::Shared;
-
-        let _ = log::set_logger(&Stderr);
-        log::set_max_level(log::LevelFilter::Info);
         let _ = wasapi::initialize_mta();
         let name = DeviceEnumerator::new()
             .and_then(|e| e.get_default_device(&Direction::Render))
             .and_then(|d| d.get_friendlyname())
             .unwrap();
-        let names = fastframe_audio::output_device_names().unwrap();
-        assert!(names.contains(&name), "{name} not in {names:?}");
-        let opens = [
-            (Device::Default, (44_100, 16)),
-            (Device::Named(name), (96_000, 24)),
-        ];
-        let ms = |n| thread::sleep(Duration::from_millis(n));
-        for (device, (rate, bits)) in opens {
-            let format = Format {
-                rate,
-                bits,
-                channels: 2,
-            };
-            // A paused player's: it renders silence.
-            let shared = Arc::new(Shared::default());
-            shared.paused.store(true, Release);
-            let (rings, _ring) = mpsc::channel();
-            let renderer = Renderer::new(Arc::clone(&shared), rings);
-            let mut x = open(&device, format, renderer).unwrap();
-            let calls = || shared.callbacks.load(Relaxed);
-            ms(200);
-            assert!(calls() > 0, "{format:?}: running");
-            x.pause();
-            ms(20);
-            let parked = calls();
-            ms(20);
-            assert_eq!(calls(), parked, "{format:?}: no wakeups while paused");
-            x.resume();
-            ms(200);
-            assert!(calls() > parked, "{format:?}: running again");
-            assert!(!x.failed(), "{format:?}");
-            drop(x);
-        }
+        crate::exclusive::tests::opens_the_default_device(name);
     }
 }
