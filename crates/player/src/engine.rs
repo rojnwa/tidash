@@ -434,7 +434,6 @@ impl Engine {
 
     fn seek(&mut self, to: Duration) {
         let Some(t) = &mut self.track else { return };
-        let rebuilt = t.stale || t.behind(to);
         match t.seek(to) {
             Ok(at) => {
                 let skip = to.saturating_sub(at).as_secs_f64() * f64::from(t.decoder.rate());
@@ -445,21 +444,15 @@ impl Engine {
                 self.flush(to);
             }
             Err(e) if superseded(&e, &self.interrupt) => {} // the next command re-seeks or drops the track
-            Err(DecodeError::Io(e)) => {
-                let id = t.id;
-                self.fail(id, e.to_string());
-            }
-            // A rebuilt decoder (going back, or on from a stale one) failing is a real failure.
-            Err(e) if rebuilt => {
-                let id = t.id;
-                self.fail(id, e.to_string());
-            }
-            Err(_) => {
-                // symphonia knows no fMP4 duration up front: a refused seek on an intact
-                // decoder is past the end.
+            Err(DecodeError::PastEnd) => {
                 let id = t.id;
                 self.emit(PlayerEvent::TrackEnded(id));
                 self.stop(Duration::ZERO);
+            }
+            // Anything else (IO, data gone bad under a rebuilt decoder) is a real failure.
+            Err(e) => {
+                let id = t.id;
+                self.fail(id, e.to_string());
             }
         }
     }
@@ -748,6 +741,27 @@ mod tests {
             "{seen:?}"
         );
         assert!(!seen.contains(&PlayerEvent::TrackEnded(1)), "{seen:?}");
+    }
+
+    /// A rebuilt decoder refusing a seek past the end still ends the track.
+    #[test]
+    fn a_seek_past_the_end_on_a_stale_decoder_ends_the_track() {
+        let (_player, events, _r, mut e) = parts();
+        e.command(PlayerCmd::Load(fixture(1)));
+        let t = e.track.as_mut().unwrap();
+        for _ in 0..5 {
+            t.next().unwrap();
+        }
+        t.stale = true;
+        e.command(PlayerCmd::Seek(Duration::from_secs(10)));
+        let seen: Vec<_> = events.try_iter().collect();
+        assert!(seen.contains(&PlayerEvent::TrackEnded(1)), "{seen:?}");
+        assert!(
+            !seen
+                .iter()
+                .any(|ev| matches!(ev, PlayerEvent::Error { .. })),
+            "{seen:?}"
+        );
     }
 
     #[test]

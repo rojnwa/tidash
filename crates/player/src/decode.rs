@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
-use symphonia::core::errors::Error;
+use symphonia::core::errors::{Error, SeekErrorKind};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
@@ -27,6 +27,9 @@ pub enum DecodeError {
     Unsupported(String),
     #[error("corrupt: {0}")]
     Corrupt(String),
+    /// A seek beyond the last packet (symphonia knows no fMP4 duration up front).
+    #[error("seek past the end")]
+    PastEnd,
 }
 
 impl From<Error> for DecodeError {
@@ -34,6 +37,7 @@ impl From<Error> for DecodeError {
         match e {
             Error::IoError(e) => DecodeError::Io(e),
             Error::Unsupported(m) => DecodeError::Unsupported(m.to_string()),
+            Error::SeekError(SeekErrorKind::OutOfRange) => DecodeError::PastEnd,
             other => DecodeError::Corrupt(other.to_string()),
         }
     }
