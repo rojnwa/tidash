@@ -697,10 +697,13 @@ impl Engine {
             .and_then(|view| Decoder::new(Box::new(view)));
         let decoder = match opened {
             Ok(decoder) => decoder,
+            // Interrupted: kept, for the command that interrupted it to re-arm or drop.
+            Err(e) if superseded(&e, &self.interrupt) => {
+                self.next = Some(next);
+                return false;
+            }
             Err(e) => {
-                if !superseded(&e, &self.interrupt) {
-                    log::warn!("preloaded track {}: {e}", next.id);
-                }
+                log::warn!("preloaded track {}: {e}", next.id);
                 return false; // dropped
             }
         };

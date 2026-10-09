@@ -655,6 +655,43 @@ fn a_crossing_while_a_preload_fails_keeps_the_position() {
     );
 }
 
+/// A seek interrupts the probe of the preload: the preload stays, and plays once the seek is
+/// done.
+#[test]
+fn a_probe_interrupted_by_a_seek_keeps_the_preload() {
+    let (_player, events, mut r, mut e) = parts();
+    r.configure(48_000, 2);
+    e.command(PlayerCmd::Load(fixture(1)));
+    let (open, gate) = mpsc::channel();
+    let next = Source {
+        reader: Box::new(Gated(Some(gate), fixture(2).reader)),
+        len: None,
+        ..fixture(2)
+    };
+    e.command(PlayerCmd::Preload(Some(next)));
+    e.interrupt.interrupt(); // a Seek on its way
+    assert!(!e.follow(), "probe not interrupted");
+    assert!(e.next.is_some(), "preload dropped");
+    e.interrupt.handled();
+    e.command(PlayerCmd::Seek(Duration::from_millis(100)));
+    open.send(()).unwrap();
+    let (_, seen) = render_until(&mut e, &mut r, &events, ended(2));
+    assert!(seen.contains(&PlayerEvent::TrackStarted(2)), "{seen:?}");
+    assert!(!seen.contains(&PlayerEvent::TrackEnded(1)), "{seen:?}");
+}
+
+/// Reads nothing until the gate opens, then from the reader.
+struct Gated(Option<Receiver<()>>, Box<dyn Read + Send>);
+
+impl Read for Gated {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if let Some(gate) = self.0.take() {
+            let _ = gate.recv();
+        }
+        self.1.read(buf)
+    }
+}
+
 #[test]
 fn a_new_renderer_continues_the_position() {
     let (_player, _events, mut r, mut e) = parts();
