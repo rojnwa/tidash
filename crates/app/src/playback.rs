@@ -1,98 +1,19 @@
-//! Playback: the segment reader, play accounting, and the backend glue between the queue,
-//! TIDAL stream info and the player.
+//! Playback: play accounting, and the backend glue between the queue, TIDAL stream info and
+//! the player.
+
+mod stream;
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
 use crate::model::{Action, Event, PlaybackSnapshot};
 use crate::queue::Queue;
 use crate::settings::{self, replay_gain};
-use player::{PlayState, Player, PlayerCmd, PlayerEvent, Source};
-use std::io::{self, Read};
-use std::sync::{Arc, OnceLock};
+use player::{PlayState, Player, PlayerCmd, PlayerEvent};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tidal::{Client, Failure, PlaybackReport, Quality, StreamInfo, classify};
+use stream::{Resolved, segment_source, stream_info};
+use tidal::{Client, PlaybackReport, Quality};
 use tokio::sync::mpsc::UnboundedSender;
-
-type Body = Box<dyn Read + Send>;
-type Open = Box<dyn FnMut(&str) -> io::Result<Body> + Send>;
-
-/// Reads each URL's body in order, as one stream; the next is opened when the current ends.
-pub struct SegmentReader {
-    urls: std::vec::IntoIter<String>,
-    open: Open,
-    body: Option<Body>,
-}
-
-impl SegmentReader {
-    pub fn new(
-        urls: Vec<String>,
-        open: impl FnMut(&str) -> io::Result<Body> + Send + 'static,
-    ) -> SegmentReader {
-        SegmentReader {
-            urls: urls.into_iter(),
-            open: Box::new(open),
-            body: None,
-        }
-    }
-}
-
-impl Read for SegmentReader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if buf.is_empty() {
-            return Ok(0);
-        }
-        loop {
-            if let Some(body) = &mut self.body {
-                let n = body.read(buf)?;
-                if n > 0 {
-                    return Ok(n);
-                }
-                self.body = None;
-            }
-            let Some(url) = self.urls.next() else {
-                return Ok(0);
-            };
-            self.body = Some((self.open)(&url)?);
-        }
-    }
-}
-
-/// Segment downloads. Blocking, so it is built in `spawn_blocking` and used only on the
-/// player's download thread; a static is never dropped, so never on a runtime thread either.
-static SEGMENTS: OnceLock<reqwest::blocking::Client> = OnceLock::new();
-
-/// The player source for a track's segment URLs, at `gain` (linear). Call off the async
-/// runtime.
-fn segment_source(id: u64, urls: Vec<String>, gain: f32) -> io::Result<Source> {
-    let http = match SEGMENTS.get() {
-        Some(http) => http,
-        None => {
-            let http = reqwest::blocking::Client::builder()
-                .connect_timeout(Duration::from_secs(10))
-                // The blocking client applies this to the send and to each read, not the whole body.
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(io::Error::other)?;
-            SEGMENTS.get_or_init(|| http)
-        }
-    };
-    // Segment URLs are pre-signed (S1): no Authorization header.
-    let open = move |url: &str| -> io::Result<Body> {
-        // The URL carries its signature: keep it out of errors, which get logged.
-        let resp = http
-            .get(url)
-            .send()
-            .and_then(|r| r.error_for_status())
-            .map_err(|e| io::Error::other(e.without_url()))?;
-        Ok(Box::new(resp))
-    };
-    Ok(Source {
-        id,
-        reader: Box::new(SegmentReader::new(urls, open)),
-        len: None,
-        gain,
-    })
-}
 
 /// How a play ended.
 #[derive(Clone, Copy, Debug)]
@@ -204,25 +125,6 @@ pub enum Msg {
     },
     /// This client's session is dead (`backend::session_expired`).
     SessionExpired(Arc<Client>),
-}
-
-/// `stream_info`, retried once after 2 s unless the failure is terminal.
-async fn stream_info(c: &Client, id: u64, quality: Quality) -> tidal::Result<StreamInfo> {
-    match c.stream_info(id, quality).await {
-        Err(e) if classify(&e) == Failure::Retryable => {
-            log::debug!("stream info for {id}: {e}; retrying");
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            c.stream_info(id, quality).await
-        }
-        r => r,
-    }
-}
-
-/// A track's stream, ready for the player.
-pub struct Resolved {
-    source: Source,
-    quality: String,
-    codec: String,
 }
 
 /// A player error this far from where the track was last restarted is a new hiccup.

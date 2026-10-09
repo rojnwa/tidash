@@ -1,60 +1,6 @@
 use super::*;
+use player::Source;
 use std::io::Cursor;
-use std::sync::{Arc, Mutex};
-
-/// A reader over `segments` (url -> bytes) whose `open` logs each URL and fails on `bad`.
-fn reader(
-    segments: &[(&str, &[u8])],
-    bad: Option<&'static str>,
-) -> (SegmentReader, Arc<Mutex<Vec<String>>>) {
-    let log = Arc::new(Mutex::new(Vec::new()));
-    let data: Vec<(String, Vec<u8>)> = segments
-        .iter()
-        .map(|(u, b)| (u.to_string(), b.to_vec()))
-        .collect();
-    let urls = data.iter().map(|(u, _)| u.clone()).collect();
-    let opened = log.clone();
-    let r = SegmentReader::new(urls, move |url| {
-        opened.lock().expect("log").push(url.to_string());
-        if Some(url) == bad {
-            return Err(io::Error::other("403"));
-        }
-        let bytes = data
-            .iter()
-            .find(|(u, _)| u == url)
-            .map(|(_, b)| b.clone())
-            .unwrap_or_default();
-        Ok(Box::new(Cursor::new(bytes)) as Body)
-    });
-    (r, log)
-}
-
-#[test]
-fn segment_reader_concatenates_in_order() {
-    let (mut r, log) = reader(&[("init", b"ab"), ("1", b"cde"), ("2", b"f")], None);
-    assert!(
-        log.lock().expect("log").is_empty(),
-        "nothing opened before the first read"
-    );
-    let mut first = [0u8; 1];
-    assert_eq!(r.read(&mut first).expect("read"), 1);
-    assert_eq!(*log.lock().expect("log"), ["init"], "opened lazily");
-    let mut rest = Vec::new();
-    r.read_to_end(&mut rest).expect("read_to_end");
-    assert_eq!([&first[..], &rest].concat(), b"abcdef");
-    assert_eq!(*log.lock().expect("log"), ["init", "1", "2"]);
-}
-
-#[test]
-fn segment_reader_surfaces_open_error() {
-    let (mut r, _) = reader(&[("init", b"ab"), ("1", b"cd"), ("2", b"ef")], Some("1"));
-    let mut got = Vec::new();
-    assert!(r.read_to_end(&mut got).is_err());
-    assert_eq!(
-        got, b"ab",
-        "the first segment's bytes come before the error"
-    );
-}
 
 fn track() -> tidal::Track {
     tidal::Track {
