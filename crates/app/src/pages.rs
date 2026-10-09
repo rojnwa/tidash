@@ -326,16 +326,17 @@ mod tests {
         assert!(!expired);
     }
 
+    /// One error, which leaves out the request's URL (its host and query).
     #[tokio::test]
     async fn network_error_without_cache_fails_once() {
         let server = MockServer::builder().start().await;
         let base = server.uri();
         stop(server);
         let (events, expired) = load_explore(client(&base, &cache("failed"))).await;
-        assert!(
-            matches!(events[..], [Event::PageFailed(_), Event::Error(_)]),
-            "{events:?}"
-        );
+        let [Event::PageFailed(_), Event::Error(e)] = &events[..] else {
+            panic!("{events:?}");
+        };
+        assert!(!e.contains(&base) && !e.contains("countryCode"), "{e}");
         assert!(!expired);
     }
 

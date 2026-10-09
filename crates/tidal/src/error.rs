@@ -2,8 +2,9 @@
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Without the request's URL (its query has the user's country), as errors reach the UI.
     #[error("http error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(#[source] reqwest::Error),
     #[error("tidal returned status {status} (sub-status {sub_status:?}): {message}")]
     Status {
         status: u16,
@@ -21,6 +22,12 @@ pub enum Error {
     /// A cache-only GET found no cached copy.
     #[error("not in the cache")]
     NotCached,
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Self::Http(e.without_url())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
