@@ -231,12 +231,17 @@ impl Track {
     /// one at byte 0 (downloaded already, so local) and seeks forward. Returns where it landed.
     fn seek(&mut self, to: Duration) -> Result<Duration, DecodeError> {
         let rate = f64::from(self.decoder.rate());
-        if self.stale || self.behind(to) {
+        let rebuilt = (self.stale || self.behind(to)).then(Instant::now);
+        if rebuilt.is_some() {
             self.decoder = Decoder::new(Box::new(self.file.forward()?))?;
             (self.decoded, self.stale) = (0, false);
         }
         let at = self.decoder.seek(to).inspect_err(|_| self.stale = true)?;
         self.decoded = (at.as_secs_f64() * rate).round() as u64;
+        if let Some(started) = rebuilt {
+            let elapsed = started.elapsed();
+            log::debug!("seek to {to:?} rebuilt the decoder in {elapsed:?}");
+        }
         Ok(at)
     }
 
@@ -429,7 +434,7 @@ impl Engine {
 
     fn seek(&mut self, to: Duration) {
         let Some(t) = &mut self.track else { return };
-        let back = t.behind(to);
+        let rebuilt = t.stale || t.behind(to);
         match t.seek(to) {
             Ok(at) => {
                 let skip = to.saturating_sub(at).as_secs_f64() * f64::from(t.decoder.rate());
@@ -444,14 +449,14 @@ impl Engine {
                 let id = t.id;
                 self.fail(id, e.to_string());
             }
-            // Going back rebuilds the decoder over data it decoded before: a real failure.
-            Err(e) if back => {
+            // A rebuilt decoder (going back, or on from a stale one) failing is a real failure.
+            Err(e) if rebuilt => {
                 let id = t.id;
                 self.fail(id, e.to_string());
             }
             Err(_) => {
-                // symphonia knows no fMP4 duration up front: a refused forward seek is past
-                // the end.
+                // symphonia knows no fMP4 duration up front: a refused seek on an intact
+                // decoder is past the end.
                 let id = t.id;
                 self.emit(PlayerEvent::TrackEnded(id));
                 self.stop(Duration::ZERO);
@@ -712,6 +717,30 @@ mod tests {
         let garbage = io::repeat(0x5a).take(64 * 1024);
         t.file = ProgressiveFile::spawn(Box::new(garbage), None, &e.interrupt).unwrap();
         e.command(PlayerCmd::Seek(Duration::ZERO));
+        let seen: Vec<_> = events.try_iter().collect();
+        assert!(
+            seen.iter()
+                .any(|ev| matches!(ev, PlayerEvent::Error { id: 1, .. })),
+            "{seen:?}"
+        );
+        assert!(!seen.contains(&PlayerEvent::TrackEnded(1)), "{seen:?}");
+    }
+
+    /// A forward seek from a stale decoder rebuilds it too: when that fails, it is an error.
+    #[test]
+    fn a_failed_forward_seek_on_a_stale_decoder_is_an_error() {
+        let (_player, events, _r, mut e) = parts();
+        e.command(PlayerCmd::Load(fixture(1)));
+        let t = e.track.as_mut().unwrap();
+        for _ in 0..5 {
+            t.next().unwrap();
+        }
+        let to = Duration::from_millis(400);
+        assert!(!t.behind(to), "not a forward seek");
+        t.stale = true;
+        let garbage = io::repeat(0x5a).take(64 * 1024);
+        t.file = ProgressiveFile::spawn(Box::new(garbage), None, &e.interrupt).unwrap();
+        e.command(PlayerCmd::Seek(to));
         let seen: Vec<_> = events.try_iter().collect();
         assert!(
             seen.iter()

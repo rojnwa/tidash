@@ -8,7 +8,7 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::units::Timestamp;
+use symphonia::core::units::{Time, TimeBase, Timestamp};
 
 /// Interleaved PCM, left-justified in `i32` (sample `<< (32 - bits)`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +43,8 @@ pub struct Decoder {
     format: Box<dyn FormatReader>,
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
+    /// What a tick of the track's timestamps is worth; fMP4 FLAC is usually 1/rate.
+    time_base: TimeBase,
     rate: u32,
     channels: u16,
     bits: u16,
@@ -80,6 +82,10 @@ impl Decoder {
         if !(1..=32).contains(&bits) {
             return Err(unsupported("bit depth out of range"));
         }
+        let time_base = track
+            .time_base
+            .or_else(|| TimeBase::try_from_recip(rate))
+            .ok_or_else(|| unsupported("unknown time base"))?;
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(params, &AudioDecoderOptions::default())?;
         let track_id = track.id;
@@ -87,6 +93,7 @@ impl Decoder {
             format,
             decoder,
             track_id,
+            time_base,
             rate,
             channels: channels as u16,
             bits: bits as u16,
@@ -130,18 +137,52 @@ impl Decoder {
 
     /// Seek (needs a seekable source); returns the actual position, at or before `to`.
     pub fn seek(&mut self, to: Duration) -> Result<Duration, DecodeError> {
-        // fMP4 FLAC timebase is 1/sample-rate.
-        let ts = (to.as_secs_f64() * f64::from(self.rate)).round() as i64;
         let seeked = self.format.seek(
             SeekMode::Accurate,
             SeekTo::Timestamp {
-                ts: Timestamp::new(ts),
+                ts: timestamp(self.time_base, to),
                 track_id: self.track_id,
             },
         )?;
         self.decoder.reset();
-        Ok(Duration::from_secs_f64(
-            seeked.actual_ts.get().max(0) as f64 / f64::from(self.rate),
-        ))
+        Ok(duration(self.time_base, seeked.actual_ts))
+    }
+}
+
+/// `to` in ticks of `tb`, rounded down so a seek lands at or before it. Too far for an `i64`
+/// is past any end.
+fn timestamp(tb: TimeBase, to: Duration) -> Timestamp {
+    Time::try_from_nanos_u128(to.as_nanos())
+        .and_then(|t| tb.calc_timestamp(t))
+        .unwrap_or(Timestamp::MAX)
+}
+
+/// `ts` ticks of `tb` as a duration; before the start is zero.
+fn duration(tb: TimeBase, ts: Timestamp) -> Duration {
+    let ns = tb.calc_time_saturating(ts).as_nanos().max(0);
+    Duration::from_nanos_u128(ns as u128)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn time_base_other_than_the_rate_converts() {
+        let ms = TimeBase::try_from_recip(1000).unwrap();
+        assert_eq!(
+            timestamp(ms, Duration::from_millis(1500)),
+            Timestamp::new(1500)
+        );
+        assert_eq!(
+            duration(ms, Timestamp::new(1500)),
+            Duration::from_millis(1500)
+        );
+        let hz = TimeBase::try_from_recip(96_000).unwrap();
+        assert_eq!(
+            timestamp(hz, Duration::from_millis(250)),
+            Timestamp::new(24_000)
+        );
     }
 }
