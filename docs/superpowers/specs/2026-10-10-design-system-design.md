@@ -73,8 +73,9 @@ Success:
 
 ### 3.4 Data flow
 
-- `main.rs` owns a `fastframe_theme::Catalog<Palette>`. At launch it starts a scan of `<config>/themes/` with the
-  presets enabled (installed there as files on the first scan); its waker is the app's repaint waker.
+- `main.rs` owns a `fastframe_theme::Catalog<Palette>`. At launch it enables the presets
+  (`enable_desktop_themes` with `presets: true`, slug `tidash`, `omarchy::BASE_TEMPLATE`) and starts a scan of
+  `<config>/themes/` (the presets are installed there as files on the first scan); its waker is the app's waker.
 - Each pass, before drawing, `resolve_theme(ctx)`:
   1. If the catalog finished a scan (`poll()`), refresh `custom_theme_cache` from the selected file (a changed palette
      is saved like any settings change).
@@ -87,13 +88,23 @@ Success:
      show without the animation.
 - The palette reaches views as a field of `ui::Ctx` (it is `Copy`); `player_bar::show` and `queue_panel::show`, which
   take no `Ctx`, get it as a parameter.
-- A Settings change (`Event::Settings`) needs nothing extra: the next pass resolves the new palette.
+- A Settings change (`Event::Settings`) needs nothing extra: the next pass resolves the new palette. When
+  `custom_theme` names a file other than the cache's, the cache is refilled from the catalog the same pass.
+- The model holds what the picker lists: `themes` (the catalog's `picker_themes` filenames) and `theme_status`
+  (`Catalog::status` for the selection), updated by an `Event::Themes` that `main.rs` applies whenever they change.
+- Opening Settings rescans the folder (`Event::RescanThemes`, handled in `main.rs`), so a file added on Windows or
+  macOS shows without a restart; Linux is also watched by fastframe. "Open themes folder" is
+  `Action::OpenThemesFolder`: the backend creates the folder if needed and opens it with `open`.
 
 ### 3.5 Failure handling
 
 - A selected file that is missing or invalid keeps the cached palette; with no cache, Dark.
-- Settings › Appearance shows the catalog's `status` for the selection in one line (fastframe's `Problem` worded:
-  "Couldn't read <name>: <reason>"), so a user editing a theme sees why it did not take.
+- Settings › Appearance words `theme_status` in one line, so a user editing a theme sees why it did not take:
+  Loading "Loading themes…"; SelectedUnavailable "<name> can't be read; its last colours stay."; Unreadable "The
+  themes folder can't be read."; TooManyEntries and TooManyThemes "The themes folder holds too many files; some
+  themes aren't listed."; LoaderFailed and any other "Themes couldn't be listed." A file that is not valid JSON
+  or names an unknown colour is left out of the list (fastframe's rule), so it shows as SelectedUnavailable once
+  picked.
 - An icon that fails to load paints nothing rather than egui's red placeholder (the fastframe loader never forgets
   bytes, which is the known cause).
 
@@ -228,14 +239,14 @@ neither sidebar nor top bar (as today).
   selected surface_active and text. Home (`house`), Explore (`compass`).
 - "COLLECTION" section header (Small, dim): Playlists, Albums, Tracks, Artists, Mixes, each a nav row to
   `Route::Collection(tab)`. The Collection page drops its own tab row and titles itself with the tab's name.
-- "PLAYLISTS" section header with a `+` icon button (New playlist / New folder, the existing menu), then the library
-  tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
+- "PLAYLISTS" section header with two 32 px icon buttons, `list-plus` "New playlist" and `folder-plus` "New folder"
+  (today's two buttons, same labels and dialogs), then the library tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
   their open/closed chevron. Rename, move and delete menus are unchanged.
 - Back and Forward leave the sidebar for the top bar. Search and Settings leave it too.
 - Collapse: a 32 px `panel-left` `icon_button` at the sidebar's top (label "Collapse sidebar" / "Expand sidebar")
   flips `sidebar_collapsed`. `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct
   ids). Collapsed, nav rows show only their icon (tooltip and AccessKit label keep the name), section headers become a
-  1 px outline line with the `+` button kept, and library rows show only the 36 px cover or folder icon, with the
+  1 px outline line (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the
   title as tooltip and label; folders still open and close in place. Menus are unchanged.
 
 ### 5.3 Top bar and search
@@ -362,7 +373,9 @@ sidebar; keyboard focus visible on every control; hover and press feel.
 
 ## 7. Not in this design
 
-- Omarchy; a setting to turn the theme-change animation off.
+- Omarchy work of our own. The catalog is enabled as Spotifast does (`enable_desktop_themes`), which on Linux with
+  Omarchy installed also lists its live palette as one more theme; untested. A setting to turn the theme-change
+  animation off.
 - Theming sizes, spacing or fonts; search as you type.
 - Card play and favourite buttons, and the track row's "…" button (the context menu covers them); playing by id
   needs a backend action.
