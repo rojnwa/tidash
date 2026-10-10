@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn the_query_leaves_with_the_session() {
         for end in [Event::LoggedOut, Event::SessionExpired] {
-            let ctx = egui::Context::default();
+            let ctx = testing::context();
             let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
             let (mut state, mut model) = (UiState::default(), testing::at(Route::Search));
             let mut time = 0.0;

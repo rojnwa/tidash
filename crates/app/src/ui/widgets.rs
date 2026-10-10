@@ -10,12 +10,12 @@ use egui::{
 };
 use std::sync::Arc;
 
-/// A nav row's inset around its icon and text.
-const NAV_PAD: f32 = 8.0;
+/// A nav row's inset around its icon and text; the library's rows share it.
+pub(super) const NAV_PAD: f32 = 8.0;
 const NAV_ICON: f32 = 24.0;
 
 /// `icon` at `size` points square, centred on `center`, tinted `tint`.
-fn paint_icon(ui: &Ui, icon: Icon, center: Pos2, size: f32, tint: Color32) {
+pub(super) fn paint_icon(ui: &Ui, icon: Icon, center: Pos2, size: f32, tint: Color32) {
     let rect = Rect::from_center_size(center, Vec2::splat(size));
     icon.image(tint, size).paint_at(ui, rect);
 }
@@ -37,12 +37,12 @@ fn scale(ui: &Ui, r: &Response) -> f32 {
 }
 
 /// 0 to 1 as `on` turns on, over `HOVER`.
-fn fade(ui: &Ui, r: &Response, on: bool) -> f32 {
+pub(super) fn fade(ui: &Ui, r: &Response, on: bool) -> f32 {
     ui.ctx().animate_bool_with_time(r.id, on, theme::HOVER)
 }
 
 /// `text` on one line in `font`, cut with "…" past `width`.
-fn line(ui: &Ui, text: &str, font: FontId, color: Color32, width: f32) -> Arc<Galley> {
+pub(super) fn line(ui: &Ui, text: &str, font: FontId, color: Color32, width: f32) -> Arc<Galley> {
     let mut job = LayoutJob::simple_singleline(text.to_owned(), font, color);
     job.wrap = TextWrapping::truncate_at_width(width);
     ui.painter().layout_job(job)

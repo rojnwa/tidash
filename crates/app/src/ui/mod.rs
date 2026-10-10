@@ -503,7 +503,7 @@ mod tests {
     /// Ctrl+F opens Search with its box focused; while typing there, Alt+← is not Back.
     #[test]
     fn ctrl_f_focuses_search_and_typing_mutes_shortcuts() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
         let mut model = Model::default();
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn ctrl_comma_opens_settings() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Home);
@@ -571,7 +571,7 @@ mod tests {
     /// key never reaches egui's own Ctrl+Q, a bare window close, which would hide to the tray.
     #[test]
     fn ctrl_q_quits() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
         let mut model = Model::default();
@@ -622,7 +622,7 @@ mod tests {
     #[test]
     fn player_bar_toggles_play_cycles_repeat_and_picks_the_side_panel() {
         use crate::queue::Repeat;
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
@@ -675,7 +675,7 @@ mod tests {
     /// Both errors' Dismiss clicked in one frame: both go, not one and then nothing.
     #[test]
     fn two_dismissals_in_one_frame_remove_both() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
@@ -705,7 +705,7 @@ mod tests {
     /// a pass standing still there; each pass asks for the next.
     #[test]
     fn autoscroll_bounces_between_the_ends_of_the_page() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         autoscroll(&ctx, 3000.0); // 50 pt a pass at egui's default 1/60 s
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

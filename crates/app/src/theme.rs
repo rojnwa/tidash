@@ -178,6 +178,8 @@ impl Tier {
 // Sizes in points (spec §4.4).
 pub const SIDEBAR: f32 = 240.0;
 pub const SIDEBAR_COLLAPSED: f32 = 78.0;
+/// The sidebar's side margins, and the gap above each of its sections.
+pub const SIDEBAR_PAD: f32 = 16.0;
 pub const TOP_BAR: f32 = 56.0;
 pub const PLAYER_BAR: f32 = 88.0;
 pub const PLAYER_PAD: f32 = 18.0;

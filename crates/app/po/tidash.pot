@@ -102,6 +102,7 @@ msgid "Could not open the track"
 msgstr ""
 
 #: src/ui/tracks.rs
+#: src/ui/library.rs
 msgid "{n} track"
 msgid_plural "{n} tracks"
 msgstr[0] ""
@@ -169,8 +170,15 @@ msgid "Explore"
 msgstr ""
 
 #: src/ui/sidebar.rs
-#: src/ui/collection.rs
 msgid "Collection"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Collapse sidebar"
+msgstr ""
+
+#: src/ui/sidebar.rs
+msgid "Expand sidebar"
 msgstr ""
 
 #: src/ui/top_bar.rs
@@ -184,7 +192,6 @@ msgstr ""
 
 #: src/ui/search.rs
 #: src/ui/collection.rs
-#: src/ui/library.rs
 msgid "Playlists"
 msgstr ""
 
@@ -486,11 +493,19 @@ msgid "Artist radio"
 msgstr ""
 
 #: src/ui/library.rs
+msgid "All playlists"
+msgstr ""
+
+#: src/ui/library.rs
 msgid "New playlist"
 msgstr ""
 
 #: src/ui/library.rs
 msgid "New folder"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Playlist"
 msgstr ""
 
 #: src/ui/library.rs

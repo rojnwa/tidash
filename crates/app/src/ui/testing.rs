@@ -154,7 +154,7 @@ pub fn pass_with(
 /// `view` draws `route` loading, failed (with Retry), and loaded with `data`, then showing
 /// each of `texts`.
 pub fn every_state(view: View, route: Route, data: PageData, texts: &[&str]) {
-    let egui = egui::Context::default();
+    let egui = context();
     egui.enable_accesskit();
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let shown = |model: &Model| shown(&pass(&egui, &tx, model, view, vec![]).1);

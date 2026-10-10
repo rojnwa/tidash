@@ -1,27 +1,28 @@
 //! Collection: a tab each for the favorite tracks (a list with Play), albums, artists,
-//! playlists and mixes (card grids).
+//! playlists and mixes (card grids). The sidebar lists the tabs; each page is titled with its
+//! tab's name.
 
 use super::{Ctx, header, shelf, tracks};
 use crate::i18n::tr;
 use crate::model::{CollectionTab, PageData, Route};
+use crate::theme;
+use std::borrow::Cow;
+
+/// `tab`'s name, as the sidebar lists it and its page is titled.
+pub fn name(tab: CollectionTab) -> Cow<'static, str> {
+    match tab {
+        CollectionTab::Tracks => tr("Tracks"),
+        CollectionTab::Albums => tr("Albums"),
+        CollectionTab::Artists => tr("Artists"),
+        CollectionTab::Playlists => tr("Playlists"),
+        CollectionTab::Mixes => tr("Mixes"),
+    }
+}
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
     let Route::Collection(at) = route else { return };
     super::padded(ui, |ui| {
-        ui.heading(tr("Collection"));
-        ui.horizontal(|ui| {
-            for (tab, label) in [
-                (CollectionTab::Tracks, tr("Tracks")),
-                (CollectionTab::Albums, tr("Albums")),
-                (CollectionTab::Artists, tr("Artists")),
-                (CollectionTab::Playlists, tr("Playlists")),
-                (CollectionTab::Mixes, tr("Mixes")),
-            ] {
-                if ui.selectable_label(*at == tab, label).clicked() {
-                    ctx.go(Route::Collection(tab));
-                }
-            }
-        });
+        ui.label(egui::RichText::new(name(*at)).font(theme::title()));
     });
     ui.add_space(8.0);
     let Some(data) = super::page_data(ui, ctx, route) else {
@@ -51,7 +52,7 @@ mod tests {
     fn views_render_every_state() {
         let route = Route::Collection(CollectionTab::Tracks);
         let data = PageData::Tracks(tracks(2));
-        let texts = ["Collection", "Tracks", "Mixes", "Play", "2 tracks · 6:40"];
+        let texts = ["Tracks", "Play", "2 tracks · 6:40"];
         every_state(super::show, route, data, &texts);
         let route = Route::Collection(CollectionTab::Albums);
         let data = PageData::Items(vec![Item::Album(album(1))]);

@@ -2,8 +2,12 @@
 //! R7), with the dialogs that make and change them.
 
 use super::Ctx;
-use crate::i18n::tr;
+use super::widgets::{NAV_PAD, fade, focus_ring, icon_button, line, paint_icon};
+use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
+use crate::theme::{self, GLYPH, Icon, Palette, SIDEBAR_COVER};
+use egui::collapsing_header::CollapsingState;
+use egui::{Rect, Response, Sense, Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use tidal::FolderItem;
@@ -45,36 +49,112 @@ pub struct State {
     asked: HashSet<String>,
 }
 
-/// The "Playlists" heading with its New buttons, then the tree, which scrolls if long. New
-/// playlists and folders go to the top level.
-pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
-    ui.strong(tr("Playlists"));
-    ui.horizontal_wrapped(|ui| {
-        if ui.button(tr("New playlist")).clicked() {
-            open(ui.ctx(), new_playlist(Vec::new()));
-        }
-        if ui.button(tr("New folder")).clicked() {
-            open(ui.ctx(), Dialog::NewFolder(String::new()));
-        }
-    });
+/// The "All playlists" header with its New buttons, then the tree, which scrolls if long.
+/// New playlists and folders go to the top level. `collapsed`, the header is a rule over the
+/// buttons, stacked, and the rows show only their covers.
+pub fn show(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, collapsed: bool) {
+    let (pal, title) = (ctx.palette, tr("All playlists"));
+    ui.add_space(theme::SIDEBAR_PAD);
+    if collapsed {
+        super::sidebar::heading(ui, &pal, &title, true);
+        ui.vertical_centered(|ui| new_buttons(ui, &pal));
+    } else {
+        ui.horizontal(|ui| {
+            super::sidebar::heading(ui, &pal, &title, false);
+            let buttons = 2.0 * theme::ICON_BUTTON + ui.spacing().item_spacing.x;
+            ui.add_space((ui.available_width() - buttons).max(0.0));
+            new_buttons(ui, &pal);
+        });
+    }
     egui::ScrollArea::vertical()
         .id_salt("library")
-        .show(ui, |ui| {
-            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-            folder(ui, ctx, state, "root");
-        });
+        .show(ui, |ui| folder(ui, ctx, state, "root", collapsed));
     dialog(ui.ctx(), ctx);
 }
 
+/// "New playlist" and "New folder", each opening its dialog.
+fn new_buttons(ui: &mut Ui, pal: &Palette) {
+    if icon_button(ui, pal, Icon::ListPlus, &tr("New playlist"), None).clicked() {
+        open(ui.ctx(), new_playlist(Vec::new()));
+    }
+    if icon_button(ui, pal, Icon::FolderPlus, &tr("New folder"), None).clicked() {
+        open(ui.ctx(), Dialog::NewFolder(String::new()));
+    }
+}
+
+/// A tree row (spec §5.2), the width available: `art` paints a `SIDEBAR_COVER` square, then
+/// come `title` in `body_strong()` over `subtitle` in `small()` `secondary`, and `chevron` at
+/// the end. Hovered `surface_hover`, selected `surface_active`. Collapsed, only the square
+/// shows, `title` its tooltip. The caller names it to AccessKit.
+#[expect(clippy::too_many_arguments)] // two callers, each part named at the call
+fn row(
+    ui: &mut Ui,
+    pal: &Palette,
+    title: &str,
+    subtitle: Option<&str>,
+    chevron: Option<Icon>,
+    selected: bool,
+    collapsed: bool,
+    art: impl FnOnce(&Ui, Rect),
+) -> Response {
+    let size = vec2(ui.available_width(), SIDEBAR_COVER + 2.0 * NAV_PAD);
+    let (rect, r) = ui.allocate_exact_size(size, Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hover = fade(ui, &r, r.hovered());
+        let fill = if selected {
+            pal.surface_active
+        } else {
+            pal.surface_hover.gamma_multiply(hover)
+        };
+        ui.painter().rect_filled(rect, theme::R_CARD, fill);
+        let left = if collapsed {
+            rect.center().x - SIDEBAR_COVER / 2.0
+        } else {
+            rect.left() + NAV_PAD
+        };
+        let square =
+            Rect::from_min_size(pos2(left, rect.top() + NAV_PAD), Vec2::splat(SIDEBAR_COVER));
+        art(ui, square);
+        if !collapsed {
+            let mid = rect.center().y;
+            let mut right = rect.right() - NAV_PAD;
+            if let Some(icon) = chevron {
+                paint_icon(
+                    ui,
+                    icon,
+                    pos2(right - GLYPH / 2.0, mid),
+                    GLYPH,
+                    pal.secondary,
+                );
+                right -= GLYPH + NAV_PAD;
+            }
+            let x = square.right() + NAV_PAD;
+            let name = line(ui, title, theme::body_strong(), pal.text, right - x);
+            let sub = subtitle.map(|s| line(ui, s, theme::small(), pal.secondary, right - x));
+            let height = name.size().y + sub.as_ref().map_or(0.0, |s| s.size().y);
+            let top = mid - height / 2.0;
+            let below = top + name.size().y;
+            ui.painter().galley(pos2(x, top), name, pal.text);
+            if let Some(sub) = sub {
+                ui.painter().galley(pos2(x, below), sub, pal.secondary);
+            }
+        }
+    }
+    focus_ring(ui, &r, theme::R_CARD);
+    if collapsed { r.on_hover_text(title) } else { r }
+}
+
 /// Folder `id`'s items, once listed. The first time it shows unlisted it is asked for; the
-/// backend lists the top level itself, at login.
-fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
+/// backend lists the top level itself, at login. Folders open in place, indented unless
+/// `collapsed`.
+fn folder(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, id: &str, collapsed: bool) {
     let Some(items) = ctx.model.folders.get(id) else {
         if id != "root" && state.asked.insert(id.to_owned()) {
             ctx.send(Action::LoadFolder(id.to_owned()));
         }
         return;
     };
+    let pal = ctx.palette;
     for item in items {
         match item {
             FolderItem::Folder {
@@ -82,12 +162,42 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                 name,
                 count,
             } => {
-                let shown = egui::CollapsingHeader::new(name)
-                    .id_salt(("folder", sub))
-                    .show(ui, |ui| folder(ui, ctx, state, sub));
+                // Not salted by the panel: it stays open across collapsing the sidebar.
+                let at = egui::Id::new(("folder", sub));
+                let mut shown = CollapsingState::load_with_default_open(ui.ctx(), at, false);
+                let (icon, chevron) = if shown.is_open() {
+                    (Icon::FolderOpen, Icon::ChevronDown)
+                } else {
+                    (Icon::Folder, Icon::ChevronRight)
+                };
+                let header = row(
+                    ui,
+                    &pal,
+                    name,
+                    None,
+                    Some(chevron),
+                    false,
+                    collapsed,
+                    |ui, square| {
+                        ui.painter().rect_filled(square, theme::R_ART, pal.surface);
+                        paint_icon(ui, icon, square.center(), GLYPH, pal.secondary);
+                    },
+                );
+                header.widget_info(|| {
+                    WidgetInfo::labeled(WidgetType::CollapsingHeader, ui.is_enabled(), name)
+                });
+                if header.clicked() {
+                    shown.toggle(ui);
+                }
+                let body = |ui: &mut Ui| folder(ui, ctx, state, sub, collapsed);
+                if collapsed {
+                    shown.show_body_unindented(ui, body);
+                } else {
+                    shown.show_body_indented(&header, ui, body);
+                }
                 let listed = ctx.model.folders.get(sub);
                 let empty = *count == 0 && listed.is_none_or(Vec::is_empty);
-                shown.header_response.context_menu(|ui| {
+                header.context_menu(|ui| {
                     if ui.button(tr("Rename")).clicked() {
                         let (id, name) = (sub.clone(), name.clone());
                         open(ui.ctx(), Dialog::RenameFolder { id, name });
@@ -106,20 +216,47 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                     }
                 });
             }
-            FolderItem::Playlist(p) => playlist(ui, ctx, p, id),
+            FolderItem::Playlist(p) => playlist(ui, ctx, p, id, collapsed),
         }
     }
 }
 
-/// Playlist `p`, in folder `parent`: it opens its page, and its menu moves it or, if it is the
-/// user's own, deletes it.
-fn playlist(ui: &mut egui::Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str) {
+/// Playlist `p`, in folder `parent`: its cover, title and track count. It opens its page, and
+/// its menu moves it or, if it is the user's own, deletes it.
+fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, collapsed: bool) {
     let route = Route::Playlist(p.uuid.clone());
-    let row = ui.selectable_label(*ctx.model.route() == route, &p.title);
-    if row.clicked() {
+    let selected = *ctx.model.route() == route;
+    // ponytail: a count TIDAL left out parses as 0 (`serde(default)`), so an empty playlist
+    // says "Playlist" too; make the count an `Option` in `tidal` to tell them apart.
+    let subtitle = match p.number_of_tracks {
+        0 => tr("Playlist").into_owned(),
+        n => tr_n("{n} track", "{n} tracks", n),
+    };
+    let (image, images, tx) = (p.image(), &mut *ctx.images, ctx.tx);
+    let resp = row(
+        ui,
+        &ctx.palette,
+        &p.title,
+        Some(&subtitle),
+        None,
+        selected,
+        collapsed,
+        |ui, square| {
+            super::cover(ui, images, tx, image.as_ref(), square, theme::R_ART);
+        },
+    );
+    resp.widget_info(|| {
+        WidgetInfo::selected(
+            WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            &p.title,
+        )
+    });
+    if resp.clicked() {
         ctx.go(route);
     }
-    row.context_menu(|ui| {
+    resp.context_menu(|ui| {
         ui.menu_button(tr("Move to folder"), |ui| {
             let here = (parent != "root").then_some(parent);
             for (to, name) in destinations(ctx.model) {
@@ -400,7 +537,7 @@ mod tests {
 
     impl Tree {
         fn new() -> Self {
-            let egui = egui::Context::default();
+            let egui = crate::ui::testing::context();
             egui.enable_accesskit();
             let (tx, rx) = unbounded_channel();
             let state = State::default();
@@ -415,7 +552,9 @@ mod tests {
         /// One pass fed `input`: the events it gave, and its output.
         fn pass(&mut self, m: &Model, input: Vec<egui::Event>) -> (Vec<Event>, egui::FullOutput) {
             let state = &mut self.state;
-            pass_with(&self.egui, &self.tx, m, input, |ui, c| show(ui, c, state))
+            pass_with(&self.egui, &self.tx, m, input, |ui, c| {
+                show(ui, c, state, false)
+            })
         }
 
         /// A few passes without input, for dialogs and menus to lay themselves out.
@@ -434,9 +573,11 @@ mod tests {
             self.settle(m)
         }
 
-        /// The actions sent since last asked.
+        /// The actions sent since last asked, but the covers' image loads (each pass draws
+        /// with a fresh texture cache, so covers ask every pass).
         fn sent(&mut self) -> Vec<String> {
             std::iter::from_fn(|| self.rx.try_recv().ok())
+                .filter(|a| !matches!(a, Action::LoadImage { .. }))
                 .map(|a| format!("{a:?}"))
                 .collect()
         }

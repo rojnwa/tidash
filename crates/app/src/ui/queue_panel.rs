@@ -183,7 +183,7 @@ mod tests {
     /// nothing. A screen reader's click on a row plays it.
     #[test]
     fn dragging_a_row_moves_it() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState {

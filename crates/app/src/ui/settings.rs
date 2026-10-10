@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn asks_for_devices_once_per_visit() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
         let (first, _) = pass(&ctx, &mut state, &mut model, vec![]);
@@ -417,7 +417,7 @@ mod tests {
     /// Settings has no session pages around it nor Log out, and Back returns to the login.
     #[test]
     fn settings_is_reachable_from_the_login_page() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = Model::default();
@@ -453,7 +453,7 @@ mod tests {
     /// change builds on the first, which shows at once.
     #[test]
     fn two_quick_edits_both_land() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -480,7 +480,7 @@ mod tests {
     /// shows with Disconnect. The token never reaches the model.
     #[test]
     fn listenbrainz_connect_and_disconnect() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -517,7 +517,7 @@ mod tests {
     /// with Disconnect.
     #[test]
     fn lastfm_connect_cancel_and_disconnect() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -552,7 +552,7 @@ mod tests {
     /// Hidden without an application ID; with one, a setting like the others.
     #[test]
     fn discord_toggle_is_a_setting() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -574,7 +574,7 @@ mod tests {
     /// changes nothing.
     #[test]
     fn start_minimized_needs_close_to_tray() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -593,7 +593,7 @@ mod tests {
     /// A file from the catalog becomes `custom_theme`; a built-in clears it and its cache.
     #[test]
     fn picking_a_theme_file_sets_custom_theme() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
@@ -622,7 +622,7 @@ mod tests {
     /// Each visit asks for a fresh list of the themes folder, once.
     #[test]
     fn settings_open_rescans_the_themes() {
-        let ctx = egui::Context::default();
+        let ctx = testing::context();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Home);
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
