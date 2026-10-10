@@ -63,8 +63,9 @@ pub fn start(
             );
             backend.artwork = Artwork::new(crate::images::open_cache(&images));
             let (http, store) = (backend.http.clone(), Arc::clone(&backend.store));
+            let on = backend.settings.integrations.connected();
             let queue = crate::scrobble::path();
-            backend.scrobbler = Scrobbler::new(http, store, queue, Urls::default());
+            backend.scrobbler = Scrobbler::new(http, store, queue, Urls::default(), &on);
             backend.playback = open_player(&msg_tx, audio.output()).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx, audio)
@@ -216,7 +217,8 @@ impl Backend {
             .build()
             .expect("an HTTP client");
         // Its queue only in memory; `start` gives it the file.
-        let scrobbler = Scrobbler::new(http.clone(), Arc::clone(&store), None, Urls::default());
+        let (on, urls) = (settings.integrations.connected(), Urls::default());
+        let scrobbler = Scrobbler::new(http.clone(), Arc::clone(&store), None, urls, &on);
         let mut backend = Self {
             emit,
             msgs,

@@ -133,8 +133,10 @@ struct Inner {
     /// The plays not yet taken, oldest first. Held across a flush, so adds and flushes go one
     /// at a time, in order.
     queue: tokio::sync::Mutex<Vec<Entry>>,
-    /// Each service's token as last read or set; `None` inside: not connected. Read once, as
-    /// each read of the OS store can raise a keychain prompt.
+    /// The services the settings show connected, each with its token as last read or set
+    /// (`None` inside: not read yet, or none stored; read again). A service missing is not
+    /// connected: nothing is queued or sent for it, and its token is never read. A token found
+    /// is kept, as each read of the OS store can raise a keychain prompt.
     tokens: Mutex<HashMap<Service, Option<String>>>,
 }
 
@@ -155,12 +157,14 @@ fn load(path: &Path) -> Vec<Entry> {
 }
 
 impl Scrobbler {
-    /// Reads the queue saved at `queue`, if any. Blocks.
+    /// Sends to the `connected` services, those the settings name a user for. Reads the queue
+    /// saved at `queue`, if any. Blocks.
     pub fn new(
         http: reqwest::Client,
         store: Arc<dyn TokenStore>,
         queue: Option<PathBuf>,
         urls: Urls,
+        connected: &[Service],
     ) -> Scrobbler {
         let saved = queue.as_deref().map(load).unwrap_or_default();
         Scrobbler(Arc::new(Inner {
@@ -169,7 +173,7 @@ impl Scrobbler {
             urls,
             path: queue,
             queue: tokio::sync::Mutex::new(saved),
-            tokens: Mutex::default(),
+            tokens: Mutex::new(connected.iter().map(|&s| (s, None)).collect()),
         }))
     }
 
@@ -188,11 +192,12 @@ impl Scrobbler {
         out
     }
 
-    /// Queues `l` for every connected service, saves the queue, and flushes it.
+    /// Queues `l` for every connected service, saves the queue, and flushes it. A service
+    /// whose token cannot be read yet gets it queued all the same.
     pub async fn scrobble(&self, l: Listen) -> Outcome {
         let mut queue = self.0.queue.lock().await;
         let service = Service::ListenBrainz;
-        if self.token(service).await.is_some() {
+        if self.tokens().contains_key(&service) {
             queue.push(Entry { service, listen: l });
             let over = queue.len().saturating_sub(MAX_QUEUED);
             queue.drain(..over);
@@ -219,7 +224,7 @@ impl Scrobbler {
             if batch.is_empty() {
                 break;
             }
-            // Not connected: kept for when it is again.
+            // Not connected, or no token readable yet: kept for later.
             let Some(token) = self.token(service).await else {
                 break;
             };
@@ -286,15 +291,25 @@ impl Scrobbler {
         self.0.tokens.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    /// `service`'s token, read from the store the first time; `None`: not connected. An
-    /// unreadable store is read again next time.
+    /// A connected `service`'s token, read from the store until one is found; `None`: not
+    /// connected, or no token readable yet.
     async fn token(&self, service: Service) -> Option<String> {
-        if let Some(token) = self.tokens().get(&service) {
-            return token.clone();
+        let cached = self.tokens().get(&service).cloned();
+        match cached {
+            None => return None,
+            Some(Some(token)) => return Some(token),
+            Some(None) => {}
         }
         match store_call(&self.0.store, move |s| s.secret(service.secret())).await {
-            // A token set meanwhile, by a connect, wins over what this read found.
-            Ok(read) => self.tokens().entry(service).or_insert(read).clone(),
+            Ok(read) => {
+                let mut tokens = self.tokens();
+                // Disconnected meanwhile: none. Connected anew: that token wins.
+                let slot = tokens.get_mut(&service)?;
+                if slot.is_none() {
+                    *slot = read;
+                }
+                slot.clone()
+            }
             Err(e) => {
                 log::warn!("the {service:?} token is unreadable: {e}");
                 None
@@ -302,7 +317,7 @@ impl Scrobbler {
         }
     }
 
-    /// Keeps `token` as `service`'s, or forgets it (`None`): in the store, then here.
+    /// Connects `service` with `token`, or disconnects it (`None`): in the store, then here.
     async fn set_token(&self, service: Service, token: Option<String>) -> tidal::Result<()> {
         let value = token.clone();
         store_call(&self.0.store, move |s| match value {
@@ -310,19 +325,22 @@ impl Scrobbler {
             None => s.delete_secret(service.secret()),
         })
         .await?;
-        self.tokens().insert(service, token);
+        match token {
+            Some(t) => self.tokens().insert(service, Some(t)),
+            None => self.tokens().remove(&service),
+        };
         Ok(())
     }
 
-    /// `service` refused `token`: forgotten, unless a connect replaced it meanwhile. True if
-    /// forgotten.
+    /// `service` refused `token`: disconnected and the token forgotten, unless a connect
+    /// replaced it meanwhile. True if so.
     async fn forget(&self, service: Service, token: &str) -> bool {
         {
             let mut tokens = self.tokens();
             if tokens.get(&service).cloned().flatten().as_deref() != Some(token) {
                 return false;
             }
-            tokens.insert(service, None);
+            tokens.remove(&service);
         }
         let deleted = store_call(&self.0.store, move |s| s.delete_secret(service.secret()));
         if let Err(e) = deleted.await {
@@ -392,21 +410,29 @@ pub(crate) mod tests {
         dir
     }
 
-    /// A store connected to ListenBrainz with token "tok".
+    /// A store holding ListenBrainz token "tok".
     fn connected() -> Arc<MemoryStore> {
         let store = Arc::new(MemoryStore::default());
         store.set_secret("listenbrainz", "tok").expect("stored");
         store
     }
 
-    /// A scrobbler sending to `server`, its queue in `dir` if any.
-    fn scrobbler(server: &MockServer, dir: Option<&Path>, store: Arc<MemoryStore>) -> Scrobbler {
+    /// The settings name a ListenBrainz user.
+    const LB: &[Service] = &[Service::ListenBrainz];
+
+    /// A scrobbler sending to `server`, its queue in `dir` if any, to the services `on`.
+    fn scrobbler(
+        server: &MockServer,
+        dir: Option<&Path>,
+        store: Arc<MemoryStore>,
+        on: &[Service],
+    ) -> Scrobbler {
         let urls = Urls {
             listenbrainz: format!("{}/", server.uri()).parse().expect("a URL"),
             ..Urls::default()
         };
         let queue = dir.map(|d| d.join("scrobbles.json"));
-        Scrobbler::new(reqwest::Client::new(), store, queue, urls)
+        Scrobbler::new(reqwest::Client::new(), store, queue, urls, on)
     }
 
     /// When each listen saved in `dir`'s queue started.
@@ -455,7 +481,7 @@ pub(crate) mod tests {
             submit("tok").respond_with(ok()).mount(&server).await;
             let dir = temp_dir("order");
             let store = connected();
-            let s = scrobbler(&server, Some(&dir), store.clone());
+            let s = scrobbler(&server, Some(&dir), store.clone(), LB);
             for at in [1_700_000_100, 1_700_000_200] {
                 let out = s.scrobble(listen(at, at)).await;
                 assert_eq!(
@@ -469,7 +495,7 @@ pub(crate) mod tests {
             }
             assert_eq!(saved(&dir), [1_700_000_100, 1_700_000_200], "saved between");
             // A restart reads them back; the next flush sends both at once, oldest first.
-            let s = scrobbler(&server, Some(&dir), store);
+            let s = scrobbler(&server, Some(&dir), store, LB);
             assert_eq!(s.flush().await, Outcome::default());
             assert_eq!(saved(&dir), Vec::<u64>::new(), "taken: none left");
             let both = vec![1_700_000_100, 1_700_000_200];
@@ -498,7 +524,7 @@ pub(crate) mod tests {
                 .await;
             let dir = temp_dir("refused");
             let store = connected();
-            let s = scrobbler(&server, Some(&dir), store.clone());
+            let s = scrobbler(&server, Some(&dir), store.clone(), LB);
             let out = s.scrobble(listen(1, 1_700_000_100)).await;
             let want = Outcome {
                 retry: false,
@@ -554,7 +580,7 @@ pub(crate) mod tests {
             submit("good").respond_with(down).mount(&server).await;
             let dir = temp_dir("connect");
             let store = Arc::new(MemoryStore::default());
-            let s = scrobbler(&server, Some(&dir), store.clone());
+            let s = scrobbler(&server, Some(&dir), store.clone(), &[]);
             let refused = s.connect_listenbrainz("bad".into()).await;
             let why = "ListenBrainz did not accept that token.";
             assert_eq!(refused, Err(why.to_owned()));
@@ -571,6 +597,49 @@ pub(crate) mod tests {
                 .expect("disconnected");
             assert_eq!(store.secret("listenbrainz").expect("read"), None);
             assert_eq!(saved(&dir), Vec::<u64>::new());
+            let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// The settings name no user (lost, or never connected), but a token is still stored:
+    /// Settings offers Connect, so nothing goes out and nothing is kept.
+    #[test]
+    fn a_token_without_a_user_sends_nothing() {
+        runtime().block_on(async {
+            let server = MockServer::start().await;
+            submit("tok").respond_with(ok()).mount(&server).await;
+            let dir = temp_dir("no-user");
+            let s = scrobbler(&server, Some(&dir), connected(), &[]);
+            assert_eq!(s.now_playing(listen(1, 0)).await, Outcome::default());
+            let out = s.scrobble(listen(1, 1_700_000_100)).await;
+            assert_eq!(out, Outcome::default());
+            assert_eq!(s.flush().await, Outcome::default());
+            assert_eq!(saved(&dir), Vec::<u64>::new(), "nothing queued");
+            assert_eq!(submitted(&server).await.len(), 0, "nothing sent");
+            let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// The settings name a user, but the token is gone or unreadable: the listen waits in the
+    /// queue, and goes out once the token reads.
+    #[test]
+    fn a_user_without_a_token_still_queues() {
+        runtime().block_on(async {
+            let server = MockServer::start().await;
+            submit("tok").respond_with(ok()).mount(&server).await;
+            let dir = temp_dir("no-token");
+            let store = Arc::new(MemoryStore::default());
+            let s = scrobbler(&server, Some(&dir), store.clone(), LB);
+            assert_eq!(s.now_playing(listen(1, 0)).await, Outcome::default());
+            let out = s.scrobble(listen(1, 1_700_000_100)).await;
+            assert_eq!(out, Outcome::default());
+            assert_eq!(saved(&dir), [1_700_000_100], "queued");
+            assert_eq!(submitted(&server).await.len(), 0, "nothing sent");
+            store.set_secret("listenbrainz", "tok").expect("stored");
+            assert_eq!(s.flush().await, Outcome::default());
+            assert_eq!(saved(&dir), Vec::<u64>::new());
+            let sent = submitted(&server).await;
+            assert_eq!(sent, [("single".to_owned(), vec![1_700_000_100])]);
             let _ = std::fs::remove_dir_all(&dir);
         });
     }

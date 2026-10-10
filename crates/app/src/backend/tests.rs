@@ -575,7 +575,7 @@ fn connect_and_disconnect_set_the_user() {
             listenbrainz: format!("{}/", server.uri()).parse().expect("a URL"),
             ..Urls::default()
         };
-        b.scrobbler = Scrobbler::new(b.http.clone(), store.clone(), None, urls);
+        b.scrobbler = Scrobbler::new(b.http.clone(), store.clone(), None, urls, &[]);
         let secret = || store.secret("listenbrainz").expect("read");
         let token = Secret("good".into());
         b.handle(Action::ConnectListenBrainz(token)).await;

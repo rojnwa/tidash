@@ -1,6 +1,7 @@
 //! The user's settings, saved as JSON in the config dir: the audio output and the streams,
 //! the theme, the TIDAL client, and the integrations.
 
+use crate::scrobble::Service;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -20,6 +21,14 @@ pub struct Settings {
 #[serde(default)]
 pub struct Integrations {
     pub listenbrainz_user: Option<String>,
+}
+
+impl Integrations {
+    /// The services with a user: the only ones scrobbled to.
+    pub fn connected(&self) -> Vec<Service> {
+        let lb = self.listenbrainz_user.is_some();
+        lb.then_some(Service::ListenBrainz).into_iter().collect()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
