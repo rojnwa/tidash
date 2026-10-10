@@ -4,7 +4,8 @@
 
 use crate::backend::Emitter;
 use crate::model::Event;
-use egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use crate::theme::{TINT_PX, dominant};
+use egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions};
 use image::imageops::{self, FilterType};
 use reqwest::Url;
 use std::collections::{HashMap, HashSet};
@@ -135,6 +136,8 @@ pub struct TextureCache {
     /// Each texture, its bytes, and the pass it was last drawn in.
     textures: HashMap<Key, (TextureHandle, usize, u64)>,
     requested: HashSet<Key>,
+    /// Each image's `dominant` colour, taken from its `TINT_PX` texture and dropped with it.
+    tints: HashMap<String, Option<Color32>>,
 }
 
 impl TextureCache {
@@ -144,6 +147,7 @@ impl TextureCache {
             bytes: 0,
             textures: HashMap::new(),
             requested: HashSet::new(),
+            tints: HashMap::new(),
         }
     }
 
@@ -195,6 +199,11 @@ impl TextureCache {
         self.requested.remove(&(key, px));
     }
 
+    /// `image`'s dominant colour, while its `TINT_PX` texture is cached (spec §5.9).
+    pub fn tint(&self, image: &str) -> Option<Color32> {
+        self.tints.get(image).copied().flatten()
+    }
+
     /// Some requested artwork has no texture yet: it is on its way, or failed and waits out
     /// `RETRY`.
     pub fn loading(&self) -> bool {
@@ -209,6 +218,9 @@ impl TextureCache {
     /// until scrolled away.
     pub fn insert(&mut self, ctx: &Context, key: String, px: u32, image: ColorImage) {
         let size = image.size[0] * image.size[1] * 4;
+        if px == TINT_PX {
+            self.tints.insert(key.clone(), dominant(&image));
+        }
         let tex = ctx.load_texture(format!("{key}@{px}"), image, TextureOptions::LINEAR);
         let now = ctx.cumulative_pass_nr();
         let key = (key, px);
@@ -228,6 +240,9 @@ impl TextureCache {
             let Some(oldest) = oldest else { break };
             if let Some((_, size, _)) = self.textures.remove(&oldest) {
                 self.bytes -= size;
+            }
+            if oldest.1 == TINT_PX {
+                self.tints.remove(&oldest.0);
             }
             self.requested.remove(&oldest); // may be requested again
         }
@@ -403,6 +418,24 @@ mod tests {
         c.insert(&ctx, "a".into(), 16, img());
         assert!(c.get_exact(&ctx, "a", 16, || n += 1).is_some());
         assert_eq!(n, 1);
+    }
+
+    /// Spec §5.9: the `TINT_PX` texture's dominant colour is kept by its key and goes with it;
+    /// no other size gives one.
+    #[test]
+    fn a_small_image_keeps_its_tint() {
+        let ctx = Context::default();
+        let px = TINT_PX;
+        let red = |w: u32| ColorImage::filled([w as usize; 2], Color32::RED);
+        let mut c = TextureCache::new(64 * 64 * 4); // only b's 64 px
+        c.insert(&ctx, "a".into(), px, red(px));
+        assert_eq!(c.tint("a"), Some(Color32::RED));
+        next_pass(&ctx);
+        next_pass(&ctx); // a is off screen
+        c.insert(&ctx, "b".into(), 64, red(64));
+        assert_eq!(c.tint("b"), None, "not the tint's size");
+        assert!(c.get_exact(&ctx, "a", px, || {}).is_none(), "a evicted");
+        assert_eq!(c.tint("a"), None, "gone with its texture");
     }
 
     #[test]

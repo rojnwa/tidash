@@ -341,6 +341,40 @@ fn crop(tex: f32, rect: f32) -> egui::Rect {
     egui::Rect::from_center_size(egui::pos2(0.5, 0.5), size)
 }
 
+/// The playing cover's tint (spec §5.9): with `accent_from_art`, once that cover's `TINT_PX`
+/// image is in, which it asks for meanwhile, only at that size (ruling 20).
+fn tint(
+    ctx: &egui::Context,
+    model: &Model,
+    tx: &UnboundedSender<Action>,
+    images: &mut TextureCache,
+    p: &Palette,
+) -> Option<egui::Color32> {
+    if !model.settings.accent_from_art {
+        return None;
+    }
+    let image = model.playback.track.as_ref()?.album.image()?;
+    let px = theme::TINT_PX;
+    let cached = images.get_exact(ctx, image.key(), px, || {
+        let image = image.clone();
+        let _ = tx.send(Action::LoadImage { image, px });
+    });
+    cached.and(images.tint(image.key())).map(|c| p.tint(c))
+}
+
+/// The player bar's fill: `panel` blended 12% toward `tint`, each channel eased over
+/// `TINT_FADE`; still once there, so nothing repaints at rest.
+fn bar_fill(ctx: &egui::Context, p: &Palette, tint: Option<egui::Color32>) -> egui::Color32 {
+    let to = tint.map_or(p.panel, |t| theme::blend(p.panel, t, 0.12));
+    let id = egui::Id::new("player tint");
+    let [r, g, b, a] = std::array::from_fn(|i| {
+        let v = f32::from(to.to_array()[i]);
+        let v = ctx.animate_value_with_time(id.with(i), v, theme::TINT_FADE);
+        v.round() as u8
+    });
+    egui::Color32::from_rgba_premultiplied(r, g, b, a)
+}
+
 /// Keyboard and mouse shortcuts but Quit (`draw`); Settings lists the keys
 /// (`settings::shortcuts`). None while typing but the mouse's back and forward; Space also
 /// leaves a focused widget alone (it clicks it).
@@ -422,6 +456,7 @@ pub fn draw(
             top_bar::notices(ui, &mut ctx);
         });
     }
+    let tint = tint(ui.ctx(), model, tx, &mut state.images, &palette);
     // Logged out (Settings, from the login page) nothing leads to the session's pages.
     if model.logged_in {
         // Before the sidebar, so the bar spans the full width.
@@ -434,7 +469,7 @@ pub fn draw(
             &mut state.images,
             &mut state.side,
             &palette,
-            palette.panel,
+            bar_fill(ui.ctx(), &palette, tint),
         );
         let mut ctx = Ctx {
             model,
@@ -476,12 +511,23 @@ pub fn draw(
             events: &mut events,
             palette,
         };
+        let route = model.route();
+        // Pages without a cover of their own: the tint behind their top, under the top bar.
+        let coverless = matches!(
+            route,
+            Route::Home | Route::Page(_) | Route::ViewAll(_) | Route::Collection(_) | Route::Search
+        );
+        if let Some(t) = tint.filter(|_| coverless) {
+            let page = ui.max_rect();
+            let top = page.with_max_y(page.top() + theme::TINT_HEADER);
+            let from = theme::blend(palette.window, t, 0.35);
+            widgets::vertical_gradient(ui.painter(), top, from, palette.window);
+        }
         if model.logged_in {
             top_bar::show(ui, &mut ctx, &mut state.search);
         } else {
             ui.add_space(theme::PAGE_PAD);
         }
-        let route = model.route();
         match route {
             Route::Login => login::show(ui, &mut ctx, &mut state.login),
             Route::Search => search::show(ui, &mut ctx),
@@ -812,6 +858,61 @@ mod tests {
             r(0.0, 1.0, 0.5 - 1.0 / 3.0, 0.5 + 1.0 / 3.0)
         );
         assert_eq!(crop(1.0, 1.0), r(0.0, 1.0, 0.0, 1.0));
+    }
+
+    /// Spec §5.9: a playing track without a cover, or `accent_from_art` off, leaves the player
+    /// bar plain `panel` once the fade settles; a cover's 16 px image tints it, and it eases
+    /// back. Settled, nothing repaints.
+    #[test]
+    fn no_cover_no_tint() {
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        model.playback.track = Some(testing::track(1)); // no cover
+        let mut time = 0.0;
+        // The bar's fill after a second of passes, past `TINT_FADE`; still by then.
+        let mut settled = |model: &Model, state: &mut UiState| {
+            let mut fill = None;
+            for i in 0..10 {
+                time += 0.1;
+                let input = egui::RawInput {
+                    time: Some(time),
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(800.0, 600.0),
+                    )),
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| {
+                    draw(ui, model, &tx, state);
+                });
+                out.textures_delta.clear(); // nothing renders them
+                let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+                assert!(i < 6 || repaint == Duration::MAX, "repaints at rest");
+                fill = out.shapes.iter().find_map(|s| match &s.shape {
+                    egui::Shape::Rect(r)
+                        if r.rect.bottom() == 600.0 && r.rect.height() == theme::PLAYER_BAR =>
+                    {
+                        Some(r.fill)
+                    }
+                    _ => None,
+                });
+            }
+            fill.expect("a player bar")
+        };
+        let panel = Palette::dark().panel;
+        assert_eq!(settled(&model, &mut state), panel, "no cover");
+        let mut track = testing::track(1);
+        track.album.cover = Some("ab-cd".into());
+        model.playback.track = Some(track);
+        let (px, red) = (theme::TINT_PX, egui::Color32::RED);
+        let red = egui::ColorImage::filled([px as usize; 2], red);
+        state.images.insert(&ctx, "ab-cd".into(), px, red);
+        let tinted = settled(&model, &mut state);
+        assert!(tinted.r() > tinted.g() + 8, "toward red: {tinted:?}");
+        model.settings.accent_from_art = false;
+        assert_eq!(settled(&model, &mut state), panel, "accent_from_art off");
     }
 
     /// Small covers are asked for exactly; larger ones in steps of 32 px, so a card that
