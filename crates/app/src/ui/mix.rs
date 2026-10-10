@@ -1,6 +1,7 @@
 //! Mix page: header with Play, then its tracks.
 
 use super::{Ctx, header, tracks};
+use crate::i18n::tr;
 use crate::model::{PageData, Route};
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
@@ -14,6 +15,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         header::header(
             ui,
             ctx,
+            &tr("Mix"),
             mix.image().as_ref(),
             &mix.title,
             subtitle,

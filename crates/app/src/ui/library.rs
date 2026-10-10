@@ -300,12 +300,13 @@ fn destinations(model: &Model) -> Vec<(Option<&str>, Cow<'_, str>)> {
         .collect()
 }
 
-/// The "Add to playlist" menu (a submenu inside a menu): "New playlist…", then the user's own
-/// playlists, newest updated first. `tracks` go into the one picked.
+/// The "Add to playlist" menu, under a secondary pill (a submenu inside a menu): "New
+/// playlist…", then the user's own playlists, newest updated first. `tracks` go into the one
+/// picked.
 pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]) {
     let ids = || tracks.iter().map(|t| t.id).collect();
     let label = tr("Add to playlist");
-    let menu = ui.menu_button(label.as_ref(), |ui| {
+    let picks = |ui: &mut Ui| {
         if ui.button(tr("New playlist…")).clicked() {
             open(ui.ctx(), new_playlist(ids()));
             ui.close();
@@ -317,7 +318,15 @@ pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]
                 ui.close();
             }
         }
-    });
+    };
+    // A page's action is a pill; in a row's menu it is a submenu.
+    if !egui::containers::menu::is_in_menu(ui) {
+        let pill =
+            super::widgets::pill_button(ui, &ctx.palette, Some(Icon::ListPlus), &label, false);
+        egui::Popup::menu(&pill).show(picks);
+        return;
+    }
+    let menu = ui.menu_button(label.as_ref(), picks);
     // Inside a menu, egui's label for a screen reader ends in the submenu's arrow.
     let resp = menu.response;
     resp.widget_info(|| {

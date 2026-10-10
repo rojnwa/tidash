@@ -146,16 +146,16 @@ impl Ctx<'_> {
         }
     }
 
-    /// A button showing `text` that flips `item`'s heart now and has the backend write it (a
-    /// failed write flips it back); disabled while that item's write is under way (ruling R19).
+    /// `button`, which flips `item`'s heart now and has the backend write it (a failed write
+    /// flips it back); disabled while that item's write is under way (ruling R19).
     pub fn favorite_button(
         &mut self,
         ui: &mut egui::Ui,
         item: tidal::Favorite,
-        text: &str,
+        button: impl egui::Widget,
     ) -> egui::Response {
         let pending = self.model.pending_favorites.contains(&item);
-        let resp = ui.add_enabled(!pending, egui::Button::new(text));
+        let resp = ui.add_enabled(!pending, button);
         if resp.clicked() {
             let on = !self.model.favorites.contains(&item);
             self.events.push(Event::FavoriteSet {

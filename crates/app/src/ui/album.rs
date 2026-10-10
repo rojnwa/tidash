@@ -2,6 +2,7 @@
 //! track list with disc headers.
 
 use super::{Ctx, header, library, tracks};
+use crate::i18n::tr;
 use crate::model::{PageData, Route};
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
@@ -33,6 +34,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         header::header(
             ui,
             ctx,
+            &tr("Album"),
             album.image().as_ref(),
             &album.title,
             details,
@@ -47,7 +49,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
 #[cfg(test)]
 mod tests {
     use crate::model::{Action, Event, Model, PageData, Route};
-    use crate::ui::testing::{album, at, click, context, every_state, pass, tracks};
+    use crate::theme;
+    use crate::ui::testing::{album, at, click, context, every_state, pass, shown, tracks};
     use tidal::Favorite;
 
     fn data() -> PageData {
@@ -96,6 +99,47 @@ mod tests {
         assert_eq!(pending, (0, false), "pending: the heart is disabled");
         model.apply(Event::FavoriteSaved { item: album });
         assert_eq!(unfavorite(&model), (1, true), "saved: it toggles again");
+    }
+
+    /// The backdrop asks for the cover at the tint's 16 px, beside the header's own size.
+    #[test]
+    fn the_backdrop_asks_for_the_small_cover() {
+        let route = Route::Album(1);
+        let mut model = at(route.clone());
+        model.apply(Event::Page {
+            route,
+            data: data(),
+        });
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        pass(&context(), &tx, &model, super::show, vec![]);
+        let sizes: Vec<u32> = std::iter::from_fn(|| rx.try_recv().ok())
+            .filter_map(|a| match a {
+                Action::LoadImage { px, .. } => Some(px),
+                _ => None,
+            })
+            .collect();
+        let header = crate::ui::request_px(theme::HEADER_COVER);
+        assert!(sizes.contains(&theme::TINT_PX), "{sizes:?}");
+        assert!(sizes.contains(&header), "{sizes:?}");
+    }
+
+    /// The header's "Add to playlist" pill opens the playlists to pick from.
+    #[test]
+    fn add_to_playlist_opens_its_menu() {
+        let route = Route::Album(1);
+        let mut model = at(route.clone());
+        model.apply(Event::Page {
+            route,
+            data: data(),
+        });
+        let egui = context();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let pill = click(&out, "Add to playlist");
+        pass(&egui, &tx, &model, super::show, vec![pill]);
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        assert!(shown(&out).contains(&"New playlist…".into()));
     }
 
     #[test]

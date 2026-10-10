@@ -1,8 +1,11 @@
-//! Artist page: picture, name and the start of the biography, its radio, then the shelves.
+//! Artist page: a hero of the picture with the name, the start of the biography and its radio
+//! over it, then the shelves.
 
+use super::widgets::pill_button;
 use super::{Ctx, header, shelf};
 use crate::i18n::tr;
 use crate::model::{PageData, Route};
+use crate::theme::Icon;
 use std::borrow::Cow;
 
 /// The most characters of the biography shown.
@@ -20,19 +23,21 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             }
         };
         let radio = |ui: &mut egui::Ui, ctx: &mut Ctx| {
-            if let Some(mix) = &artist.mixes.artist
-                && ui.button(tr("Artist radio")).clicked()
-            {
+            let Some(mix) = &artist.mixes.artist else {
+                return;
+            };
+            let label = tr("Artist radio");
+            if pill_button(ui, &ctx.palette, Some(Icon::Radio), &label, false).clicked() {
                 ctx.go(Route::Mix(mix.clone()));
             }
         };
-        header::header(
+        header::hero(
             ui,
             ctx,
+            &tr("Artist"),
             artist.image().as_ref(),
             &artist.name,
             bio,
-            None,
             Some(tidal::Favorite::Artist(artist.id)),
             radio,
         );
@@ -51,7 +56,7 @@ fn excerpt(text: &str, max: usize) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use crate::model::{Event, Model, PageData, Route};
-    use crate::ui::testing::{album, artist, at, click, every_state, key, pass, shown};
+    use crate::ui::testing::{album, artist, at, click, context, every_state, key, pass, shown};
     use egui::Key;
     use std::time::Instant;
     use tidal::{ArtistPage, Item, Layout, Shelf};
@@ -117,7 +122,7 @@ mod tests {
     #[test]
     fn artist_radio_button_opens_the_mix() {
         let model = with_mix(Some("m"));
-        let egui = egui::Context::default();
+        let egui = context();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
@@ -129,10 +134,27 @@ mod tests {
         );
     }
 
+    /// The hero's column sits on the picture's foot from the first pass: its height, unknown
+    /// until drawn, has the pass drawn again.
+    #[test]
+    fn the_name_and_actions_sit_at_the_foot_of_the_picture() {
+        use crate::theme::{BACKDROP, PAGE_PAD};
+        let model = with_mix(Some("m"));
+        let egui = context();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let radio = crate::ui::testing::bounds(&out, "Artist radio");
+        assert!(
+            (radio.bottom() - (BACKDROP - PAGE_PAD)).abs() < 1.0,
+            "{radio:?}"
+        );
+    }
+
     #[test]
     fn no_artist_mix_no_button() {
         let model = with_mix(None);
-        let egui = egui::Context::default();
+        let egui = context();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);

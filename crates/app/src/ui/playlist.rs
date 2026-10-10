@@ -1,6 +1,7 @@
 //! Playlist page: header with Play, then its tracks. The user's own also has Edit and Delete,
 //! and its rows can be removed and dragged to reorder it.
 
+use super::widgets::pill_button;
 use super::{Ctx, header, library, tracks};
 use crate::i18n::tr;
 use crate::model::{PageData, Route};
@@ -23,20 +24,23 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         // Ruling R19: no heart on the user's own, whose folder remove could drop it.
         let own = p.creator_id.is_some() && p.creator_id == ctx.model.user_id;
         let fav = (!own).then(|| tidal::Favorite::Playlist(p.uuid.clone()));
-        let edit = |ui: &mut egui::Ui, _: &mut Ctx| {
+        let edit = |ui: &mut egui::Ui, ctx: &mut Ctx| {
             if !own {
                 return;
             }
-            if ui.button(tr("Edit")).clicked() {
+            let pill =
+                |ui: &mut egui::Ui, label: &str| pill_button(ui, &ctx.palette, None, label, false);
+            if pill(ui, &tr("Edit")).clicked() {
                 library::open(ui.ctx(), library::edit_playlist(p));
             }
-            if ui.button(tr("Delete")).clicked() {
+            if pill(ui, &tr("Delete")).clicked() {
                 library::open(ui.ctx(), library::delete_playlist(p));
             }
         };
         header::header(
             ui,
             ctx,
+            &tr("Playlist"),
             p.image().as_ref(),
             &p.title,
             details,

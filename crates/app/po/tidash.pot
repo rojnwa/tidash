@@ -207,6 +207,7 @@ msgstr ""
 msgid "Scroll right"
 msgstr ""
 
+#: src/ui/artist.rs
 #: src/ui/shelf.rs
 msgid "Artist"
 msgstr ""
@@ -225,6 +226,10 @@ msgstr ""
 
 #: src/ui/collection.rs
 msgid "Mixes"
+msgstr ""
+
+#: src/ui/mix.rs
+msgid "Mix"
 msgstr ""
 
 #: src/ui/mod.rs
@@ -360,6 +365,7 @@ msgstr ""
 msgid "Track"
 msgstr ""
 
+#: src/ui/album.rs
 #: src/ui/settings.rs
 msgid "Album"
 msgstr ""
@@ -513,6 +519,7 @@ msgid "New folder"
 msgstr ""
 
 #: src/ui/library.rs
+#: src/ui/playlist.rs
 msgid "Playlist"
 msgstr ""
 

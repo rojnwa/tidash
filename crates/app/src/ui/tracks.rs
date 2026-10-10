@@ -362,7 +362,10 @@ fn menu(
         }
         let fav = tidal::Favorite::Track(t.id);
         let label = ctx.favorite_label(&fav);
-        if ctx.favorite_button(ui, fav, &label).clicked() {
+        if ctx
+            .favorite_button(ui, fav, egui::Button::new(label.as_ref()))
+            .clicked()
+        {
             ui.close();
         }
         if ui.button(tr("Copy link")).clicked() {

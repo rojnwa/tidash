@@ -157,14 +157,8 @@ impl TextureCache {
         px: u32,
         request: impl FnOnce(),
     ) -> Option<TextureHandle> {
-        let key = (image.to_owned(), px);
-        let now = ctx.cumulative_pass_nr();
-        if let Some((tex, _, used)) = self.textures.get_mut(&key) {
-            *used = now;
-            return Some(tex.clone());
-        }
-        if self.requested.insert(key) {
-            request();
+        if let Some(tex) = self.get_exact(ctx, image, px, request) {
+            return Some(tex);
         }
         // ponytail: O(n) scan, only while a size loads; n is a few hundred textures.
         let (_, (tex, _, used)) = self
@@ -172,8 +166,28 @@ impl TextureCache {
             .iter_mut()
             .filter(|((k, _), _)| k == image)
             .min_by_key(|((_, at), _)| at.abs_diff(px))?;
-        *used = now;
+        *used = ctx.cumulative_pass_nr();
         Some(tex.clone())
+    }
+
+    /// As `get`, but only the texture `px` wide, never another size meanwhile: for the page
+    /// backdrop and the tint, which must not show a sharp cover (ruling 20).
+    pub fn get_exact(
+        &mut self,
+        ctx: &Context,
+        image: &str,
+        px: u32,
+        request: impl FnOnce(),
+    ) -> Option<TextureHandle> {
+        let key = (image.to_owned(), px);
+        if let Some((tex, _, used)) = self.textures.get_mut(&key) {
+            *used = ctx.cumulative_pass_nr();
+            return Some(tex.clone());
+        }
+        if self.requested.insert(key) {
+            request();
+        }
+        None
     }
 
     /// The artwork could not be loaded: the next `get` requests it again.
@@ -369,6 +383,25 @@ mod tests {
         c.insert(&ctx, "a".into(), 192, img());
         let exact = c.get(&ctx, "a", 192, || n += 1).map(|t| t.id());
         assert!(exact.is_some() && exact != near, "the 192 px one");
+        assert_eq!(n, 1);
+    }
+
+    /// Ruling 20: the exact lookup never stands another size in, but still asks once.
+    #[test]
+    fn the_exact_size_or_nothing() {
+        let ctx = Context::default();
+        let mut c = TextureCache::new(1 << 20);
+        c.insert(&ctx, "a".into(), 256, img());
+        let mut n = 0;
+        for _ in 0..2 {
+            assert!(
+                c.get_exact(&ctx, "a", 16, || n += 1).is_none(),
+                "not 256 px"
+            );
+        }
+        assert_eq!(n, 1, "16 px asked for once");
+        c.insert(&ctx, "a".into(), 16, img());
+        assert!(c.get_exact(&ctx, "a", 16, || n += 1).is_some());
         assert_eq!(n, 1);
     }
 
