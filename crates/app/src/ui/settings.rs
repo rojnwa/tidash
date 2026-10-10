@@ -12,7 +12,10 @@ use crate::model::{Action, Event, Model, Route};
 use crate::scrobble::Keys;
 use crate::settings::{Account, Audio, Normalization, Settings, Theme, nonblank};
 use crate::theme::{self, Palette};
-use egui::{Response, RichText, Ui, WidgetInfo, WidgetText, WidgetType};
+use egui::{
+    Align, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText, WidgetType,
+    vec2,
+};
 use fastframe_theme::Status;
 use std::borrow::Cow;
 
@@ -78,12 +81,11 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         section(ui, &p, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
         section(ui, &p, tr("Behavior"));
-        check(ui, &mut new.behavior.close_to_tray, &tr("Close to tray"));
+        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
         // Without Close to tray there would be no window to come back to (`starts_hidden`).
-        let start_minimized = &mut new.behavior.start_minimized;
-        ui.add_enabled_ui(new.behavior.close_to_tray, |ui| {
-            check(ui, start_minimized, &tr("Start minimized"));
-        });
+        let start_minimized =
+            egui::Checkbox::new(&mut new.behavior.start_minimized, tr("Start minimized"));
+        ui.add_enabled(new.behavior.close_to_tray, start_minimized);
         ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, &p, tr("Integrations"));
         if state.lastfm {
@@ -94,7 +96,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         }
         if state.discord {
             let toggle = tr("Show what you play in your Discord status");
-            check(ui, &mut new.integrations.discord, &toggle);
+            ui.checkbox(&mut new.integrations.discord, toggle);
             ui.weak(tr("Discord must be running on this computer."));
         }
         section(ui, &p, tr("Keyboard shortcuts"));
@@ -143,23 +145,32 @@ fn section(ui: &mut Ui, p: &Palette, title: Cow<'static, str>) {
     heading(ui, p, &title);
 }
 
-/// A setting's row: `label` on the left, wrapping in the room `control` leaves, and what
-/// `control` adds right-aligned, right to left (the first it adds is the rightmost).
+/// A setting's row (ruling 30), left to right in reading order: `label` in a `SETTINGS_LABEL`
+/// column, cut with "…", then what `controls` adds, wrapping. With less room than that column
+/// and a field, the label stacks above the controls.
 fn row<R>(
     ui: &mut Ui,
     label: impl Into<WidgetText>,
-    control: impl FnOnce(&mut Ui) -> R,
+    controls: impl FnOnce(&mut Ui) -> R,
 ) -> (Response, R) {
-    let sides = egui::Sides::new().shrink_left().wrap();
-    sides.show(ui, |ui| ui.label(label), control)
+    if ui.available_width() < theme::SETTINGS_LABEL + theme::SETTINGS_FIELD {
+        let label = ui.label(label);
+        return (label, ui.horizontal_wrapped(controls).inner);
+    }
+    ui.horizontal(|ui| {
+        let size = vec2(theme::SETTINGS_LABEL, ui.spacing().interact_size.y);
+        let (column, _) = ui.allocate_exact_size(size, Sense::hover());
+        let layout = Layout::left_to_right(Align::Center);
+        let mut column = ui.new_child(UiBuilder::new().max_rect(column).layout(layout));
+        let label = column.add(egui::Label::new(label).truncate());
+        (label, ui.horizontal_wrapped(controls).inner)
+    })
+    .inner
 }
 
-/// A switch's row: `label`, and on the right its checkbox, named after it.
-fn check(ui: &mut Ui, on: &mut bool, label: &str) {
-    row(ui, label, |ui| {
-        let r = ui.add(egui::Checkbox::without_text(on));
-        r.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, r.enabled(), *on, label));
-    });
+/// A one-line field for a row, `SETTINGS_FIELD` wide or the room left.
+fn field(text: &mut String) -> egui::TextEdit<'_> {
+    egui::TextEdit::singleline(text).desired_width(theme::SETTINGS_FIELD)
 }
 
 /// A combo box showing `selected`, its choices drawn by `list`, named `label` for screen
@@ -195,7 +206,6 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
     };
     let title = tr("Theme");
     let (_, open) = row(ui, title.as_ref(), |ui| {
-        let open = ui.button(tr("Open themes folder")).clicked();
         combo(ui, &title, &selected, |ui| {
             // Closed by hand: egui closes it on a pointer's click only, not on Enter, Space
             // or a screen reader's.
@@ -223,7 +233,7 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
                 }
             }
         });
-        open
+        ui.button(tr("Open themes folder")).clicked()
     });
     if let Some(status) = &model.theme_status {
         ui.weak(status_text(
@@ -231,7 +241,7 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
             new.custom_theme.as_deref().unwrap_or_default(),
         ));
     }
-    check(ui, &mut new.accent_from_art, &tr("Colour from album art"));
+    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"));
     open
 }
 
@@ -260,22 +270,22 @@ fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
         (tr("Redirect URL"), &mut state.redirect_uri),
     ];
     for (label, text) in fields {
-        let (label, edit) = row(ui, label, |ui| ui.text_edit_singleline(text));
+        let (label, edit) = row(ui, label, |ui| ui.add(field(text)));
         edit.labelled_by(label.id);
     }
     let typed = Account {
         client_id: nonblank(&state.client_id),
         redirect_uri: nonblank(&state.redirect_uri),
     };
-    let help = tr("Leave empty for the built-in client. Changing it logs you out.");
-    let (_, apply) = row(ui, RichText::new(help).weak(), |ui| {
-        let changed = typed != *account;
-        ui.add_enabled_ui(changed, |ui| pill_button(ui, p, None, &tr("Apply"), true))
-            .inner
+    let apply = ui.add_enabled_ui(typed != *account, |ui| {
+        pill_button(ui, p, None, &tr("Apply"), true)
     });
-    if apply.clicked() {
+    if apply.inner.clicked() {
         *account = typed;
     }
+    ui.weak(tr(
+        "Leave empty for the built-in client. Changing it logs you out.",
+    ));
 }
 
 /// Who Last.fm is connected as, with Disconnect; while a connect waits for the user, Cancel;
@@ -284,12 +294,12 @@ fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
     let user = &model.settings.integrations.lastfm_user;
     let (_, clicked) = row(ui, tr("Last.fm"), |ui| {
         if let Some(user) = user {
-            let disconnect = ui.button(tr("Disconnect")).clicked();
             ui.label(tr("Connected as {user}").replace("{user}", user));
+            let disconnect = ui.button(tr("Disconnect")).clicked();
             disconnect.then_some(Action::DisconnectLastfm)
         } else if model.lastfm_waiting {
-            let cancel = ui.button(tr("Cancel")).clicked();
             ui.label(tr("Waiting for you to allow Tidash on Last.fm…"));
+            let cancel = ui.button(tr("Cancel")).clicked();
             cancel.then_some(Action::CancelLastfm)
         } else {
             let connect = ui.button(tr("Connect")).clicked();
@@ -304,30 +314,35 @@ fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
     clicked
 }
 
-/// Who ListenBrainz is connected as, with Disconnect; or the token field, and Connect beside
-/// what it is for (after the field, so it sees this pass's typing). What was clicked, to send.
+/// Who ListenBrainz is connected as, with Disconnect; or the token field, called "User token",
+/// with Connect. What was clicked, to send.
 fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action> {
     let name = tr("ListenBrainz");
     if let Some(user) = &model.settings.integrations.listenbrainz_user {
         let (_, disconnect) = row(ui, name, |ui| {
-            let disconnect = ui.button(tr("Disconnect")).clicked();
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            disconnect
+            ui.button(tr("Disconnect")).clicked()
         });
         return disconnect.then_some(Action::DisconnectListenBrainz);
     }
-    let field = egui::TextEdit::singleline(&mut state.listenbrainz_token)
-        .password(true)
-        .hint_text(tr("User token"));
-    let (label, field) = row(ui, name, |ui| ui.add(field));
-    field.labelled_by(label.id);
-    let help = tr("Scrobbles what you play. Copy your user token from listenbrainz.org/settings.");
-    let (_, connect) = row(ui, RichText::new(help).weak(), |ui| {
+    let (_, connect) = row(ui, name, |ui| {
+        let hint = tr("User token");
+        let token = field(&mut state.listenbrainz_token)
+            .password(true)
+            .hint_text(hint.as_ref());
+        let token = ui.add(token);
+        // The hint is AccessKit's placeholder, not its name; `widget_info` would also make it
+        // a plain text input.
+        ui.ctx()
+            .accesskit_node_builder(token.id, |node| node.set_label(hint));
         let token = nonblank(&state.listenbrainz_token);
         let button = egui::Button::new(tr("Connect"));
         let clicked = ui.add_enabled(token.is_some(), button).clicked();
         clicked.then_some(token).flatten()
     });
+    ui.weak(tr(
+        "Scrobbles what you play. Copy your user token from listenbrainz.org/settings.",
+    ));
     connect.map(|token| {
         state.listenbrainz_token.clear();
         Action::ConnectListenBrainz(Secret(token))
@@ -348,25 +363,24 @@ fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
             }
         });
     });
-    check(ui, &mut audio.exclusive, &tr("Exclusive mode"));
+    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"));
     ui.weak(tr(
         "Bit-perfect: each track plays at its own sample rate and bit depth, without other \
          apps' sound and without volume control. Falls back to shared mode when the device \
          refuses.",
     ));
-    // Right to left: the last added is the leftmost.
     row(ui, tr("Quality"), |ui| {
-        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
         ui.radio_value(
             &mut audio.hi_res,
             true,
             tr("Hi-Res (up to 24-bit, 192 kHz)"),
         );
+        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
     });
     row(ui, tr("Normalization"), |ui| {
-        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"));
-        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
         ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"));
+        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
+        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"));
     });
 }
 
@@ -384,12 +398,23 @@ mod tests {
         model: &mut Model,
         events: Vec<egui::Event>,
     ) -> (Vec<Action>, egui::FullOutput) {
+        pass_at(ctx, state, model, events, 1000.0)
+    }
+
+    /// `pass` in a window `width` wide, 600 tall.
+    fn pass_at(
+        ctx: &egui::Context,
+        state: &mut UiState,
+        model: &mut Model,
+        events: Vec<egui::Event>,
+        width: f32,
+    ) -> (Vec<Action>, egui::FullOutput) {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let input = egui::RawInput {
             events,
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(1000.0, 600.0),
+                egui::vec2(width, 600.0),
             )),
             ..Default::default()
         };
@@ -657,6 +682,126 @@ mod tests {
         assert_eq!(rescans(&model), 0);
         model.navigate(Route::Settings);
         assert_eq!((rescans(&model), rescans(&model)), (1, 0));
+    }
+
+    /// The AccessKit tree's nodes in `out`.
+    fn nodes(out: &egui::FullOutput) -> &[(egui::accesskit::NodeId, egui::accesskit::Node)] {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        &tree.expect("AccessKit is on").nodes
+    }
+
+    /// Ruling 30: Tab follows the reading order, a row's controls left to right.
+    #[test]
+    fn settings_tab_order_reads_left_to_right() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        let (hi_res, lossless) = (
+            "Hi-Res (up to 24-bit, 192 kHz)",
+            "Lossless (16-bit, 44.1 kHz)",
+        );
+        let ends = ["Open themes folder", lossless];
+        pass(&ctx, &mut state, &mut model, vec![]);
+        // The labels the focus visits, Tab after Tab.
+        let mut order: Vec<String> = Vec::new();
+        for _ in 0..200 {
+            let tab = vec![testing::key(egui::Key::Tab)];
+            let (_, out) = pass(&ctx, &mut state, &mut model, tab);
+            let id = ctx.memory(|m| m.focused()).map(|id| id.accesskit_id());
+            let node = nodes(&out).iter().find(|(n, _)| Some(*n) == id);
+            order.extend(node.and_then(|(_, n)| n.label()).map(str::to_owned));
+            if ends.iter().all(|e| order.iter().any(|l| l == e)) {
+                break;
+            }
+        }
+        let at = |label: &str| {
+            let at = order.iter().position(|l| l == label);
+            at.unwrap_or_else(|| panic!("{label:?} never focused: {order:?}"))
+        };
+        assert!(at("Theme") < at("Open themes folder"), "{order:?}");
+        assert!(at(hi_res) < at(lossless), "{order:?}");
+    }
+
+    /// Review focus 4, ruling 30: at the 960 px minimum with the side panel open at its
+    /// default, every control lies between the sidebar and the side panel, and a label does
+    /// not run into its field.
+    #[test]
+    fn settings_fit_at_960_with_the_side_panel() {
+        use crate::theme::{SIDE_PANEL, SIDEBAR};
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let mut state = UiState {
+            side: Some(crate::ui::Side::Queue),
+            ..Default::default()
+        };
+        let mut model = testing::at(Route::Settings);
+        for _ in 0..2 {
+            pass_at(&ctx, &mut state, &mut model, vec![], 960.0);
+        }
+        let (_, out) = pass_at(&ctx, &mut state, &mut model, vec![], 960.0);
+        let centre = SIDEBAR..=960.0 - SIDE_PANEL;
+        let controls = [
+            "Apply",
+            "Log out",
+            "Theme",
+            "Open themes folder",
+            "Colour from album art",
+            "Output device",
+            "Exclusive mode",
+            "Hi-Res (up to 24-bit, 192 kHz)",
+            "Lossless (16-bit, 44.1 kHz)",
+            "Off",
+            "Track",
+            "Album",
+            "Close to tray",
+            "Start minimized",
+            "Connect",
+        ];
+        for label in controls {
+            let r = testing::bounds(&out, label);
+            let inside = centre.contains(&r.left()) && centre.contains(&r.right());
+            assert!(inside, "{label}: {r:?} outside {centre:?}");
+        }
+        let rect = |n: &egui::accesskit::Node| {
+            let b = n.bounds().expect("placed");
+            let (min, max) = ((b.x0 as f32, b.y0 as f32), (b.x1 as f32, b.y1 as f32));
+            egui::Rect::from_min_max(min.into(), max.into())
+        };
+        for label in ["Client ID", "Redirect URL"] {
+            let text = Some(label);
+            let (id, node) = nodes(&out)
+                .iter()
+                .find(|(_, n)| n.role() == egui::accesskit::Role::Label && n.value() == text)
+                .expect(label);
+            let field = nodes(&out)
+                .iter()
+                .find(|(_, n)| n.labelled_by().contains(id));
+            let (_, field) = field.unwrap_or_else(|| panic!("no field for {label}"));
+            let (label_rect, field_rect) = (rect(node), rect(field));
+            assert!(
+                !label_rect.intersects(field_rect),
+                "{label}: {label_rect:?} {field_rect:?}"
+            );
+            let inside =
+                centre.contains(&field_rect.left()) && centre.contains(&field_rect.right());
+            assert!(inside, "{label}'s field: {field_rect:?} outside {centre:?}");
+        }
+    }
+
+    /// The ListenBrainz field is called what it asks for, and stays a password field.
+    #[test]
+    fn the_token_field_is_called_user_token() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let field = nodes(&out)
+            .iter()
+            .find(|(_, n)| n.label() == Some("User token"));
+        let (_, field) = field.expect("a field called User token");
+        assert_eq!(field.role(), egui::accesskit::Role::PasswordInput);
     }
 
     #[test]

@@ -499,10 +499,14 @@ pub fn draw(
                 .default_size(theme::SIDE_PANEL)
                 .size_range(theme::SIDE_PANEL_MIN..=theme::SIDE_PANEL_MAX)
                 .frame(frame)
-                .show(ui, |ui| match side {
-                    Side::Queue => queue_panel::show(ui, &mut ctx),
-                    Side::Lyrics => lyrics::show(ui, &mut ctx, at),
-                    Side::Credits => credits::show(ui, &mut ctx),
+                .show(ui, |ui| {
+                    // Short content (an empty queue, a spinner) would shrink it to its minimum.
+                    ui.take_available_width();
+                    match side {
+                        Side::Queue => queue_panel::show(ui, &mut ctx),
+                        Side::Lyrics => lyrics::show(ui, &mut ctx, at),
+                        Side::Credits => credits::show(ui, &mut ctx),
+                    }
                 });
         }
     }

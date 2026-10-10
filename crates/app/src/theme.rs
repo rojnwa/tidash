@@ -223,6 +223,9 @@ pub const CARD_CONTROL: f32 = 36.0;
 /// A pill's height.
 pub const PILL: f32 = 40.0;
 pub const SEARCH_W: f32 = 280.0;
+/// Settings' label column (ruling 30), and a text field there at its widest.
+pub const SETTINGS_LABEL: f32 = 180.0;
+pub const SETTINGS_FIELD: f32 = 280.0;
 /// The search pill at its narrowest: its icon and a word. With less room it reaches over the
 /// history pill, never the gear.
 pub const SEARCH_MIN: f32 = 120.0;
