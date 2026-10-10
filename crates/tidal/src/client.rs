@@ -103,6 +103,15 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
+        Ok(self.get_tagged(path, query).await?.0)
+    }
+
+    /// [`Client::get`] and the answer's ETag: on a 304 or cache-only, the saved copy's.
+    pub(crate) async fn get_tagged<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<(T, Option<String>)> {
         self.get_json(path, query, false, true).await
     }
 
@@ -112,7 +121,7 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
-        self.get_json(path, query, true, true).await
+        Ok(self.get_json(path, query, true, true).await?.0)
     }
 
     /// A v1 GET that never reads or writes the cache, for answers that must not be kept
@@ -122,7 +131,7 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
-        self.get_json(path, query, false, false).await
+        Ok(self.get_json(path, query, false, false).await?.0)
     }
 
     /// Writes succeed on any 2xx (TIDAL answers 200 with a body or 204); the body is ignored.
@@ -149,21 +158,15 @@ impl Client {
             .map(drop)
     }
 
-    /// The `ETag` of an uncached v1 GET of `path`, a playlist's write guard (S5). `*` would
-    /// skip TIDAL's check and `""` always fails it, so neither counts.
-    pub(crate) async fn etag(&self, path: &str) -> Result<String> {
+    /// The `ETag` of an uncached v1 GET of `path`, if it has one.
+    pub(crate) async fn etag(&self, path: &str) -> Result<Option<String>> {
         let url = self.url(path, &[], false)?;
         let resp = self.request(Method::GET, &url, None, false, None).await?;
-        resp.headers()
+        Ok(resp
+            .headers()
             .get(ETAG)
             .and_then(|v| v.to_str().ok())
-            .filter(|e| !matches!(*e, "" | "*" | "\"\""))
-            .map(str::to_owned)
-            .ok_or_else(|| Error::Status {
-                status: resp.status().as_u16(),
-                sub_status: None,
-                message: "no playlist ETag".into(),
-            })
+            .map(str::to_owned))
     }
 
     /// An openapi JSON:API request with `countryCode` only and one `Idempotency-Key` for all
@@ -193,14 +196,14 @@ impl Client {
 
     /// A GET through the cache (if `use_cache`), keyed by user and full URL (never the token).
     /// A cached ETag goes out as `If-None-Match` and a 304 serves the cached body; a 200
-    /// replaces it.
+    /// replaces it. With the ETag of what it returns.
     async fn get_json<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
         v2: bool,
         use_cache: bool,
-    ) -> Result<T> {
+    ) -> Result<(T, Option<String>)> {
         let url = self.url(path, query, v2)?;
         let key = format!("{} {url}", self.session().user_id);
         let cache = self.inner.cache.clone().filter(|_| use_cache);
@@ -218,15 +221,15 @@ impl Client {
         let cached =
             cached.and_then(|e| Some((e.etag, serde_json::from_slice::<T>(&e.body).ok()?)));
         if self.cache_only {
-            return cached.map(|(_, v)| v).ok_or(Error::NotCached);
+            return cached.map(|(etag, v)| (v, etag)).ok_or(Error::NotCached);
         }
         let etag = cached.as_ref().and_then(|(etag, _)| etag.as_deref());
         let resp = self.request(Method::GET, &url, None, v2, etag).await?;
         let status = resp.status();
         if status == StatusCode::NOT_MODIFIED
-            && let Some((_, v)) = cached
+            && let Some((etag, v)) = cached
         {
-            return Ok(v); // `read` marked it used
+            return Ok((v, etag)); // `read` marked it used
         }
         let etag = resp
             .headers()
@@ -240,10 +243,13 @@ impl Client {
         {
             // Best-effort: a failed write leaves the old copy, none, or this body under the old
             // ETag (revalidated with a 200, never a 304). Writes of one key never interleave.
-            let entry = Entry { etag, body };
+            let entry = Entry {
+                etag: etag.clone(),
+                body,
+            };
             let _ = tokio::task::spawn_blocking(move || c.write(&key, &entry)).await;
         }
-        Ok(value)
+        Ok((value, etag))
     }
 
     /// A v1 or v2 write; `etag` goes out as `If-None-Match` (a playlist item write's guard).

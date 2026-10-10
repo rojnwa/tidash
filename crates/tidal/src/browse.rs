@@ -67,6 +67,18 @@ pub struct ArtistPage {
     pub shelves: Vec<Shelf>,
 }
 
+/// A playlist's tracks, ready for editing.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PlaylistItems {
+    pub tracks: Vec<Track>,
+    /// Each track's 0-based position in the whole list, as item writes address them (S5);
+    /// videos and broken tracks are skipped but counted.
+    pub positions: Vec<u32>,
+    /// The listing's ETag (its first page's), the guard for edits by position; `None` if
+    /// TIDAL sent none.
+    pub etag: Option<String>,
+}
+
 /// One page of a v1 list.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Paged<T> {
@@ -189,26 +201,30 @@ impl Client {
         self.get(&format!("playlists/{uuid}"), &[]).await
     }
 
-    /// Its tracks in playlist order, and the 0-based position of each in the whole list, as
-    /// the item writes address them (S5). Videos and broken tracks are skipped but counted.
+    /// Its tracks in playlist order, with their positions and the listing's ETag for edits.
     // ponytail: positions count the items received; if TIDAL drops unavailable ones from a
     // page, as it does in favorites (S4), later positions shift. Anchor each page at its offset then.
-    pub async fn playlist_items(&self, uuid: &str) -> Result<(Vec<Track>, Vec<u32>)> {
+    pub async fn playlist_items(&self, uuid: &str) -> Result<PlaylistItems> {
         let query = [
             ("order", "INDEX".to_owned()),
             ("orderDirection", "ASC".to_owned()),
         ];
-        let items: Vec<Value> = self
-            .paged_all(&format!("playlists/{uuid}/items"), &query, 100)
+        let (items, etag): (Vec<Value>, _) = self
+            .paged_all_tagged(&format!("playlists/{uuid}/items"), &query, 100)
             .await?;
-        Ok(items
+        let (tracks, positions) = items
             .into_iter()
             .zip(0..)
             .filter_map(|(e, i)| match typed(e) {
                 Some(Item::Track(t)) => Some((t, i)),
                 _ => None,
             })
-            .unzip())
+            .unzip();
+        Ok(PlaylistItems {
+            tracks,
+            positions,
+            etag,
+        })
     }
 
     /// The mix and all its tracks, from one request: `pages/mix` embeds them all (S4).
@@ -239,11 +255,23 @@ impl Client {
         query: &[(&'static str, String)],
         limit: usize,
     ) -> Result<Vec<T>> {
-        let first: Paged<T> = self.get(path, &page_query(query, limit, 0)).await?;
+        Ok(self.paged_all_tagged(path, query, limit).await?.0)
+    }
+
+    /// [`Client::paged_all`] and the first page's ETag. That page is fetched before the
+    /// others, so its ETag is the oldest: a change while paging only makes it stale.
+    pub(crate) async fn paged_all_tagged<T: DeserializeOwned + Send + 'static>(
+        &self,
+        path: &str,
+        query: &[(&'static str, String)],
+        limit: usize,
+    ) -> Result<(Vec<T>, Option<String>)> {
+        let (first, etag): (Paged<T>, _) =
+            self.get_tagged(path, &page_query(query, limit, 0)).await?;
         let mut items = first.items;
         let rest = (limit..first.total).step_by(limit);
         items.extend(self.pages_at(path, query, limit, rest).await?);
-        Ok(items)
+        Ok((items, etag))
     }
 
     /// The pages of `path` at `offsets`, concurrently on clones of the client; items in

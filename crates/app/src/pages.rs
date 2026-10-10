@@ -24,10 +24,12 @@ pub async fn fetch(c: &Client, route: &Route) -> tidal::Result<PageData> {
         }
         Route::Artist(id) => PageData::Artist(c.artist_page(*id).await?),
         Route::Playlist(uuid) => {
-            // Task 7 keeps the positions for editing.
-            let (playlist, (tracks, _)) =
-                tokio::try_join!(c.playlist(uuid), c.playlist_items(uuid))?;
-            PageData::Playlist { playlist, tracks }
+            // Task 7 keeps the positions and the ETag for editing.
+            let (playlist, items) = tokio::try_join!(c.playlist(uuid), c.playlist_items(uuid))?;
+            PageData::Playlist {
+                playlist,
+                tracks: items.tracks,
+            }
         }
         Route::Mix(id) => {
             let (mix, tracks) = c.mix(id).await?;

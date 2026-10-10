@@ -17,7 +17,7 @@ mod playback;
 mod store;
 
 pub use auth::{Pkce, Session, authorize_url, code_from_redirect, exchange_code, refresh};
-pub use browse::{ArtistPage, Item, Layout, More, Page, Paged, Shelf};
+pub use browse::{ArtistPage, Item, Layout, More, Page, Paged, PlaylistItems, Shelf};
 pub use cache::{DiskCache, Entry};
 pub use catalog::{Album, AlbumRef, Artist, Mix, Mixes, Playlist, SearchResults, Track};
 pub use client::Client;

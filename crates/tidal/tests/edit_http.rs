@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tidal::{Client, ClientConfig, Error, FolderItem, MemoryStore, Session};
+use tidal::{Client, ClientConfig, DiskCache, Error, FolderItem, MemoryStore, Session};
 use wiremock::matchers::{
     body_json, body_string, header, header_exists, method, path, query_param,
     query_param_is_missing,
@@ -23,6 +23,10 @@ const FOLDERS: &str = "/v2/my-collection/playlists/folders";
 const JSON_API: &str = "application/vnd.api+json";
 
 fn setup(server: &MockServer) -> Client {
+    client_with(server, None)
+}
+
+fn client_with(server: &MockServer, cache: Option<Arc<DiskCache>>) -> Client {
     let url = |p: &str| format!("{}/{p}", server.uri()).parse().unwrap();
     let cfg = ClientConfig {
         api_base: url("v1/"),
@@ -38,7 +42,7 @@ fn setup(server: &MockServer) -> Client {
         user_id: 12345,
         country_code: "US".into(),
     };
-    Client::new(cfg, session, Arc::new(MemoryStore::default()), None).unwrap()
+    Client::new(cfg, session, Arc::new(MemoryStore::default()), cache).unwrap()
 }
 
 fn json_body(body: &str) -> ResponseTemplate {
@@ -184,27 +188,49 @@ async fn add_gives_up_after_one_retry() {
     ));
 }
 
-/// `*` would skip TIDAL's check and `""` always fails it (S5): neither is sent.
+/// `*` would skip TIDAL's check and `""` always fails it (S5): neither is sent, whether the
+/// GET gave it (add) or the caller did (remove, move).
 #[tokio::test]
 async fn a_wildcard_or_empty_etag_is_never_sent() {
-    for etag in ["*", "\"\""] {
+    for etag in ["*", "\"\"", ""] {
         let server = MockServer::start().await;
         mock_etag(&server, etag, 1).await;
-        assert!(setup(&server).add_to_playlist(UUID, &[1]).await.is_err());
+        let client = setup(&server);
+        assert!(client.add_to_playlist(UUID, &[1]).await.is_err());
+        assert!(client.remove_from_playlist(UUID, etag, &[0]).await.is_err());
+        assert!(client.move_in_playlist(UUID, etag, 0, 2).await.is_err());
         assert_eq!(server.received_requests().await.unwrap().len(), 1, "{etag}");
     }
+}
+
+/// The page's positions belong to the listing it came from: a fresh ETag would let a stale
+/// position through, and remove whatever now sits there.
+#[tokio::test]
+async fn remove_uses_the_listing_etag_not_a_fresh_one() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/playlists/{UUID}")))
+        .respond_with(ResponseTemplate::new(200).insert_header("etag", "\"L1\""))
+        .expect(0)
+        .mount(&server)
+        .await;
+    once(item_write("DELETE", "/1", "\"L0\""), stale_etag(), &server).await;
+    let err = setup(&server)
+        .remove_from_playlist(UUID, "\"L0\"", &[1])
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Status { status: 412, .. }));
 }
 
 #[tokio::test]
 async fn remove_sends_positions_in_index_order() {
     let server = MockServer::start().await;
-    mock_etag(&server, "\"100\"", 1).await;
     let mock = item_write("DELETE", "/0,2", "\"100\"")
         .and(query_param("order", "INDEX"))
         .and(query_param("orderDirection", "ASC"));
     once(mock, ResponseTemplate::new(200), &server).await;
     setup(&server)
-        .remove_from_playlist(UUID, &[0, 2])
+        .remove_from_playlist(UUID, "\"100\"", &[0, 2])
         .await
         .unwrap();
 }
@@ -212,10 +238,9 @@ async fn remove_sends_positions_in_index_order() {
 #[tokio::test]
 async fn remove_on_412_is_not_retried() {
     let server = MockServer::start().await;
-    mock_etag(&server, "\"100\"", 1).await;
     once(item_write("DELETE", "/1", "\"100\""), stale_etag(), &server).await;
     let err = setup(&server)
-        .remove_from_playlist(UUID, &[1])
+        .remove_from_playlist(UUID, "\"100\"", &[1])
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Status { status: 412, .. }));
@@ -224,7 +249,6 @@ async fn remove_on_412_is_not_retried() {
 #[tokio::test]
 async fn move_sends_index_after_removal() {
     let server = MockServer::start().await;
-    mock_etag(&server, "\"100\"", 2).await;
     for (from, to_index) in [(0, 2), (2, 0)] {
         let mock = item_write("POST", &format!("/{from}"), "\"100\"")
             .and(header("content-type", "application/x-www-form-urlencoded"))
@@ -232,8 +256,25 @@ async fn move_sends_index_after_removal() {
         once(mock, ResponseTemplate::new(200), &server).await;
     }
     let client = setup(&server);
-    client.move_in_playlist(UUID, 0, 3).await.unwrap();
-    client.move_in_playlist(UUID, 2, 0).await.unwrap();
+    client
+        .move_in_playlist(UUID, "\"100\"", 0, 3)
+        .await
+        .unwrap();
+    client
+        .move_in_playlist(UUID, "\"100\"", 2, 0)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn move_on_412_is_not_retried() {
+    let server = MockServer::start().await;
+    once(item_write("POST", "/0", "\"100\""), stale_etag(), &server).await;
+    let err = setup(&server)
+        .move_in_playlist(UUID, "\"100\"", 0, 2)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, Error::Status { status: 412, .. }));
 }
 
 #[tokio::test]
@@ -249,10 +290,54 @@ async fn playlist_items_keep_positions_past_videos() {
         .expect(1)
         .mount(&server)
         .await;
-    let (tracks, positions) = setup(&server).playlist_items("p").await.unwrap();
-    let ids: Vec<u64> = tracks.iter().map(|t| t.id).collect();
+    let items = setup(&server).playlist_items("p").await.unwrap();
+    let ids: Vec<u64> = items.tracks.iter().map(|t| t.id).collect();
     assert_eq!(ids, [10582679, 555115]);
-    assert_eq!(positions, [0, 2]);
+    assert_eq!(items.positions, [0, 2]);
+    assert_eq!(items.etag, None, "TIDAL sent none");
+}
+
+/// The first page's ETag: from a 200, then the saved copy's on a 304 and when cache-only.
+#[tokio::test]
+async fn playlist_items_return_the_listing_etag() {
+    let server = MockServer::start().await;
+    let items = |offset: usize| {
+        Mock::given(method("GET"))
+            .and(path("/v1/playlists/p/items"))
+            .and(query_param("offset", offset.to_string()))
+    };
+    // Mounted first, so it answers the revalidation; its 304 carries no ETag.
+    once(
+        items(0).and(header("if-none-match", "\"L0\"")),
+        ResponseTemplate::new(304),
+        &server,
+    )
+    .await;
+    let mut first: Value = serde_json::from_str(PLAYLIST_ITEMS).unwrap();
+    first["totalNumberOfItems"] = 101.into();
+    let first = ResponseTemplate::new(200)
+        .insert_header("etag", "\"L0\"")
+        .set_body_json(first);
+    once(items(0), first, &server).await;
+    // A later page has its own ETag (the playlist changed while paging): the first one stays.
+    let rest = json!({"limit": 100, "offset": 100, "totalNumberOfItems": 101, "items": []});
+    let rest = ResponseTemplate::new(200)
+        .insert_header("etag", "\"L1\"")
+        .set_body_json(rest);
+    items(100).respond_with(rest).expect(2).mount(&server).await;
+    let dir = std::env::temp_dir()
+        .join("tidal-edit-http")
+        .join("listing-etag");
+    let _ = std::fs::remove_dir_all(&dir);
+    let cache = Arc::new(DiskCache::open(dir, 1 << 20, "json").unwrap());
+    let client = client_with(&server, Some(cache));
+    let fresh = client.playlist_items("p").await.unwrap();
+    assert_eq!(fresh.etag.as_deref(), Some("\"L0\""));
+    assert_eq!(fresh.tracks.len(), 3);
+    let revalidated = client.playlist_items("p").await.unwrap();
+    assert_eq!(revalidated, fresh);
+    let offline = client.cache_only().playlist_items("p").await.unwrap();
+    assert_eq!(offline.etag.as_deref(), Some("\"L0\""));
 }
 
 #[tokio::test]

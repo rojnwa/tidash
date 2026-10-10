@@ -115,7 +115,7 @@ impl Client {
                 ("onDupes", "SKIP".to_owned()),
                 ("trackIds", csv(ids)),
             ];
-            let add = || self.item_write(uuid, Method::POST, "", &[], Some(&form));
+            let add = || self.add_once(uuid, &form);
             let resp = match add().await {
                 Err(Error::Status { status: 412, .. }) => add().await?,
                 resp => resp?,
@@ -126,9 +126,15 @@ impl Client {
         Ok(added)
     }
 
-    /// Removes the items at `positions`, from [`Client::playlist_items`]. A stale ETag (412)
-    /// is returned, not retried: the positions may be stale too.
-    pub async fn remove_from_playlist(&self, uuid: &str, positions: &[u32]) -> Result<()> {
+    /// Removes the items at `positions`, both from one [`Client::playlist_items`], behind its
+    /// `etag`: a fresh ETag would let positions from an older listing hit other tracks. A 412
+    /// (the playlist changed since) is returned, not retried.
+    pub async fn remove_from_playlist(
+        &self,
+        uuid: &str,
+        etag: &str,
+        positions: &[u32],
+    ) -> Result<()> {
         if positions.is_empty() {
             return Ok(());
         }
@@ -137,18 +143,19 @@ impl Client {
             ("orderDirection", "ASC".to_owned()),
         ];
         let rest = format!("/{}", csv(positions));
-        self.item_write(uuid, Method::DELETE, &rest, &query, None)
+        self.item_write(uuid, etag, Method::DELETE, &rest, &query, None)
             .await
             .map(drop)
     }
 
     /// Moves the item at position `from` to the slot `to` (`0..=len`, counted before the
-    /// move). TIDAL's `toIndex` is the position once the item is out (S5). A 412 is returned.
-    pub async fn move_in_playlist(&self, uuid: &str, from: u32, to: u32) -> Result<()> {
+    /// move), behind the listing's `etag` as for a remove. TIDAL's `toIndex` is the position
+    /// once the item is out (S5). A 412 is returned, not retried.
+    pub async fn move_in_playlist(&self, uuid: &str, etag: &str, from: u32, to: u32) -> Result<()> {
         let to_index = if to > from { to - 1 } else { to };
         let form = [("toIndex", to_index.to_string())];
         let rest = format!("/{from}");
-        self.item_write(uuid, Method::POST, &rest, &[], Some(&form))
+        self.item_write(uuid, etag, Method::POST, &rest, &[], Some(&form))
             .await
             .map(drop)
     }
@@ -205,18 +212,35 @@ impl Client {
         Ok(())
     }
 
-    /// A v1 write to `playlists/{uuid}/items{rest}` behind the playlist's current ETag.
+    /// An add behind a freshly taken ETag: appends address no positions.
+    async fn add_once(&self, uuid: &str, form: &[(&str, String)]) -> Result<reqwest::Response> {
+        let etag = self.etag(&format!("playlists/{uuid}")).await?;
+        // None is refused below, like `""`.
+        let etag = etag.unwrap_or_default();
+        self.item_write(uuid, &etag, Method::POST, "", &[], Some(form))
+            .await
+    }
+
+    /// A v1 write to `playlists/{uuid}/items{rest}` behind `etag`. `*` would skip TIDAL's
+    /// check and `""` always fails it (S5), so neither is sent.
     async fn item_write(
         &self,
         uuid: &str,
+        etag: &str,
         method: Method,
         rest: &str,
         query: &[(&str, String)],
         form: Option<&[(&str, String)]>,
     ) -> Result<reqwest::Response> {
-        let etag = self.etag(&format!("playlists/{uuid}")).await?;
+        if matches!(etag, "" | "*" | "\"\"") {
+            return Err(Error::Status {
+                status: 0,
+                sub_status: None,
+                message: "no playlist ETag".into(),
+            });
+        }
         let path = format!("playlists/{uuid}/items{rest}");
-        self.write(method, &path, query, form, false, Some(&etag))
+        self.write(method, &path, query, form, false, Some(etag))
             .await
     }
 }
