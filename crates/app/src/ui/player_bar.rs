@@ -10,10 +10,11 @@ use crate::model::{Action, Model, OutputInfo};
 use crate::queue::Repeat;
 use crate::theme::{self, ICON_BUTTON, Icon, PLAY_GLYPH, Palette, SKIP_GLYPH, TRANSPORT, Tier};
 use egui::{
-    Align, Color32, Frame, Label, Layout, Panel, Rect, RichText, Slider, Stroke, Ui, UiBuilder,
-    Vec2, pos2, vec2,
+    Align, Color32, Frame, Label, Layout, Panel, Rect, Response, RichText, Slider, Stroke, Ui,
+    UiBuilder, Vec2, pos2, vec2,
 };
 use player::{PlayState, Player};
+use std::ops::RangeInclusive;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -90,7 +91,7 @@ fn child(ui: &mut Ui, rect: Rect, layout: Layout) -> Ui {
 }
 
 /// The cover, and beside it the title in `label()` over the artists in `small()`
-/// `secondary`, each cut to the column.
+/// `secondary`, each cut to the column. Nothing without a track.
 fn now_playing(
     ui: &mut Ui,
     p: &Palette,
@@ -99,11 +100,10 @@ fn now_playing(
     track: Option<&tidal::Track>,
     rect: Rect,
 ) {
+    let Some(t) = track else { return };
     let size = Vec2::splat(theme::PLAYER_COVER);
     let art = Rect::from_min_size(pos2(rect.left(), rect.center().y - size.y / 2.0), size);
-    let image = track.and_then(|t| t.album.image());
-    cover(ui, images, tx, image.as_ref(), art, theme::R_ART);
-    let Some(t) = track else { return };
+    cover(ui, images, tx, t.album.image().as_ref(), art, theme::R_ART);
     let x = art.right() + theme::COL_GAP;
     let width = rect.right() - x;
     let title = widgets::line(ui, &t.title, theme::label(), p.text, width);
@@ -200,9 +200,10 @@ fn transport(
     let mut at = state.seek.unwrap_or(pos);
     time(row, at, Layout::right_to_left(Align::Center));
     row.spacing_mut().slider_width = (seek.width() - 2.0 * (theme::TIME_COL + gap)).max(0.0);
-    row.visuals_mut().selection.bg_fill = p.text; // the played part (spec §4.6)
-    let slider = Slider::new(&mut at, 0.0..=duration.max(1.0)).show_value(false);
-    let seek = row.add_enabled(has, slider);
+    let range = 0.0..=duration.max(1.0);
+    let seek = row
+        .add_enabled_ui(has, |ui| slider(ui, p, &mut at, range))
+        .inner;
     if seek.dragged() {
         state.seek = Some(at);
     } else if seek.drag_stopped() || seek.changed() {
@@ -264,10 +265,8 @@ fn extras(
         let speaker = ui.add_sized(Vec2::splat(ICON_BUTTON), image);
         let speaker = speaker.on_hover_text(label);
         ui.spacing_mut().slider_width = VOLUME;
-        ui.visuals_mut().selection.bg_fill = p.text;
         let mut volume = pb.volume;
-        let slider = ui.add(Slider::new(&mut volume, 0.0..=1.0).show_value(false));
-        if slider
+        if slider(ui, p, &mut volume, 0.0..=1.0)
             .labelled_by(speaker.id)
             .on_disabled_hover_text(tr("Volume is fixed in exclusive mode"))
             .changed()
@@ -275,6 +274,37 @@ fn extras(
             let _ = tx.send(Action::SetVolume(volume));
         }
     });
+}
+
+/// egui's `Slider` over `range` (its keys, its AccessKit node), as TIDAL's (spec §5.7): the rail
+/// `surface_active`, `text` up to the value, there a `text` knob with no stroke, faded with
+/// the rest when disabled. The row is a line of body text tall; egui's knob, 2/5 of it.
+fn slider(ui: &mut Ui, p: &Palette, value: &mut f32, range: RangeInclusive<f32>) -> Response {
+    ui.scope(|ui| {
+        let s = ui.style_mut();
+        s.spacing.interact_size.y = 0.0;
+        s.visuals.selection.bg_fill = p.text; // the played part (spec §4.6)
+        let w = &mut s.visuals.widgets;
+        w.inactive.bg_fill = p.surface_active; // the rail, and egui's knob at rest
+        for state in [
+            &mut w.noninteractive,
+            &mut w.inactive,
+            &mut w.hovered,
+            &mut w.active,
+        ] {
+            state.fg_stroke = Stroke::NONE;
+        }
+        let ends = *range.start()..=*range.end();
+        let r = ui.add(Slider::new(value, range).show_value(false));
+        // Over egui's knob, where egui puts it: its rest colour is the rail's.
+        let t = egui::remap_clamp(*value, ends, 0.0..=1.0);
+        let radius = r.rect.height() / 2.5;
+        let x = r.rect.x_range().shrink(radius);
+        let at = pos2(egui::lerp(x.min..=x.max, t), r.rect.center().y);
+        ui.painter().circle_filled(at, radius, p.text);
+        r
+    })
+    .inner
 }
 
 /// A rate in kHz, with no trailing ".0": "44.1", "96".
@@ -532,6 +562,42 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The seek and volume knobs are small discs with no stroke, playing or not (the seek
+    /// slider disabled then).
+    #[test]
+    fn slider_knobs_are_small() {
+        let ctx = testing::context();
+        theme::apply(&ctx, &Palette::dark()); // the knob shape and sizes
+        let mut model = Model::default();
+        for track in [Some(testing::track(1)), None] {
+            model.playback.track = track;
+            let out = bar(&ctx, &model, 1000.0);
+            let knobs: Vec<_> = (out.shapes.iter())
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Circle(c) => Some(c),
+                    _ => None,
+                })
+                .collect();
+            assert!(knobs.len() >= 2, "{knobs:?}");
+            for k in knobs {
+                assert!(k.radius <= 7.0 && k.stroke.is_empty(), "{k:?}");
+            }
+        }
+    }
+
+    /// Nothing playing, the left column is empty: no cover placeholder.
+    #[test]
+    fn no_track_no_cover() {
+        let ctx = testing::context();
+        let out = bar(&ctx, &Model::default(), 1000.0);
+        let cover = Vec2::splat(theme::PLAYER_COVER);
+        let placeholder = out.shapes.iter().any(|s| match &s.shape {
+            egui::Shape::Rect(r) => r.rect.size() == cover,
+            _ => false,
+        });
+        assert!(!placeholder);
     }
 
     #[test]

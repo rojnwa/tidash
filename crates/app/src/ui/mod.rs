@@ -1,5 +1,5 @@
-//! Drawing: the player bar, the sidebar and the side panel; then the top bar, dismissible
-//! errors under it, and the current route.
+//! Drawing: the player bar, the sidebar and the side panel; then dismissible errors under the
+//! top bar's place, the current route, and the top bar over it.
 
 mod album;
 mod artist;
@@ -166,20 +166,44 @@ impl Ctx<'_> {
 
 /// A route's one vertical scroll; each route keeps its own offset, and the ids inside (a
 /// shelf's sideways offset, say) are the route's own: egui does not salt them by the scroll's.
+/// Right under the top bar, with nothing between (`draw`), it runs behind the bar (spec §5.3):
+/// from the bar's top, its content a bar's height down; scrolled, it fills the bar `window`
+/// (egui's panel fill), under the controls `draw` puts over it next.
 pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let bar = ui.data(|d| d.get_temp::<Option<egui::Rect>>(bar_id()).flatten());
+    let bar = bar.filter(|b| ui.cursor().top() <= b.bottom());
+    let mut rect = ui.available_rect_before_wrap();
+    if let Some(b) = bar {
+        rect.min.y = b.top();
+    }
+    let inset = bar.map_or(0.0, |b| b.height());
     let speed = ui.ctx().data(|d| d.get_temp::<f32>(autoscroll_id()));
     let step = speed.map(|v| v * ui.input(|i| i.stable_dt));
-    let out = egui::ScrollArea::vertical()
+    let scroll = egui::ScrollArea::vertical()
         .id_salt(("page", route))
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
+        .auto_shrink([false, false]);
+    let out = ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        scroll.show(ui, |ui| {
             if let Some(step) = step {
                 let animation = egui::style::ScrollAnimation::none();
                 ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
                 ui.ctx().request_repaint();
             }
-            padded(ui, |ui| ui.push_id(route, f).inner)
-        });
+            padded(ui, |ui| {
+                ui.push_id(route, |ui| {
+                    ui.add_space(inset);
+                    f(ui)
+                })
+                .inner
+            })
+        })
+    });
+    let out = out.inner;
+    if let Some(b) = bar.filter(|_| out.state.offset.y > 0.0) {
+        // Not over the scroll bar beside it.
+        let fill = b.with_max_x(out.inner_rect.right());
+        ui.painter().rect_filled(fill, 0.0, ui.visuals().panel_fill);
+    }
     if let (Some(v), Some(step)) = (speed, step) {
         // This step lands next pass; turn round now if it reaches an end (give or take float
         // error), so no pass stands still there.
@@ -201,6 +225,16 @@ fn padded<R>(ui: &mut egui::Ui, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
 
 fn autoscroll_id() -> egui::Id {
     egui::Id::new("autoscroll")
+}
+
+/// Where `draw` keeps the top bar this pass (an `Option<Rect>`, none logged out), for `page`.
+fn bar_id() -> egui::Id {
+    egui::Id::new("top bar")
+}
+
+/// `MODULE_GAP` to the next module, the item spacing after the last one included.
+fn gap(ui: &mut egui::Ui) {
+    ui.add_space(theme::MODULE_GAP - ui.spacing().item_spacing.y);
 }
 
 /// `TIDASH_AUTOSCROLL`: the current page scrolls `speed` points a second down (up if
@@ -533,11 +567,18 @@ pub fn draw(
             let from = theme::blend(palette.window, t, 0.35);
             widgets::vertical_gradient(ui.painter(), top, from, palette.window);
         }
-        if model.logged_in {
-            top_bar::show(ui, &mut ctx, &mut state.search);
-        } else {
+        // The top bar's place, then the notices under it; the bar itself comes last, over the
+        // page (`page` runs behind it).
+        let bar = model.logged_in.then(|| {
+            let bar = ui.available_rect_before_wrap();
+            ui.add_space(theme::TOP_BAR);
+            top_bar::notices(ui, &mut ctx);
+            bar.with_max_y(bar.top() + theme::TOP_BAR)
+        });
+        if bar.is_none() {
             ui.add_space(theme::PAGE_PAD);
         }
+        ui.data_mut(|d| d.insert_temp(bar_id(), bar));
         match route {
             Route::Login => login::show(ui, &mut ctx, &mut state.login),
             Route::Search => search::show(ui, &mut ctx),
@@ -548,6 +589,9 @@ pub fn draw(
             Route::Mix(_) => mix::show(ui, &mut ctx, route),
             Route::Collection(_) => collection::show(ui, &mut ctx, route),
             Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
+        }
+        if let Some(bar) = bar {
+            top_bar::show(ui, &mut ctx, &mut state.search, bar);
         }
     });
     state.transition.paint(ui.ctx()); // over everything

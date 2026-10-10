@@ -20,7 +20,7 @@ pub fn shelves(ui: &mut egui::Ui, shelves: &[Shelf], ctx: &mut Ctx) {
 }
 
 fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
-    ui.add_space(theme::MODULE_GAP);
+    super::gap(ui);
     let cards = s.layout == Layout::Cards;
     // An untitled shelf without "View all" or a row of cards to page has no heading row.
     let pages = if !s.title.is_empty() || s.more.is_some() || cards {
@@ -256,6 +256,34 @@ mod tests {
             (moved - width).abs() <= CARD_GAP + 0.5,
             "{moved} for {width}"
         );
+    }
+
+    /// From the first shelf's cards to the second's heading row (its ‹ › buttons fill it):
+    /// `MODULE_GAP`.
+    #[test]
+    fn modules_are_module_gap_apart() {
+        let egui = context();
+        egui.enable_accesskit();
+        crate::theme::apply(&egui, &crate::theme::Palette::dark()); // its item spacing
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let old = Shelf {
+            title: "Old".into(),
+            items: (4..=6).map(|i| Item::Album(album(i))).collect(),
+            ..rail(0)
+        };
+        let (model, shelves) = (at(Route::Home), [rail(3), old]);
+        let (_, out) = pass_with(&egui, &tx, &model, vec![], |ui, ctx| {
+            super::shelves(ui, &shelves, ctx);
+        });
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let second = (nodes.iter())
+            .filter(|(_, n)| n.label() == Some("Scroll left"))
+            .filter_map(|(_, n)| n.bounds().map(|b| b.y0 as f32))
+            .reduce(f32::max)
+            .expect("two shelves");
+        let gap = second - card(&out, 1).bottom();
+        assert!((gap - crate::theme::MODULE_GAP).abs() < 0.5, "{gap}");
     }
 
     #[test]
