@@ -544,3 +544,51 @@ msgstr ""
 #: src/ui/tracks.rs
 msgid "Remove from this playlist"
 msgstr ""
+
+#: src/scrobble.rs
+msgid "The token could not be stored"
+msgstr ""
+
+#: src/scrobble.rs
+msgid "ListenBrainz did not accept that token."
+msgstr ""
+
+#: src/scrobble.rs
+msgid "ListenBrainz could not be reached. Try again later."
+msgstr ""
+
+#: src/backend.rs
+msgid "ListenBrainz refused the token. Connect again in Settings."
+msgstr ""
+
+#: src/backend.rs
+msgid "ListenBrainz could not be disconnected"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Integrations"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "ListenBrainz"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Connected as {user}"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Disconnect"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "User token"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Connect"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Scrobbles what you play. Copy your user token from listenbrainz.org/settings."
+msgstr ""

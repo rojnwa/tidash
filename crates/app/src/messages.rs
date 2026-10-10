@@ -14,6 +14,16 @@ impl std::fmt::Debug for Redirect {
     }
 }
 
+/// A token as the user typed it: `Debug` hides it.
+#[derive(Clone)]
+pub struct Secret(pub String);
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Action {
     BeginLogin,
@@ -69,6 +79,11 @@ pub enum Action {
     EditPlaylist(PlaylistEdit),
     /// Lists this folder for the library tree (`Event::Folder`).
     LoadFolder(String),
+    /// Checks this ListenBrainz user token, then keeps it and sets the user in the settings;
+    /// a token refused is an `Error`.
+    ConnectListenBrainz(Secret),
+    /// Forgets the token, the user, and the listens still queued for ListenBrainz.
+    DisconnectListenBrainz,
 }
 
 /// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
@@ -219,5 +234,7 @@ mod tests {
             "https://tidal.com/android/login/auth?code=SECRET123&state=s".into(),
         ));
         assert!(!format!("{a:?}").contains("SECRET123"));
+        let a = Action::ConnectListenBrainz(Secret("SECRET456".into()));
+        assert!(!format!("{a:?}").contains("SECRET456"));
     }
 }

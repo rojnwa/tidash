@@ -1,5 +1,5 @@
 //! The user's settings, saved as JSON in the config dir: the audio output and the streams,
-//! the theme, and the TIDAL client.
+//! the theme, the TIDAL client, and the integrations.
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
@@ -11,6 +11,15 @@ pub struct Settings {
     pub audio: Audio,
     pub theme: Theme,
     pub account: Account,
+    pub integrations: Integrations,
+}
+
+/// Who each scrobbling service is connected as; its secret is in the credential store, never
+/// here. The backend sets these, on a connect, a disconnect, or a refused token.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Integrations {
+    pub listenbrainz_user: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,18 +96,9 @@ impl Settings {
         })
     }
 
-    /// Writes a `.tmp` beside `path` through to the disk, then renames it over: a crash leaves
-    /// the old file whole. Blocks.
+    /// Saved as `write_atomic` writes. Blocks.
     pub fn save(&self, path: &Path) -> io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let tmp = path.with_extension("tmp");
-        let mut file = std::fs::File::create(&tmp)?;
-        file.write_all(&serde_json::to_vec_pretty(self)?)?;
-        file.sync_all()?;
-        drop(file); // closed before it is renamed
-        std::fs::rename(&tmp, path)
+        write_atomic(path, &serde_json::to_vec_pretty(self)?)
     }
 
     /// The built-in client config with the account's overrides.
@@ -113,6 +113,20 @@ impl Settings {
         }
         cfg
     }
+}
+
+/// Writes `bytes` to a `.tmp` beside `path` through to the disk, then renames it over: a crash
+/// leaves the old file whole. Creates the directory. Blocks.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("tmp");
+    let mut file = std::fs::File::create(&tmp)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file); // closed before it is renamed
+    std::fs::rename(&tmp, path)
 }
 
 impl Audio {
@@ -228,6 +242,9 @@ mod tests {
             account: Account {
                 client_id: Some("id".into()),
                 redirect_uri: Some("https://example.test/cb".into()),
+            },
+            integrations: Integrations {
+                listenbrainz_user: Some("rob".into()),
             },
         };
         saved.save(&file).expect("saved");

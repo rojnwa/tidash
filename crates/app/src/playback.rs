@@ -7,6 +7,7 @@ use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
 use crate::model::{Action, Event, OutputInfo, PlaybackSnapshot};
 use crate::queue::Queue;
+use crate::scrobble::{self, Listen, Outcome, Service};
 use crate::settings::{self, replay_gain};
 use player::{PlayState, Player, PlayerCmd, PlayerEvent};
 use std::sync::Arc;
@@ -24,7 +25,8 @@ pub enum End {
     At(Duration),
 }
 
-/// One play of one track, from its first audio until it ends: what its report needs.
+/// One play of one track, from its first audio until it ends: what its report and its
+/// scrobble need.
 pub struct PlayAccounting {
     track_id: u64,
     album_id: u64,
@@ -36,6 +38,10 @@ pub struct PlayAccounting {
     /// Time spent in `PlayState::Playing`, not counting the running stretch.
     played: Duration,
     playing_since: Option<Instant>,
+    /// What the scrobblers are sent.
+    listen: Listen,
+    /// The scrobble went out: once per play.
+    scrobbled: bool,
 }
 
 impl PlayAccounting {
@@ -55,7 +61,16 @@ impl PlayAccounting {
             start_position,
             played: Duration::ZERO,
             playing_since: None,
+            listen: Listen::of(track, now_ms / 1000),
+            scrobbled: false,
         }
+    }
+
+    /// True once per play: when what it has played first meets the scrobble rule.
+    pub fn scrobble_due(&mut self, now: Instant) -> bool {
+        let due = !self.scrobbled && scrobble::due(self.duration_s, self.played(now));
+        self.scrobbled |= due;
+        due
     }
 
     /// Call on every state change: only wall-clock time while playing counts.
@@ -126,6 +141,14 @@ pub enum Msg {
     /// This client's session is dead (`backend::session_expired`); true if TIDAL refused the
     /// client ID.
     SessionExpired(Arc<Client>, bool),
+    /// A play started: the scrobblers' "now playing".
+    NowPlaying(Listen),
+    /// A play met the scrobble rule.
+    Scrobble(Listen),
+    /// A scrobbler call is done; what it left to do.
+    Scrobbled(Outcome),
+    /// A scrobbling service is connected as this user, or disconnected (`None`).
+    Connected(Service, Option<String>),
 }
 
 /// A player error this far from where the track was last restarted is a new hiccup.
@@ -235,10 +258,15 @@ impl Playback {
         self.state == PlayState::Playing
     }
 
-    /// Samples the position, and near the end preloads the next track; called every second
-    /// while playing.
+    /// Samples the position, sends the play's scrobble once it is due, and near the end
+    /// preloads the next track; called every second while playing.
     pub fn tick(&mut self, c: Option<&Arc<Client>>) {
         let position = self.position();
+        if let Some(play) = &mut self.play
+            && play.scrobble_due(Instant::now())
+        {
+            let _ = self.msgs.send(Msg::Scrobble(play.listen.clone())); // backend gone = closing
+        }
         if let Some(c) = c {
             self.maybe_preload(c, position);
         }
@@ -357,7 +385,7 @@ impl Playback {
             Msg::Loaded { seq, result, .. } => {
                 log::debug!("stream {seq} resolved: {}", result.is_ok());
             }
-            Msg::SessionExpired(..) => {}
+            _ => {}
         }
         if let Msg::Player(PlayerEvent::TrackStarted(id) | PlayerEvent::Error { id, .. }) = &msg {
             self.went_on(c, *id);
@@ -404,8 +432,12 @@ impl Playback {
                     Err(e) => log::debug!("preload of track {}: {e}", pre.track_id),
                 }
             }
-            Msg::Loaded { .. } => {}      // superseded
-            Msg::SessionExpired(..) => {} // the backend's
+            Msg::Loaded { .. } => {} // superseded
+            Msg::SessionExpired(..)
+            | Msg::NowPlaying(_)
+            | Msg::Scrobble(_)
+            | Msg::Scrobbled(_)
+            | Msg::Connected(..) => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
                 if s == PlayState::Stopped {
@@ -430,6 +462,7 @@ impl Playback {
                     );
                     // A gapless start sends no State event: the player was playing all along.
                     play.set_playing(self.state == PlayState::Playing, Instant::now());
+                    let _ = self.msgs.send(Msg::NowPlaying(play.listen.clone()));
                     self.play = Some(play);
                 }
             }

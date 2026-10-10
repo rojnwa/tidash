@@ -2,6 +2,7 @@
 
 use crate::{Error, Result, Session};
 use keyring_core::Entry;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Once};
 
 /// Calls block (keychain prompts, D-Bus), and the Linux store runs a tokio runtime of its own,
@@ -9,7 +10,20 @@ use std::sync::{Arc, Mutex, Once};
 pub trait TokenStore: Send + Sync {
     fn load(&self) -> Result<Option<Session>>;
     fn save(&self, s: &Session) -> Result<()>;
+    /// The TIDAL session only: the secrets stay.
     fn clear(&self) -> Result<()>;
+
+    /// An integration's secret by name (`"lastfm"`, `"listenbrainz"`). By default a store
+    /// keeps none: it reads none and refuses to store one.
+    fn secret(&self, _name: &str) -> Result<Option<String>> {
+        Ok(None)
+    }
+    fn set_secret(&self, _name: &str, _value: &str) -> Result<()> {
+        Err(Error::Store("this store keeps no secrets".into()))
+    }
+    fn delete_secret(&self, _name: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Error text only; keyring errors carry no secret values.
@@ -155,10 +169,26 @@ impl TokenStore for KeyringStore {
         }
         self.delete("session")
     }
+
+    /// Kept as user `secret-<name>`, apart from the session's entries.
+    fn secret(&self, name: &str) -> Result<Option<String>> {
+        self.get(&format!("secret-{name}"))
+    }
+
+    fn set_secret(&self, name: &str, value: &str) -> Result<()> {
+        self.entry(&format!("secret-{name}"))?
+            .set_password(value)
+            .map_err(store_err)
+    }
+
+    fn delete_secret(&self, name: &str) -> Result<()> {
+        self.delete(&format!("secret-{name}"))
+    }
 }
 
+/// The session, and the secrets by name.
 #[derive(Default)]
-pub struct MemoryStore(Mutex<Option<Session>>);
+pub struct MemoryStore(Mutex<Option<Session>>, Mutex<HashMap<String, String>>);
 
 impl TokenStore for MemoryStore {
     fn load(&self) -> Result<Option<Session>> {
@@ -173,6 +203,26 @@ impl TokenStore for MemoryStore {
     fn clear(&self) -> Result<()> {
         *self.0.lock().unwrap_or_else(|p| p.into_inner()) = None;
         Ok(())
+    }
+
+    fn secret(&self, name: &str) -> Result<Option<String>> {
+        Ok(self.secrets().get(name).cloned())
+    }
+
+    fn set_secret(&self, name: &str, value: &str) -> Result<()> {
+        self.secrets().insert(name.into(), value.into());
+        Ok(())
+    }
+
+    fn delete_secret(&self, name: &str) -> Result<()> {
+        self.secrets().remove(name);
+        Ok(())
+    }
+}
+
+impl MemoryStore {
+    fn secrets(&self) -> std::sync::MutexGuard<'_, HashMap<String, String>> {
+        self.1.lock().unwrap_or_else(|p| p.into_inner())
     }
 }
 
@@ -200,6 +250,45 @@ mod tests {
             expires_at: 1_800_000_000,
             user_id: 42,
             country_code: "US".into(),
+        }
+    }
+
+    /// Logging out of TIDAL leaves the integrations connected.
+    fn secrets_survive_clear_in(s: &dyn TokenStore) {
+        s.save(&sample()).unwrap();
+        s.set_secret("listenbrainz", "lb-token").unwrap();
+        s.set_secret("lastfm", "sk").unwrap();
+        s.clear().unwrap();
+        assert!(s.load().unwrap().is_none());
+        assert_eq!(
+            s.secret("listenbrainz").unwrap().as_deref(),
+            Some("lb-token")
+        );
+        s.set_secret("listenbrainz", "newer").unwrap();
+        assert_eq!(s.secret("listenbrainz").unwrap().as_deref(), Some("newer"));
+        s.delete_secret("listenbrainz").unwrap();
+        s.delete_secret("listenbrainz").unwrap(); // gone already: fine
+        assert!(s.secret("listenbrainz").unwrap().is_none());
+        assert_eq!(s.secret("lastfm").unwrap().as_deref(), Some("sk"));
+        s.delete_secret("lastfm").unwrap();
+    }
+
+    #[test]
+    fn secrets_survive_clear() {
+        secrets_survive_clear_in(&MemoryStore::default());
+    }
+
+    #[test]
+    #[ignore = "touches the real OS credential store"]
+    fn keyring_secrets_survive_clear() {
+        let s = KeyringStore::with_service("tidash-test-secrets");
+        let r = std::panic::catch_unwind(|| secrets_survive_clear_in(&s));
+        let _ = s.clear();
+        for name in ["listenbrainz", "lastfm"] {
+            let _ = s.delete_secret(name);
+        }
+        if let Err(e) = r {
+            std::panic::resume_unwind(e);
         }
     }
 

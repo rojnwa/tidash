@@ -2,8 +2,10 @@
 
 use crate::i18n::tr;
 use crate::images::Artwork;
+use crate::messages::Secret;
 use crate::model::{Action, Event, Load, Redirect};
 use crate::playback::{Msg, Playback};
+use crate::scrobble::{Outcome, Scrobbler, Service, Urls};
 use crate::settings::Settings;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -60,6 +62,9 @@ pub fn start(
                 open_api_cache(),
             );
             backend.artwork = Artwork::new(crate::images::open_cache(&images));
+            let (http, store) = (backend.http.clone(), Arc::clone(&backend.store));
+            let queue = crate::scrobble::path();
+            backend.scrobbler = Scrobbler::new(http, store, queue, Urls::default());
             backend.playback = open_player(&msg_tx, audio.output()).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx, audio)
@@ -145,6 +150,20 @@ fn client_refused() -> Event {
     Event::Error(tr("TIDAL refused the client ID. Check Settings › Account.").into_owned())
 }
 
+/// Runs `call` on `store` off the async workers (see `TokenStore`).
+pub(crate) async fn store_call<T: Send + 'static>(
+    store: &Arc<dyn TokenStore>,
+    call: impl FnOnce(&dyn TokenStore) -> tidal::Result<T> + Send + 'static,
+) -> tidal::Result<T> {
+    let store = Arc::clone(store);
+    tokio::task::spawn_blocking(move || call(store.as_ref()))
+        .await
+        .unwrap_or_else(|e| Err(tidal::Error::Store(e.to_string())))
+}
+
+/// After a failed scrobble flush, the next one waits this long.
+const SCROBBLE_RETRY: Duration = Duration::from_secs(5 * 60);
+
 struct Backend {
     emit: Arc<Emitter>,
     /// For the tasks it spawns.
@@ -173,6 +192,10 @@ struct Backend {
     settings: Settings,
     /// Where `settings` are saved; `None` without a config dir (nothing is saved).
     settings_path: Option<PathBuf>,
+    /// Its calls run on the runtime, outside `tasks`: logging out of TIDAL does not stop them.
+    scrobbler: Scrobbler,
+    /// When the flush after a failed one runs: failures until then arm no other.
+    scrobble_retry_at: Option<tokio::time::Instant>,
 }
 
 impl Backend {
@@ -185,17 +208,20 @@ impl Backend {
         (store, stored): (Arc<dyn TokenStore>, tidal::Result<Option<tidal::Session>>),
         api_cache: Option<Arc<DiskCache>>,
     ) -> Self {
+        // The token exchange is awaited in the action loop: a stalled server must not hold
+        // it. `Client::new` would panic where this fails (no TLS backend).
+        let http = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .expect("an HTTP client");
+        // Its queue only in memory; `start` gives it the file.
+        let scrobbler = Scrobbler::new(http.clone(), Arc::clone(&store), None, Urls::default());
         let mut backend = Self {
             emit,
             msgs,
             cfg: settings.client_config(),
-            // The token exchange is awaited in the action loop: a stalled server must not hold
-            // it. `Client::new` would panic where this fails (no TLS backend).
-            http: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(10))
-                .timeout(Duration::from_secs(30))
-                .build()
-                .expect("an HTTP client"),
+            http,
             store,
             pkce: None,
             search_task: None,
@@ -207,6 +233,8 @@ impl Backend {
             playback: None,
             settings,
             settings_path: None,
+            scrobbler,
+            scrobble_retry_at: None,
         };
         backend.resume(stored);
         backend
@@ -220,18 +248,12 @@ impl Backend {
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         self.load_favorites(); // the stored session's
         self.load_library();
+        self.scrobbling(|s| async move { s.flush().await }); // what earlier runs left
         loop {
             let playing = self.playback.as_ref().is_some_and(Playback::is_playing);
             tokio::select! {
                 biased; // a pending player error goes before a sample of its reset clock
-                Some(msg) = msgs.recv() => match msg {
-                    Msg::SessionExpired(dead, refused) => self.expire(dead, refused).await,
-                    msg => {
-                        if let Some(p) = &mut self.playback {
-                            p.on_msg(self.client.as_ref(), msg);
-                        }
-                    }
-                },
+                Some(msg) = msgs.recv() => self.on_msg(msg).await,
                 action = rx.recv() => match action {
                     Some(action) => self.handle(action).await,
                     None => break,
@@ -246,6 +268,91 @@ impl Backend {
         if let Some(p) = &mut self.playback {
             p.shutdown(self.client.as_ref()).await;
         }
+    }
+
+    async fn on_msg(&mut self, msg: Msg) {
+        match msg {
+            Msg::SessionExpired(dead, refused) => self.expire(dead, refused).await,
+            Msg::NowPlaying(l) => self.scrobbling(|s| async move { s.now_playing(l).await }),
+            Msg::Scrobble(l) => self.scrobbling(|s| async move { s.scrobble(l).await }),
+            Msg::Scrobbled(out) => self.scrobbled(out).await,
+            Msg::Connected(service, user) => {
+                let connected = user.is_some();
+                self.set_user(service, user).await;
+                if connected {
+                    // What waited for it, kept from before a refused token.
+                    self.scrobbling(|s| async move { s.flush().await });
+                }
+            }
+            msg => {
+                if let Some(p) = &mut self.playback {
+                    p.on_msg(self.client.as_ref(), msg);
+                }
+            }
+        }
+    }
+
+    /// Runs `call` on the scrobbler, on the runtime but outside `tasks`; what it left to do
+    /// comes back as `Msg::Scrobbled`.
+    fn scrobbling<F>(&self, call: impl FnOnce(Scrobbler) -> F)
+    where
+        F: Future<Output = Outcome> + Send + 'static,
+    {
+        let (done, msgs) = (call(self.scrobbler.clone()), self.msgs.clone());
+        tokio::spawn(async move {
+            let _ = msgs.send(Msg::Scrobbled(done.await)); // backend gone = app closing
+        });
+    }
+
+    /// A failed flush arms the next, unless one is armed already. A refused token clears its
+    /// user, and says so once: the scrobbler has forgotten the token, so nothing asks again
+    /// until the user connects again.
+    async fn scrobbled(&mut self, out: Outcome) {
+        let now = tokio::time::Instant::now();
+        if out.retry && self.scrobble_retry_at.is_none_or(|at| at <= now) {
+            let at = now + SCROBBLE_RETRY;
+            self.scrobble_retry_at = Some(at);
+            self.scrobbling(move |s| async move {
+                tokio::time::sleep_until(at).await;
+                s.flush().await
+            });
+        }
+        for service in out.refused {
+            let user = &self.settings.integrations.listenbrainz_user;
+            if service == Service::ListenBrainz && user.is_some() {
+                self.set_user(service, None).await;
+                let why = tr("ListenBrainz refused the token. Connect again in Settings.");
+                self.emit.send(Event::Error(why.into_owned()));
+            }
+        }
+    }
+
+    /// The settings name `user` as `service`'s; saved and sent back as any change is.
+    async fn set_user(&mut self, service: Service, user: Option<String>) {
+        let mut settings = self.settings.clone();
+        match service {
+            Service::ListenBrainz => settings.integrations.listenbrainz_user = user,
+            Service::LastFm => {}
+        }
+        self.set_settings(settings).await;
+    }
+
+    /// Connects or disconnects a scrobbling service off the loop: `Msg::Connected` with the
+    /// user it ends with, or the error.
+    fn connect(
+        &self,
+        service: Service,
+        call: impl Future<Output = Result<Option<String>, String>> + Send + 'static,
+    ) {
+        let (msgs, emit) = (self.msgs.clone(), self.emit.clone());
+        tokio::spawn(async move {
+            match call.await {
+                Ok(user) => {
+                    let _ = msgs.send(Msg::Connected(service, user));
+                }
+                Err(e) => emit.send(Event::Error(e)),
+            }
+        });
     }
 
     /// A stored session logs in without any network call; expiry refreshes lazily.
@@ -386,7 +493,26 @@ impl Backend {
                     self.spawn(crate::library::load_folder(c, id, emit, msgs));
                 }
             }
-            Action::SetSettings(settings) => self.set_settings(settings).await,
+            Action::SetSettings(mut settings) => {
+                // The backend's to set: the UI's copy may predate a connect or a refusal.
+                let user = &self.settings.integrations.listenbrainz_user;
+                settings.integrations.listenbrainz_user = user.clone();
+                self.set_settings(settings).await;
+            }
+            Action::ConnectListenBrainz(Secret(token)) => {
+                let s = self.scrobbler.clone();
+                let call = async move { s.connect_listenbrainz(token).await.map(Some) };
+                self.connect(Service::ListenBrainz, call);
+            }
+            Action::DisconnectListenBrainz => {
+                let s = self.scrobbler.clone();
+                let call = async move {
+                    let done = s.disconnect(Service::ListenBrainz).await;
+                    let why = tr("ListenBrainz could not be disconnected");
+                    done.map(|()| None).map_err(|e| format!("{why}: {e}"))
+                };
+                self.connect(Service::ListenBrainz, call);
+            }
             Action::ListDevices => {
                 let emit = self.emit.clone();
                 tokio::task::spawn_blocking(move || {
@@ -571,10 +697,7 @@ impl Backend {
         &self,
         call: impl FnOnce(&dyn TokenStore) -> tidal::Result<()> + Send + 'static,
     ) -> tidal::Result<()> {
-        let store = Arc::clone(&self.store);
-        tokio::task::spawn_blocking(move || call(store.as_ref()))
-            .await
-            .unwrap_or_else(|e| Err(tidal::Error::Store(e.to_string())))
+        store_call(&self.store, call).await
     }
 }
 

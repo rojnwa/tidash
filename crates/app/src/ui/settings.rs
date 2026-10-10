@@ -1,10 +1,12 @@
-//! Settings view: account, appearance, audio, and the keyboard shortcuts; the login page leads
-//! here too, logged out. A change shows at once (`Event::Settings`) and goes to the backend
-//! (`Action::SetSettings`), which saves it and sends the settings back.
+//! Settings view: account, appearance, audio, integrations, and the keyboard shortcuts; the
+//! login page leads here too, logged out. A change shows at once (`Event::Settings`) and goes
+//! to the backend (`Action::SetSettings`), which saves it and sends the settings back. The
+//! integrations are the backend's to set: Connect and Disconnect are actions.
 
 use super::Ctx;
 use crate::i18n::tr;
-use crate::model::{Action, Event, Route};
+use crate::messages::Secret;
+use crate::model::{Action, Event, Model, Route};
 use crate::settings::{Account, Audio, Normalization, Theme, nonblank};
 use std::borrow::Cow;
 
@@ -16,6 +18,8 @@ pub struct State {
     /// The account fields as typed; Apply makes them the settings.
     client_id: String,
     redirect_uri: String,
+    /// The ListenBrainz token as typed, until Connect sends it; never in the model.
+    listenbrainz_token: String,
 }
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
@@ -27,7 +31,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         state.redirect_uri = saved.redirect_uri.clone().unwrap_or_default();
     }
     let mut new = model.settings.clone(); // edited here
-    let (mut logout, mut back) = (false, false);
+    let (mut logout, mut back, mut connect) = (false, false, None);
     super::page(ui, &Route::Settings, |ui| {
         // Logged out there is no sidebar: this is the way back to the login page.
         if !model.logged_in {
@@ -48,6 +52,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         });
         section(ui, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
+        section(ui, tr("Integrations"));
+        connect = listenbrainz(ui, model, state);
         section(ui, tr("Keyboard shortcuts"));
         egui::Grid::new("shortcuts").num_columns(2).show(ui, |ui| {
             for (keys, what) in shortcuts() {
@@ -59,6 +65,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     });
     if logout {
         ctx.send(Action::Logout);
+    }
+    if let Some(action) = connect {
+        ctx.send(action);
     }
     if back {
         ctx.events.push(Event::Back);
@@ -119,6 +128,36 @@ fn account(ui: &mut egui::Ui, state: &mut State, account: &mut Account) {
     ui.weak(tr(
         "Leave empty for the built-in client. Changing it logs you out.",
     ));
+}
+
+/// Who ListenBrainz is connected as, with Disconnect; or the token field with Connect. What
+/// was clicked, to send.
+fn listenbrainz(ui: &mut egui::Ui, model: &Model, state: &mut State) -> Option<Action> {
+    ui.label(egui::RichText::new(tr("ListenBrainz")).strong());
+    if let Some(user) = &model.settings.integrations.listenbrainz_user {
+        let mut disconnect = false;
+        ui.horizontal(|ui| {
+            ui.label(tr("Connected as {user}").replace("{user}", user));
+            disconnect = ui.button(tr("Disconnect")).clicked();
+        });
+        return disconnect.then_some(Action::DisconnectListenBrainz);
+    }
+    let mut connect = None;
+    ui.horizontal(|ui| {
+        let label = ui.label(tr("User token"));
+        let field = egui::TextEdit::singleline(&mut state.listenbrainz_token).password(true);
+        ui.add(field).labelled_by(label.id);
+        let token = nonblank(&state.listenbrainz_token);
+        let button = egui::Button::new(tr("Connect"));
+        if ui.add_enabled(token.is_some(), button).clicked() {
+            state.listenbrainz_token.clear();
+            connect = token.map(|t| Action::ConnectListenBrainz(Secret(t)));
+        }
+    });
+    ui.weak(tr(
+        "Scrobbles what you play. Copy your user token from listenbrainz.org/settings.",
+    ));
+    connect
 }
 
 /// The output device and the stream choices.
@@ -280,6 +319,42 @@ mod tests {
         let mut both = exclusive;
         both.audio.normalization = Normalization::Album;
         assert_eq!(set_settings(sent), [both]);
+    }
+
+    /// Connect sends the token typed, trimmed, and empties the field; connected, the user
+    /// shows with Disconnect. The token never reaches the model.
+    #[test]
+    fn listenbrainz_connect_and_disconnect() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        state.settings.listenbrainz_token = " tok \n".into(); // as pasted
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let (sent, _) = pass(
+            &ctx,
+            &mut state,
+            &mut model,
+            vec![testing::click(&out, "Connect")],
+        );
+        let token = sent.iter().find_map(|a| match a {
+            Action::ConnectListenBrainz(t) => Some(t.0.as_str()),
+            _ => None,
+        });
+        assert_eq!(token, Some("tok"), "{sent:?}");
+        assert!(state.settings.listenbrainz_token.is_empty());
+        assert!(!format!("{:?}", model.settings).contains("tok"));
+        model.settings.integrations.listenbrainz_user = Some("rob".into());
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(labels(&out).iter().any(|l| l == "Connected as rob"));
+        let (sent, _) = pass(
+            &ctx,
+            &mut state,
+            &mut model,
+            vec![testing::click(&out, "Disconnect")],
+        );
+        let disconnect = |a: &Action| matches!(a, Action::DisconnectListenBrainz);
+        assert_eq!(sent.iter().filter(|a| disconnect(a)).count(), 1, "{sent:?}");
     }
 
     #[test]

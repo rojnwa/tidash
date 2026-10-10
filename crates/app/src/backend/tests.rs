@@ -501,6 +501,108 @@ fn set_settings_saves_and_announces() {
     );
 }
 
+fn runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime")
+}
+
+fn errors(events: &Receiver<Event>) -> Vec<String> {
+    let error = |e| match e {
+        Event::Error(e) => Some(e),
+        _ => None,
+    };
+    events.try_iter().filter_map(error).collect()
+}
+
+/// A failed flush arms one retry, however many fail before it runs. A refused token clears
+/// the user, and is shown once.
+#[test]
+fn scrobbler_outcomes_arm_one_retry_and_ask_once() {
+    let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+    b.settings.integrations.listenbrainz_user = Some("rob".into());
+    runtime().block_on(async {
+        let retry = || Outcome {
+            retry: true,
+            refused: vec![],
+        };
+        b.on_msg(Msg::Scrobbled(retry())).await;
+        let armed = b.scrobble_retry_at.expect("armed");
+        b.on_msg(Msg::Scrobbled(retry())).await;
+        assert_eq!(b.scrobble_retry_at, Some(armed), "one at a time");
+        for _ in 0..2 {
+            let refused = vec![Service::ListenBrainz];
+            let out = Outcome {
+                retry: false,
+                refused,
+            };
+            b.on_msg(Msg::Scrobbled(out)).await;
+        }
+    });
+    assert_eq!(b.settings.integrations.listenbrainz_user, None);
+    let refused = "ListenBrainz refused the token. Connect again in Settings.";
+    assert_eq!(errors(&events), [refused]);
+}
+
+/// The next `Msg::Connected` the backend's tasks send.
+async fn next_connected(msgs: &mut UnboundedReceiver<Msg>) -> Msg {
+    loop {
+        let next = tokio::time::timeout(Duration::from_secs(5), msgs.recv()).await;
+        let msg = next.expect("in time").expect("a message");
+        if matches!(msg, Msg::Connected(..)) {
+            return msg;
+        }
+    }
+}
+
+/// Connect checks the token and keeps it; the settings name the user, and an edit the UI made
+/// before it heard does not undo that. Disconnect forgets both.
+#[test]
+fn connect_and_disconnect_set_the_user() {
+    runtime().block_on(async {
+        let server = MockServer::start().await;
+        let valid = r#"{"code":200,"message":"Token valid.","valid":true,"user_name":"rob"}"#;
+        Mock::given(method("GET"))
+            .and(path("/1/validate-token"))
+            .and(header("authorization", "Token good"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(valid, "application/json"))
+            .mount(&server)
+            .await;
+        let store = Arc::new(tidal::MemoryStore::default());
+        let (mut b, events, mut msgs) = new_backend(store.clone(), Ok(None));
+        let urls = Urls {
+            listenbrainz: format!("{}/", server.uri()).parse().expect("a URL"),
+            ..Urls::default()
+        };
+        b.scrobbler = Scrobbler::new(b.http.clone(), store.clone(), None, urls);
+        let secret = || store.secret("listenbrainz").expect("read");
+        let token = Secret("good".into());
+        b.handle(Action::ConnectListenBrainz(token)).await;
+        b.on_msg(next_connected(&mut msgs).await).await;
+        assert_eq!(
+            b.settings.integrations.listenbrainz_user.as_deref(),
+            Some("rob")
+        );
+        assert_eq!(secret().as_deref(), Some("good"));
+        b.handle(Action::SetSettings(Settings::default())).await;
+        assert_eq!(
+            b.settings.integrations.listenbrainz_user.as_deref(),
+            Some("rob")
+        );
+        b.handle(Action::DisconnectListenBrainz).await;
+        b.on_msg(next_connected(&mut msgs).await).await;
+        assert_eq!(b.settings.integrations.listenbrainz_user, None);
+        assert_eq!(secret(), None);
+        let shown = |e: Event| match e {
+            Event::Settings(s) => Some(s.integrations.listenbrainz_user),
+            _ => None,
+        };
+        let users: Vec<_> = events.try_iter().filter_map(shown).collect();
+        assert_eq!(users, [Some("rob".into()), Some("rob".into()), None]);
+    });
+}
+
 const CLIENT_ID_CHANGED: &str = "Logged out: the client ID changed. Log in again.";
 const CLIENT_REFUSED: &str = "TIDAL refused the client ID. Check Settings › Account.";
 

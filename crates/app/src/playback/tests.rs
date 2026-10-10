@@ -333,6 +333,23 @@ fn pause_time_is_excluded() {
     );
 }
 
+#[test]
+fn one_scrobble_per_play_and_a_repeat_counts_again() {
+    let t0 = Instant::now();
+    let mut p = PlayAccounting::new(&track(), "LOSSLESS".into(), Duration::ZERO, 0); // 200 s
+    p.set_playing(true, t0);
+    p.set_playing(false, t0 + S * 60); // paused for 100 s
+    assert!(!p.scrobble_due(t0 + S * 160), "60 s played");
+    p.set_playing(true, t0 + S * 160);
+    assert!(!p.scrobble_due(t0 + S * 199), "99 s played");
+    assert!(p.scrobble_due(t0 + S * 200), "100 s: half of it");
+    assert!(!p.scrobble_due(t0 + S * 300), "once per play");
+    // Repeat one plays it again: a new play, which counts again.
+    let mut again = PlayAccounting::new(&track(), "LOSSLESS".into(), Duration::ZERO, 0);
+    again.set_playing(true, t0 + S * 300);
+    assert!(again.scrobble_due(t0 + S * 400));
+}
+
 fn current_id(p: &Playback) -> Option<u64> {
     p.queue.current().map(|t| t.id)
 }
@@ -478,6 +495,42 @@ fn a_preloaded_track_starts_without_a_load() {
     let report = report_for(play, End::Natural, Instant::now() + S * 31, 0);
     let quality = report.expect("reported").quality;
     assert_eq!(quality, "HI_RES_LOSSLESS");
+}
+
+/// "Now playing" when a play starts, at a load's start and at a gapless one; the scrobble from
+/// `tick`, once, when the play has played half the track.
+#[test]
+fn playback_signals_now_playing_and_scrobble() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playback();
+    let (msgs, mut sent) = tokio::sync::mpsc::unbounded_channel();
+    p.msgs = msgs;
+    let (tracks, start) = (tracks(3), 0);
+    p.handle(Some(&c), Action::PlayTracks { tracks, start });
+    (p.loading, p.state) = (false, PlayState::Playing);
+    let before = now_ms() / 1000;
+    let id = p.seq;
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::TrackStarted(id)));
+    let Ok(Msg::NowPlaying(l)) = sent.try_recv() else {
+        panic!("no now playing")
+    };
+    assert_eq!((l.track_id, l.title.as_str()), (0, "t0"));
+    assert!((before..=now_ms() / 1000).contains(&l.started_at), "{l:?}");
+    p.tick(Some(&c));
+    assert!(sent.try_recv().is_err(), "not due yet");
+    p.play.as_mut().expect("a play").played = S * 100; // the fake clock: half played
+    p.tick(Some(&c));
+    assert!(
+        matches!(sent.try_recv(), Ok(Msg::Scrobble(s)) if s == l),
+        "the play's listen"
+    );
+    p.tick(Some(&c));
+    assert!(sent.try_recv().is_err(), "once per play");
+    let x = sent_preload(&mut p, &c);
+    p.on_msg(Some(&c), Msg::Player(PlayerEvent::TrackStarted(x)));
+    assert!(matches!(sent.try_recv(), Ok(Msg::NowPlaying(l)) if l.track_id == 1));
 }
 
 fn track_9() -> Vec<tidal::Track> {

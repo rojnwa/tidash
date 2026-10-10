@@ -18,6 +18,7 @@ mod now_playing;
 mod pages;
 mod playback;
 mod queue;
+mod scrobble;
 mod settings;
 mod ui;
 
