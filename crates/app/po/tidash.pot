@@ -255,6 +255,7 @@ msgstr ""
 
 #: src/ui/sidebar.rs
 #: src/ui/settings.rs
+#: src/ui/login.rs
 msgid "Settings"
 msgstr ""
 

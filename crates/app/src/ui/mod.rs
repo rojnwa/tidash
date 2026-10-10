@@ -243,7 +243,7 @@ fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events:
     };
     let find = ctx.input_mut(|i| {
         let mut key = |mods: Modifiers, k: Key| !typing && i.consume_key(mods, k);
-        let find = key(Modifiers::COMMAND, Key::F);
+        let find = model.logged_in && key(Modifiers::COMMAND, Key::F); // Search needs a session
         if key(Modifiers::COMMAND, Key::Comma) {
             events.push(Event::Navigate(Route::Settings));
         }
@@ -306,7 +306,8 @@ pub fn draw(
             }
         });
     }
-    if *model.route() != Route::Login {
+    // Logged out (Settings, from the login page) nothing leads to the session's pages.
+    if model.logged_in {
         // Before the sidebar, so the bar spans the full width.
         player_bar::show(
             ui,
@@ -332,7 +333,7 @@ pub fn draw(
         };
         let route = model.route();
         match route {
-            Route::Login => login::show(ui, model, tx, &mut state.login),
+            Route::Login => login::show(ui, &mut ctx, &mut state.login),
             Route::Search => search::show(ui, &mut ctx, &mut state.search),
             Route::Home | Route::Page(_) | Route::ViewAll(_) => browse::show(ui, &mut ctx, route),
             Route::Album(_) => album::show(ui, &mut ctx, route),

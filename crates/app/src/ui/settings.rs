@@ -1,6 +1,6 @@
-//! Settings view: account, appearance, audio, and the keyboard shortcuts. A change shows at
-//! once (`Event::Settings`) and goes to the backend (`Action::SetSettings`), which saves it and
-//! sends the settings back.
+//! Settings view: account, appearance, audio, and the keyboard shortcuts; the login page leads
+//! here too, logged out. A change shows at once (`Event::Settings`) and goes to the backend
+//! (`Action::SetSettings`), which saves it and sends the settings back.
 
 use super::Ctx;
 use crate::i18n::tr;
@@ -27,8 +27,12 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         state.redirect_uri = saved.redirect_uri.clone().unwrap_or_default();
     }
     let mut new = model.settings.clone(); // edited here
-    let mut logout = false;
+    let (mut logout, mut back) = (false, false);
     super::page(ui, &Route::Settings, |ui| {
+        // Logged out there is no sidebar: this is the way back to the login page.
+        if !model.logged_in {
+            back = ui.button(tr("Back")).clicked();
+        }
         ui.heading(tr("Settings"));
         section(ui, tr("Account"));
         if model.logged_in {
@@ -55,6 +59,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     });
     if logout {
         ctx.send(Action::Logout);
+    }
+    if back {
+        ctx.events.push(Event::Back);
     }
     if new != model.settings {
         // Shown at once, so a second change before the backend answers builds on this one.
@@ -202,6 +209,42 @@ mod tests {
         model.navigate(Route::Settings);
         let (back, _) = pass(&ctx, &mut state, &mut model, vec![]);
         assert_eq!(listed(&back), 1, "a new visit");
+    }
+
+    /// The labels and texts `out` shows a screen reader.
+    fn labels(out: &egui::FullOutput) -> Vec<String> {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = tree.expect("AccessKit is on").nodes.iter();
+        let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
+        nodes.filter_map(|(_, n)| text(n)).collect()
+    }
+
+    /// Spec §9: a refused client ID points to a setting the login page leads to. Logged out,
+    /// Settings has no session pages around it nor Log out, and Back returns to the login.
+    #[test]
+    fn settings_is_reachable_from_the_login_page() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = Model::default();
+        assert_eq!(model.route(), &Route::Login);
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let click = testing::click(&out, "Settings");
+        pass(&ctx, &mut state, &mut model, vec![click]);
+        assert_eq!(model.route(), &Route::Settings);
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let shown = labels(&out);
+        for (label, want) in [("Home", false), ("Log out", false), ("Back", true)] {
+            assert_eq!(shown.iter().any(|l| l == label), want, "{label}: {shown:?}");
+        }
+        assert!(shown.iter().any(|l| l == "Client ID"), "{shown:?}");
+        pass(
+            &ctx,
+            &mut state,
+            &mut model,
+            vec![testing::click(&out, "Back")],
+        );
+        assert_eq!(model.route(), &Route::Login);
     }
 
     fn set_settings(sent: Vec<Action>) -> Vec<Settings> {

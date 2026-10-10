@@ -321,10 +321,7 @@ impl Backend {
     async fn handle(&mut self, action: Action) {
         match action {
             Action::BeginLogin => {
-                let pkce = Pkce::new();
-                let url = tidal::authorize_url(&self.cfg, &pkce).to_string();
-                self.pkce = Some(pkce);
-                self.emit.send(Event::LoginUrl(url.clone()));
+                let url = self.begin_login();
                 // Some launchers (xdg-open) would block the backend until the browser exits.
                 if let Err(e) = open::that_detached(&url) {
                     log::warn!("could not open the browser: {e}");
@@ -404,6 +401,15 @@ impl Backend {
                 None => {}
             },
         }
+    }
+
+    /// A new login on the current client: its authorize URL, also sent to the UI.
+    fn begin_login(&mut self) -> String {
+        let pkce = Pkce::new();
+        let url = tidal::authorize_url(&self.cfg, &pkce).to_string();
+        self.pkce = Some(pkce);
+        self.emit.send(Event::LoginUrl(url.clone()));
+        url
     }
 
     async fn log_out(&mut self) {

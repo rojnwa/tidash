@@ -502,6 +502,31 @@ fn changing_the_client_id_logs_out() {
     );
 }
 
+/// Logged out there is nothing to log out of: the override is saved, and the next login's
+/// authorize URL carries it. (`begin_login` is `BeginLogin` without opening the browser.)
+#[test]
+fn client_id_set_while_logged_out_is_used_by_the_next_login() {
+    let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    let mut settings = Settings::default();
+    settings.account.client_id = Some("mine".into());
+    settings.account.redirect_uri = Some("https://example.test/cb".into());
+    rt.block_on(b.handle(Action::SetSettings(settings)));
+    let url = b.begin_login();
+    let events: Vec<_> = events.try_iter().collect();
+    assert!(
+        matches!(&events[..], [Event::Settings(_), Event::LoginUrl(u)] if *u == url),
+        "{events:?}"
+    );
+    let url = reqwest::Url::parse(&url).expect("a URL");
+    let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+    assert_eq!(query["client_id"], "mine");
+    assert_eq!(query["redirect_uri"], "https://example.test/cb");
+}
+
 /// The token endpoint refuses the client ID, on the login exchange and on a refresh (which
 /// first ends the session): the error points to the setting.
 #[test]

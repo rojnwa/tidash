@@ -1,22 +1,28 @@
-//! Login screen: paste-the-redirect-URL flow.
+//! Login screen: paste-the-redirect-URL flow, and the way to Settings (the client to log in
+//! with).
 
+use super::Ctx;
 use crate::i18n::tr;
-use crate::model::{Action, Model, Redirect};
-use tokio::sync::mpsc::UnboundedSender;
+use crate::model::{Action, Redirect, Route};
 
 #[derive(Default)]
 pub struct State {
     pasted: String,
 }
 
-pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, state: &mut State) {
+pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     ui.add_space(24.0);
     ui.vertical_centered(|ui| {
         ui.set_max_width(560.0);
         if ui.button(tr("Log in with TIDAL")).clicked() {
-            let _ = tx.send(Action::BeginLogin);
+            ctx.send(Action::BeginLogin);
         }
-        let Some(url) = &model.login_url else { return };
+        if ui.small_button(tr("Settings")).clicked() {
+            ctx.go(Route::Settings);
+        }
+        let Some(url) = &ctx.model.login_url else {
+            return;
+        };
         ui.add_space(12.0);
         ui.label(tr(
             "After logging in, your browser shows a TIDAL page. Copy the full address from the address bar and paste it here.",
@@ -34,7 +40,7 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>, stat
         let ready = !state.pasted.trim().is_empty();
         if ui.add_enabled(ready, egui::Button::new(tr("Continue"))).clicked() {
             let pasted = Redirect(std::mem::take(&mut state.pasted));
-            let _ = tx.send(Action::FinishLogin(pasted));
+            ctx.send(Action::FinishLogin(pasted));
         }
     });
 }
