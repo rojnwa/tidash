@@ -45,7 +45,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
 #[cfg(test)]
 mod tests {
     use crate::model::{Event, PageData, Route};
-    use crate::ui::testing::{album, artist, at, every_state, mix, pass, playlist, tracks};
+    use crate::ui::testing::{
+        album, artist, at, context, every_state, mix, pass, playlist, tracks,
+    };
     use tidal::{Item, Layout, More, Page, Shelf};
 
     /// A v1 "View all": a page of one untitled-page shelf, as `Client::page` fills it.
@@ -73,7 +75,7 @@ mod tests {
             route,
             data: PageData::Shelves(page),
         });
-        let egui = egui::Context::default();
+        let egui = context();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);

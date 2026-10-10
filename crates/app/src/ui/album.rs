@@ -47,7 +47,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
 #[cfg(test)]
 mod tests {
     use crate::model::{Action, Event, Model, PageData, Route};
-    use crate::ui::testing::{album, at, click, every_state, pass, tracks};
+    use crate::ui::testing::{album, at, click, context, every_state, pass, tracks};
     use tidal::Favorite;
 
     fn data() -> PageData {
@@ -69,7 +69,7 @@ mod tests {
             route,
             data: data(),
         });
-        let egui = egui::Context::default();
+        let egui = context();
         egui.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);

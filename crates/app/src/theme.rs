@@ -195,6 +195,10 @@ pub const ROW_HEADER: f32 = 36.0;
 pub const INDEX_COL: f32 = 42.0;
 pub const COVER_COL: f32 = 42.0;
 pub const ROW_COVER: f32 = 40.0;
+/// The durations' column: "10:02:05" fits.
+pub const TIME_COL: f32 = 64.0;
+/// Between a row's columns, and inside its right edge.
+pub const COL_GAP: f32 = 12.0;
 /// A card's target width (`card_columns`).
 pub const CARD: f32 = 175.0;
 pub const CARD_GAP: f32 = 16.0;

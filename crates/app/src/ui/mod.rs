@@ -453,7 +453,7 @@ pub fn draw(
                 .default_size(320.0)
                 .size_range(260.0..=560.0)
                 .show(ui, |ui| match side {
-                    Side::Queue => queue_panel::show(ui, model, tx),
+                    Side::Queue => queue_panel::show(ui, &mut ctx),
                     Side::Lyrics => lyrics::show(ui, &mut ctx, at),
                     Side::Credits => credits::show(ui, &mut ctx),
                 });

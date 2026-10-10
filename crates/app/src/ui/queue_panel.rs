@@ -2,15 +2,14 @@
 //! bare `DragAndDrop` payload: its drop zones give no insertion index and need every row
 //! built, and these rows are virtual. A playlist's rows drag the same way (`dragging`).
 
-use super::rows;
 use super::tracks::{self, ROW_H};
+use super::{Ctx, rows};
 use crate::i18n::tr;
-use crate::model::{Action, Model};
+use crate::model::Action;
 use egui::style::ScrollAnimation;
-use egui::{DragAndDrop, PointerButton, ScrollArea, Sense, Stroke, vec2};
+use egui::{DragAndDrop, PointerButton, ScrollArea, Sense, vec2};
 use std::any::Any;
 use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// While dragging within `EDGE` of the list's top or bottom, it scrolls at `SCROLL` pt/s.
 const EDGE: f32 = 48.0;
@@ -22,12 +21,12 @@ pub struct QueueDrag {
     pub track_id: u64,
 }
 
-/// Draws into `ui`, the side panel's.
-pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
+/// Draws into `ui`, the side panel's: the track rows' painter with covers, no column header
+/// and no album column.
+pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
+    let model = ctx.model; // not borrowed from `ctx`, which the rows take
     let q = &model.queue;
-    let send = |a: Action| {
-        let _ = tx.send(a);
-    };
+    let tier = tracks::playing_colour(ctx);
     ui.horizontal(|ui| {
         ui.heading(tr("Queue"));
         if !q.tracks.is_empty() {
@@ -48,7 +47,9 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
                 let size = vec2(ui.available_width(), ROW_H);
                 let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
                 let num = (i + 1).to_string();
-                tracks::paint_row(ui, &row, num, t, false, q.current == Some(i));
+                // By index: a track queued twice plays at one of them.
+                let current = (q.current == Some(i)).then_some(tier);
+                tracks::paint_row(ui, ctx, &row, num, t, true, false, current);
                 if row.drag_started_by(PointerButton::Primary) {
                     let drag = QueueDrag {
                         from: i,
@@ -57,11 +58,11 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
                     DragAndDrop::set_payload(ui.ctx(), drag);
                 }
                 if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
-                    send(Action::PlayQueueIndex(i));
+                    ctx.send(Action::PlayQueueIndex(i));
                 }
                 row.context_menu(|ui| {
                     if ui.button(tr("Remove")).clicked() {
-                        send(Action::RemoveFromQueue(i));
+                        ctx.send(Action::RemoveFromQueue(i));
                         ui.close();
                     }
                 });
@@ -69,7 +70,7 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
             if let Some((drag, slot)) = dragging::<QueueDrag>(ui, q.tracks.len(), top)
                 && let Some((from, to)) = drop_move(&q.tracks, &drag, slot)
             {
-                send(Action::MoveInQueue { from, to });
+                ctx.send(Action::MoveInQueue { from, to });
             }
         });
 }
@@ -110,8 +111,8 @@ pub fn dragging<T: Any + Send + Sync>(
         return None; // above the list, over what the page shows there
     }
     let slot = drop_slot(p.y, top, ROW_H, len);
-    // The accent's stroke, which shows on the current row's highlight too.
-    let line = Stroke::new(2.0, ui.visuals().selection.stroke.color);
+    // 2 px `accent`: `theme::style` makes the selection stroke that.
+    let line = ui.visuals().selection.stroke;
     ui.painter()
         .hline(view.x_range(), top + slot as f32 * ROW_H, line);
     if !ui.input(|i| i.pointer.any_released()) {

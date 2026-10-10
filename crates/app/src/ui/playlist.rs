@@ -62,8 +62,8 @@ mod tests {
     use crate::model::{Action, Event, Model, PageData, Route};
     use crate::ui::library;
     use crate::ui::testing::{
-        at, click, clicks, every_state, key, middle, pass, pass_with, playlist, right, shown,
-        tracks,
+        at, click, clicks, context, every_state, key, middle, pass, pass_with, playlist, right,
+        shown, tracks,
     };
     use egui::{Key, PointerButton, Pos2, vec2};
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -91,7 +91,7 @@ mod tests {
     /// take it out of their library; TIDAL's and other users' have one.
     #[test]
     fn no_heart_on_the_users_own_playlist() {
-        let egui = egui::Context::default();
+        let egui = context();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         for (creator, heart) in [(Some(1), false), (Some(2), true), (Some(0), true)] {
@@ -128,7 +128,7 @@ mod tests {
             route,
             data: data(),
         });
-        let egui = egui::Context::default();
+        let egui = context();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         for input in [vec![], vec![key(Key::Tab)], vec![key(Key::Enter)]] {
             pass(&egui, &tx, &model, super::show, input);
@@ -164,7 +164,7 @@ mod tests {
                 etag: etag.map(str::to_owned),
             };
             model.apply(Event::Page { route, data });
-            let egui = egui::Context::default();
+            let egui = context();
             egui.enable_accesskit();
             let (tx, rx) = unbounded_channel();
             Self {
