@@ -80,7 +80,8 @@ tidash/
 - **Threads**
   - UI (main): egui, event-driven repaint only. While playing, repaint ~4 Hz only if the window is visible. Paused and
     hidden = 0% CPU.
-  - Backend: one tokio multi-thread runtime for API, images, cache, scrobbling, Discord.
+  - Backend: one tokio multi-thread runtime for API, images, cache, scrobbling.
+  - Discord (as built in M4): one thread of its own, as its IPC blocks without timeouts.
   - Player (as built in M3): one `player` thread handles the commands and the decoding; one download thread per open
     stream (the current track and a preload); the output's real-time side reads a lock-free ring. Exclusive: WASAPI
     runs its own render thread, cpal (macOS, Linux) its callback; neither allocates nor locks. Shared: fastframe's
@@ -163,17 +164,23 @@ none is available, tokens stay in memory with a visible warning — no plaintext
 `api.tidal.com/v2/home/feed/static` (cursor pages, a `view-all` per shelf); the artist page is v2 `artist/{id}`;
 Explore, genre/mood pages and the mix page are v1 `pages/*` documents; playlists, favorite tracks/albums/artists and
 favorite ids are v1; favorite mixes and the playlist list are v2 (`favorites/mixes`, `my-collection/playlists/folders`).
-M4 (S5): lyrics v1 `tracks/{id}/lyrics` (404 = none); credits v1 `tracks/{id}/credits`; radio is the mix page for the
-item's `TRACK_MIX`/`ARTIST_MIX` id (v1 `tracks|artists/{id}/mix` when the entity lacks it); the "Add to playlist" list is
-v1 `users/{uid}/playlists`; playlist item add/remove/move are v1, guarded by the playlist's ETag in `If-None-Match`;
-folders, moves and playlist delete are v2 `my-collection/playlists/folders/*` PUTs; playlist create and rename are
-openapi (JSON:API, `Idempotency-Key`). Also search, album, playbackinfo, user, event batch. v1 requests add
+M4 as built (S5): lyrics v1 `tracks/{id}/lyrics` (LRC in centiseconds, 404 = none); track credits v1
+`tracks/{id}/credits`; radio is the mix page for the item's `TRACK_MIX`/`ARTIST_MIX` id, as in the official client
+(Track radio disabled and Artist radio hidden without one; v1 `tracks|artists/{id}/mix` is not used); the "Add to
+playlist" list is v1 `users/{uid}/playlists`; the library tree is the v2 folder listing
+(`my-collection/playlists/folders?folderId=`, own and favorited playlists, paged by `offset`, no cursor). Playlist
+item add/remove/move are v1, guarded by the playlist's ETag in `If-None-Match` (never `*` or `""`): an add takes a
+fresh ETag and is retried once on 412; a remove or move sends the ETag of the listing its positions came from and is
+never retried (a listing whose pages disagree on the ETag has none, and its rows cannot be edited). Folders, moves
+and playlist delete are v2 `my-collection/playlists/folders/*` PUTs (`create-folder` ignores the parent: create at
+the top, then move); playlist create and edit are openapi (JSON:API, `Idempotency-Key`; the PATCH answer is the
+pre-edit state and is ignored). Also search, album, playbackinfo, user, event batch. v1 requests add
 `countryCode`, `locale=en_US` and `deviceType=DESKTOP`; v2 requests also add `platform=DESKTOP` and the header
-`x-tidal-client-version` (required). The public `openapi.tidal.com/v2` API accepts our token for reads and playlist
-writes; beyond create and rename it is the fallback if the internal endpoints break.
+`x-tidal-client-version` (required). The public `openapi.tidal.com/v2` API accepts our token for reads and for
+playlist create and PATCH (the only writes probed); beyond those it is the fallback if the internal endpoints break.
 
 **Models.** Hand-written serde structs with only the fields we use; unknown fields ignored; enums carry
-`#[serde(other)] Unknown` so new values never break parsing.
+`#[serde(other)] Unknown` so new values never break parsing. `mixes: null` (v2 sends it) reads as no mixes.
 
 **Playback info.** Quality preference HI_RES_LOSSLESS → LOSSLESS. Manifest is a DASH MPD (`application/dash+xml`):
 `SegmentTemplate` + `SegmentTimeline` → init + media URLs; segment URLs are pre-signed, no auth header. Classify
@@ -189,30 +196,71 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 
 ## 7. `app` — UI
 
-- **Layout:** left sidebar (Home, Explore, Search, Collection sections, playlist/folder tree); centre view with
-  back/forward history (`Route` stack); bottom player bar (art, title/artist, transport, seek, volume, format badge
-  e.g. `24/96 FLAC · Exclusive`); right panel toggling Queue (drag reorder) / Lyrics (synced, auto-scroll,
-  click-to-seek) / Credits.
-- **Views:** Login, Home/Explore (shelves and grids rendered from TIDAL page modules), Search, Collection, Album,
-  Artist, Playlist (edit/reorder), Mix, Settings.
-- **Lists and grids** are virtualized (`ScrollArea::show_rows`; grids as rows). Track context menu: play next, add to
-  queue, add to playlist, favorite, go to album/artist, track radio, copy link.
-- **Keyboard** (Cmd on macOS): space play/pause, Ctrl+→/← next/prev, Ctrl+F search, Alt+←/→ back/forward; shortcut list in Settings.
+- **Layout** (as built in M4): left sidebar (back/forward, Home, Explore, Search, Collection, Settings, then the
+  library tree); centre view with back/forward history (`Route` stack); bottom player bar (art, title/artist,
+  transport with shuffle and repeat, seek, volume, format badge e.g. `24/96 FLAC · Exclusive`, and the toggles of the
+  right panel); right panel showing one of Queue (drag reorder), Lyrics or Credits, or none. Logged out, only the
+  login page and Settings show.
+- **Library tree:** folders and playlists as TIDAL keeps them, own and favorited alike (as the official sidebar); a
+  folder is listed when first opened. New playlist and New folder make them at the top level. A folder's menu
+  renames it, or deletes it once known empty (S5 never tried a full one); a playlist's moves it to a folder or the
+  top level and, if it is the user's own, deletes it.
+- **Views:** Login, Home/Explore (shelves and grids rendered from TIDAL page modules), Search, Collection, Album
+  (Add to playlist for all its tracks), Artist (Artist radio when it has a mix), Playlist (own: Edit, Delete, drag
+  to reorder), Mix, Settings.
+- **Lyrics** of the current track: synced lines follow the playback (the current one centred) and a click seeks
+  there; unsynced lyrics show as text; right-to-left when TIDAL says so; the provider is named. **Credits:** a
+  heading per role, credited artists link to their pages.
+- **Lists and grids** are virtualized (`ScrollArea::show_rows`; grids as rows). Track context menu: Play next, Add
+  to queue, Add to playlist ("New playlist…", then the own playlists, last updated first), Go to album, Go to
+  artist, Track radio (disabled without a mix), favorite, Copy link; on an own playlist also Remove from this
+  playlist. A menu left open across a reload closes rather than act on another row.
+- **Keyboard** (Cmd on macOS): space play/pause, Ctrl+→/← next/prev, Ctrl+F search, Alt+←/→ back/forward, Ctrl+,
+  Settings, Ctrl+Q quit (on every page; it never just hides to the tray); shortcut list in Settings.
 - **Theme:** dark default plus light (fastframe-theme). Accessibility via AccessKit. All strings through
   fastframe-i18n.
-- **Settings:** account (login/logout, client ID override), audio (Hi-Res on by default, output device, exclusive
-  off by default, normalization Off/Track/Album, Off by default), behavior (close to tray, start minimized), integrations (Last.fm, ListenBrainz, Discord toggle), updates
-  (check, pre-release channel). Stored as JSON in the config dir; secrets in the credential store.
+- **Settings** (as built in M4; the login page leads there too, with Back and without Log out): Account (Log out;
+  client ID and redirect URL, empty for the built-in client, Apply logs out), Appearance (Dark/Light), Audio (output
+  device, exclusive off by default, Hi-Res on by default, normalization Off/Track/Album, Off by default), Behavior
+  (Close to tray, on by default; Start minimized), Integrations (Last.fm, ListenBrainz, the Discord toggle; §8),
+  Keyboard shortcuts. Updates (check, pre-release channel) come with the updater (M5). Stored as `settings.json` in
+  the config dir; secrets in the credential store.
 
 ## 8. Integrations
 
-- **Now playing + media keys:** fastframe-now-playing.
-- **Tray:** fastframe-tray (play/pause, next, previous, show, quit).
-- **Single instance + `tidal://` links:** fastframe-instance; second launches hand their URL to the running instance.
-- **Scrobbling:** Last.fm (desktop auth flow with the project's API key) and ListenBrainz (user token). Rule: track
-  > 30 s, scrobble after half its length or 4 min, whichever comes first; "now playing" on start. Failed scrobbles
-  persisted to disk and retried.
-- **Discord Rich Presence:** `discord-rich-presence`; title, artist, album art URL, elapsed time; toggle in settings.
+As built in M4, except self-update (M5).
+
+- **Now playing + media keys:** fastframe-now-playing; MPRIS Raise and Quit act as the tray's Show and Quit, and
+  `OpenUri` opens a link.
+- **Tray and close to tray:** fastframe-tray (Show or hide, Play/Pause, Next, Previous, Quit; a drawn icon until
+  packaging). The app runs on fastframe-shell and outlives its window: with Close to tray on (the default) and a tray
+  the desktop shows, closing the window leaves playback, the media controls, Discord and the tray running headless,
+  and Show makes a new window. Without a tray host (stock GNOME) closing quits. Start minimized opens no window at
+  launch, again only with Close to tray and a tray. Ctrl+Q, the tray's Quit and MPRIS Quit quit.
+- **Single instance + links:** fastframe-instance. A later launch hands the running one its link (`open <link>`), or
+  else `show`, and exits; one the running copy declines or does not answer warns and exits. Links are
+  `tidal://<track|album|artist|playlist|mix>/<id>` and web links on `tidal.com`, `www.tidal.com` and
+  `listen.tidal.com` (with or without `browse/`), from the command line, a later launch or MPRIS `OpenUri`. Parsed
+  strictly in both processes (at most 2048 bytes; decimal ids, a 36-character playlist uuid, a mix id of 1–64
+  letters and digits), so no escape reaches an API path. A link opens once logged in; a track opens its album.
+  Registering the `tidal://` scheme and macOS Apple Events come with packaging (M5).
+- **Scrobbling:** one `Scrobbler` on the backend sends to each connected service. Rule: track > 30 s, a listen once
+  the time played (pauses excluded) reaches half its length or 4 min, whichever comes first; one per play, a repeat
+  counts again; "now playing" on start. Last.fm: the desktop auth flow (`auth.getToken`, the browser page where the
+  user allows Tidash, then `auth.getSession` every 3 s for up to 5 min), signed (md5) form POSTs, at most 50
+  scrobbles per call. ListenBrainz: the user token, checked with `validate-token`; `submit-listens`. The session key
+  and the token live in the credential store, the user names in the settings. Listens not taken wait in
+  `<data dir>/scrobbles.json` (one entry per service and play, at most 500, the oldest dropped; no secrets), flushed
+  oldest first at start, on a connect, and 5 min after a failed flush. A refused token (Last.fm 9/10/26, ListenBrainz
+  401) disconnects that service with one notice and keeps its queue; a send refused as malformed is dropped.
+- **Discord Rich Presence:** `discord-rich-presence` on a thread of its own (its IPC blocks without timeouts).
+  "Listening to Tidash": title, artists, the album cover (a 640 px `resources.tidal.com` URL), elapsed and
+  remaining time while playing, and an "Open in TIDAL" button. While there is a track to show and Discord is not
+  running, it looks again every 30 s. Off by default; the toggle is in Settings › Integrations.
+- **Build-time keys:** read with `option_env!`; an integration whose keys are not compiled in is hidden in Settings.
+  `TIDASH_LASTFM_API_KEY` and `TIDASH_LASTFM_SECRET` (a Last.fm API account), `TIDASH_DISCORD_APP_ID` (a
+  Discord application named `Tidash`, whose name is the "Listening to …"). ListenBrainz needs none. Nothing is
+  sent until the user connects a service or turns Discord on.
 - **Self-update:** fastframe-update with Ed25519-signed `checksums.txt` (publisher key set), using its `Transport`
   trait implemented over our reqwest 0.13 client (no second HTTP stack).
 
@@ -229,7 +277,9 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 | Exclusive refused / format unsupported | Shared output, one notice per run of refused tracks; the next track that opens the output (a load, or a format change) tries exclusive again, a gapless same-format track stays shared |
 | Device lost | Exclusive: shared output (the default device once the DAC is gone) from the same position, notice. Shared: reopens on its own, notice if it cannot |
 | Credential store unavailable | Memory-only session, warning |
-| Client ID revoked | Clear error pointing to the client ID setting |
+| Client ID refused (OAuth `invalid_client` or `unauthorized_client` at login or refresh) | Login page with "TIDAL refused the client ID. Check Settings › Account."; the login page leads to Settings |
+| Playlist changed elsewhere (412 on an item write) | An add retries once with a fresh ETag; a remove or move is not retried: the playlist reloads with a notice to try again. The wrong track is never removed |
+| Scrobble service offline, down or rate-limited | Kept in the disk queue, flushed 5 min later; a refused token disconnects the service with one notice and keeps its queue (§8) |
 
 ## 10. Performance budget (measured with a scripted run before each release)
 
@@ -311,8 +361,9 @@ second of 24/192 audio).
   exclusive opener; hardware tests are `#[ignore]`. Tests: bit-perfect output is bit-identical to decoded source;
   gapless output equals the concatenation of two tracks' decoded samples; resample and ReplayGain correctness. Small
   FLAC fixtures (16/44.1, 24/96) committed under `crates/player/tests/fixtures`.
-- `app`: queue logic (shuffle, repeat, insert, reorder), scrobble rule, `Model::apply`.
-- No UI tests in v1; add when UI regressions appear.
+- `app`: queue logic (shuffle, repeat, insert, reorder), scrobble rule, `Model::apply`; the backend, playlist edits
+  and scrobbling against wiremock; views headless (an egui pass, clicked through their AccessKit labels).
+- No screenshot tests in v1; add when visual regressions appear.
 
 ## 13. Milestones
 
@@ -336,6 +387,22 @@ past the end ends the track, the resampler counts its output. `cargo test` green
 on all three OSes at `e635314` (the last player commit); the WASAPI hardware test passes on the FiiO
 E10 (24/96). The exit criterion, bit-perfect 24/192 on each OS, awaits the acceptance session (the
 Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, else CI only).
+
+M4 outcome (2026-10-10, built; human acceptance pending): playlist create, edit and delete, adding tracks (an
+album's at once), removing and drag-reordering them; folders (create, rename, move a playlist in or out, delete
+once empty) in a sidebar tree of own and favorited playlists; track and artist radio; synced lyrics and track
+credits in the right panel beside the queue; Last.fm and ListenBrainz scrobbling with a disk queue; Discord Rich
+Presence; tray, close to tray and start minimized on fastframe-shell; single instance with `tidal://` and
+tidal.com links; Settings with Account (the client ID override, reachable before login), Appearance, Behavior,
+Integrations and the shortcut list (§7, §8). Also the M3 follow-ups on a settings change (a stale preload is
+dropped, the fallback notice can show again, the volume stays disabled in exclusive mode until the output is
+known). Workspace tests green on Windows (418 at `5e9ae46`); CI green on all three OSes at `62e9faf` (run
+38021201669, through the tray and shell), the branch head to be re-checked. Key rulings: a remove or move sends
+the ETag of the listing its positions came from and is never retried, so a playlist changed elsewhere reloads
+instead of removing the wrong track; a folder is deleted only when known empty; a relaunch always shows the window.
+Last.fm and Discord need the build-time keys (§8), which the human creates; until then both are hidden and tested
+on wiremock only. The exit criterion, v1 scope complete, awaits the acceptance session (M4 plan, Task 15 Step 3),
+with the M3 session still owed.
 
 ## 14. Spikes
 
@@ -370,7 +437,7 @@ Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, els
 | Crate | Version | Use |
 |---|---|---|
 | eframe / egui / egui_extras | 0.36.2 | UI (glow renderer, accesskit) |
-| fastframe-* | git tag v0.4.1 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll |
+| fastframe-* | git tag v0.4.1 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (fonts pinned to crmne/fastframe#17 until it ships; tray, shell, instance added in M4) |
 | symphonia | 0.6.1 | FLAC decode, MP4 demux |
 | cpal | 0.18.2 | shared output (via fastframe-audio); exclusive on macOS and Linux (`hw:`) |
 | wasapi | 0.25.0 | Windows exclusive |
@@ -384,6 +451,7 @@ Windows DAC takes 96 kHz at most; Linux needs a machine with a `hw:` device, els
 | roxmltree | 0.21 | DASH MPD parsing |
 | sha2 / base64 / rand | 0.11 / 0.23 / 0.10 | PKCE |
 | discord-rich-presence | 1.1.0 | Discord |
+| md5 | 0.8.1 | Last.fm call signatures |
 | image | 0.25.10 | artwork decode (jpeg/png) |
 | thiserror / log | 2.x / 0.4 | errors / logging (fastframe-log) |
 

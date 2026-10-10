@@ -4,7 +4,7 @@ A fast, native desktop client for TIDAL, built in Rust with egui on [fastframe](
 
 ## Legal stance
 
-Using an official client ID breaches TIDAL's ToS and can be revoked at any time. A setting to enter a replacement client ID is planned (settings come in milestone M4); until then the ID is built in. The name "Tidash" (TIDAL plus dash, for fast) plays on TIDAL's trademark, as Spotifast does on Spotify's; rename if challenged.
+Using an official client ID breaches TIDAL's ToS and can be revoked at any time. One is built in; you can enter a replacement client ID and redirect URL in Settings › Account, which the login page also leads to. The name "Tidash" (TIDAL plus dash, for fast) plays on TIDAL's trademark, as Spotifast does on Spotify's; rename if challenged.
 
 ## Build
 
@@ -17,6 +17,13 @@ On Linux, install the build dependencies first:
 ```sh
 sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
 ```
+
+### Build-time keys
+
+Last.fm scrobbling and the Discord status need keys compiled in. Set these environment variables when building; without them, those integrations are hidden in Settings. ListenBrainz needs none.
+
+- `TIDASH_LASTFM_API_KEY` and `TIDASH_LASTFM_SECRET`: a Last.fm API account ([last.fm/api/account/create](https://www.last.fm/api/account/create)).
+- `TIDASH_DISCORD_APP_ID`: the application ID of a Discord application named `Tidash` (its name is what "Listening to …" shows).
 
 ## License
 

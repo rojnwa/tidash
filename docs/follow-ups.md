@@ -1,4 +1,4 @@
-# Follow-ups carried out of M0–M3
+# Follow-ups carried out of M0–M4
 
 Parked by task reviews and the final reviews. Pick each up in the milestone that touches its code.
 
@@ -29,6 +29,85 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 - Untested: the `Error` of a cancelled preload and its stop-when-nothing-follows branch, the stale
   drop in `RemoveFromQueue`, a normal load not counting play time while Buffering (the `playing()`
   helper sets Playing early), `start_current` clearing the output and gapless keeping it.
+
+Parked in M4:
+
+- Not built: an album credits page (v1 `albums/{id}/items/credits`, S5; only track credits show, in
+  the side panel); collaborative playlists (only the user's own are edited).
+- The lyrics auto-scroll follows every line change; pause it after a manual scroll (`ui/lyrics.rs`).
+- Lyrics: a late Failed for the same track can replace Ready lyrics (track 1 → 2 → 1, the first
+  request timing out last; Failed should never overwrite Ready, `model.rs`); the lyrics and credits
+  scroll offset carries over between tracks (`id_salt` not keyed by the track); the highlight lags a
+  line change by up to 250 ms; a blank synced line shows "…" outside `tr` (`ui/lyrics.rs`).
+- The player bar reserves an estimated 420 pt for the three panel toggles (`ui/player_bar.rs`);
+  measure it in the acceptance session.
+- "Added n tracks" and "Already in this playlist" go out through the error list, warn-coloured (R17);
+  a styled info notice (`library.rs`).
+- Settings: a stale echo of edit A after B can make a third edit C build on A (B lost), and two quick
+  edits can flicker once (the theme, say) until the second echo; a pending counter like
+  `pending_favorites` would close both (`model.rs`).
+- A client change while logged out keeps the old PKCE and login URL, so a redirect pasted from the old
+  URL fails with a generic "Login failed": clear `pkce` on a client change (`backend.rs`).
+- A refused refresh shows both "session expired" and the refused-client message; a redirect-only
+  change says "the client ID changed"; `Msg::SessionExpired(Arc<Client>, bool)` wants named fields
+  (`backend.rs`, `model.rs`).
+- Shortcut list: the key names "Space" and "Alt" skip `tr`; Ctrl+, does nothing on the login page
+  though the list names it (`ui/settings.rs`, `ui/mod.rs`); Ctrl+Shift+Q also quits (`consume_key`
+  ignores an extra Shift, as for the other shortcuts).
+- Start minimized needs Close to tray, which the UI does not show: disable the checkbox or reword the
+  hint (`ui/settings.rs`).
+- Library tree: a failed root or folder load at login (5xx) is only logged and not retried (the tree
+  stays empty until the next edit or login); deleted folders stay in the backend's `folders` set and
+  later edits GET them (drop them when `DeleteFolder` succeeds); concurrent edits' reloads can land out
+  of order (`backend.rs`, `library.rs`).
+- "Move to folder": `destinations` dedupes only adjacent entries, so a folder can show twice; its
+  AccessKit label carries egui's "⏵" ("Add to playlist" overrides it) (`ui/library.rs`).
+- A click outside a dialog closes it and discards what was typed (egui `Modal`'s default,
+  `ui/library.rs`); check in the acceptance session.
+- Row menus: a reload landing on the right-click pass races for one frame; an empty popup frame shows
+  for one pass on close; `tracks::show` does not enforce "edit only without discs"
+  (`edit.filter(|_| !multi)`); `tracks` imports `dragging` from `queue_panel`, which imports `ROW_H`
+  from `tracks` (`rows.rs` is the natural home) (`ui/tracks.rs`, `ui/queue_panel.rs`).
+- Scrobbling: a 401 in flight across a disconnect and reconnect can clear the new user or delete the
+  new secret; `forget` compares the cache before the store delete, so a racing connect's secret could
+  go (the UI cannot reach that) (`scrobble.rs`).
+- Scrobbling: a connected service with no stored token reads the store again on every send (a prompt
+  on a locked Linux Secret Service); a wiped keyring with the user still set shows "Connected as …"
+  while listens wait; settings lost with a saved queue send the backlog to whichever account connects
+  next (`scrobble.rs`).
+- Scrobbling: a ListenBrainz 4xx drops a whole import and keeps dropping (a systematic 403/404 wipes
+  the backlog), and a Last.fm batch refused outright (code 6, say) goes whole. Never queue a listen
+  with an empty artist or title (`Listen::of` falls back to ""); optionally re-send one by one
+  (`scrobble.rs`, `scrobble/listenbrainz.rs`, `scrobble/lastfm.rs`).
+- A skip within ~1 s of crossing the threshold loses the scrobble (checked on the 1 s tick only);
+  `end_play` could check `scrobble_due` (`playback.rs`).
+- Last.fm's `verdict` checks HTTP 5xx before the codes (a 5xx with 9/10/26 is Retry, not Reconnect):
+  reorder, or fix the comment (`scrobble/lastfm.rs`).
+- Discord: timestamps can carry over to another track that starts within 2 s (add
+  `&& new.url == old.url`; only a < 2 s gapless track reaches it); the thread wakes every 30 s with
+  nothing to do (block on `recv` while nothing is dirty); no reconnect right after a write error (it
+  waits for the 30 s tick) (`discord.rs`).
+- A later launch: fastframe-instance's own warnings go nowhere (no logger yet, `instance.rs`); on
+  Windows it may only flash the taskbar instead of raising the window, where
+  `AllowSetForegroundWindow(ASFW_ANY)` in the later launch is the remedy (check in the acceptance
+  session).
+- The current track's own in-flight load keeps the old quality when the settings change (documented,
+  `playback.rs`).
+- `backend/tests.rs` is 813 lines (over ~800): move the scrobbling tests to
+  `backend/tests/scrobble.rs`; `ui/testing.rs`' `every_state` shadows `shown` (closure, module fn,
+  local); the `too_many_arguments` reason in `ui/header.rs` ("each part named at the call") reads
+  oddly.
+- Untested in M4: Cancel/OK in the name and playlist dialogs, and an edit's Auth path (no error, no
+  reload) (`ui/library.rs`, `library.rs`); the row-menu reload test changes track and ETag at once (a
+  one-field guard would pass); the album header's "Add to playlist" sending every track id; a dialog
+  closing on LoggedOut/SessionExpired (`library::close`); a saved-queue flush at start without a user
+  (`a_token_without_a_user_sends_nothing` flushes an empty queue), the 500 cap, and repeat-one through
+  `Playback`; the no-keys filter at the send level (`Scrobbler::new` with `lastfm_keys` None and
+  Last.fm connected); Discord's `run` loop (generic over `DiscordIpc`, it could take a fake); the
+  hide/quit state machine (quit beats hide, Toggle on a minimized window restores, Toggle headless
+  shows) and the `quit_shortcuts` clear in `setup_look` (`main.rs`); the backend's
+  `Action::OpenTrack` arm; `set_audio`'s abort of an unsent preload and a normalization-only change
+  (`playback/tests.rs`).
 
 ## Player
 
@@ -91,7 +170,26 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 - `reqwest`'s `rustls` feature pulls aws-lc-sys (cmake, NASM); `ring` is the lighter provider.
 - `paged_all` waits for every concurrent page before returning the first error, and trusts
   `totalNumberOfItems` without a bound; a cursor cycle longer than one page runs to the 200-page cap.
-- Writes go through `send`, so 429/5xx are retried (the official client never retries writes).
+- Writes go through `send`, so 429/5xx are retried (the official client never retries writes): a
+  `create-folder` that TIDAL applied but answered 5xx can make two folders (v2 has no idempotency
+  key), and an add applied but answered 5xx reports 0 added after its SKIP retry (`edit.rs`).
+- R10: `playlist_items` positions count the items TIDAL lists; if TIDAL ever left an unavailable item
+  out of a page, later positions would shift and a remove or move would hit a neighbouring row
+  (`browse.rs`, marked `ponytail:`; official client 2026.09.30 makes the same assumption).
+- `folder()` would send both `cursor` and `offset` if a cursor ever appeared (R6's guess, `edit.rs`).
+- `TokenStore`'s secret methods default to no-ops (`delete_secret` answers Ok), so a half-written
+  store would hide a failed Disconnect: make them required (`store.rs`).
+- Untested: that only a 404 maps to `Ok(None)` in `lyrics` (500/403 are errors); `parse_lrc`'s
+  rejected stamps (`[ab:cd.ef]`, `[01:02.5]`, `[ar:x]`, a missing `]`, no space after the cue), checked
+  by inspection only (`lyrics.rs`); a non-matching `client_refused()` (`invalid_grant`, another
+  `Auth`, a `Status`) (`error.rs`).
+- `catalog.rs:21`'s doc comment ("…is neither") reads oddly.
+- S5 fixtures: `folder_items.json`'s top-level `lastModifiedAt` is earlier than the subfolder's
+  `addedAt` (cosmetic); `openapi_playlist_created.json` keeps 4 `externalLinks` (the rule is ≤ 3); the
+  probe titles stay instead of Playlist A/B; the probe uuid `…0001` is S4's Playlist A in older
+  fixtures (R8; renumber to `…0009`?).
+- Spike docs: S5 row 11 says "add" with the SKIP ETag where the Task 1 report says a move;
+  `s4-library-endpoints.md` line 3 shows the recorder's old positional header syntax (now `--header`).
 
 ## CI and dependencies
 
@@ -100,8 +198,15 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   ships.
 - fastframe-audio v0.4.1 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
   issue is drafted (M3 Task 11) and waits for the human's go-ahead to file.
+- Lockfile churn from the tray, shell and instance crates (M4 Tasks 12–13): ~8 crates moved from
+  windows-sys 0.61/0.60 to 0.52/0.59, and `dpi` is in twice (0.1.1, 0.1.2) (`Cargo.lock`).
 
-## M4 / M5
+## M5 and later
+
+- Links: register the `tidal://` scheme and handle macOS Apple Events at packaging; an autostart
+  argument then pings instead of showing the window (R21, `instance.rs`).
+- Linux Flatpak: `discord-rich-presence`'s Unix transport commits to the first socket path that
+  exists, so a stale Flatpak socket refuses every connect (SONE replaced the transport; `discord.rs`).
 
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
