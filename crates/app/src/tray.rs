@@ -11,11 +11,13 @@ const NEXT: &str = "next";
 const PREVIOUS: &str = "previous";
 const QUIT: &str = "quit";
 
-/// What the tray, or the desktop's media controls, ask of the app.
+/// What the tray, the desktop's media controls, or a later launch (`instance`) ask of the app.
 #[derive(Debug)]
 pub enum TrayAction {
     /// Bring the window up, making one if there is none.
     Show,
+    /// Bring the window up and open this link once logged in.
+    Open(crate::link::Link),
     /// Make a window if there is none, else close it to the tray.
     Toggle,
     /// For the backend.

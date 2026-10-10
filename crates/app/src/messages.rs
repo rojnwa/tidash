@@ -31,6 +31,8 @@ pub enum Action {
     Logout,
     Search(String),
     Open(Route),
+    /// A track link: goes to the track's album (`Event::Navigate`).
+    OpenTrack(u64),
     PlayTracks {
         tracks: Vec<tidal::Track>,
         start: usize,

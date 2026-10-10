@@ -522,6 +522,12 @@ impl Backend {
                     self.spawn(load);
                 }
             }
+            Action::OpenTrack(id) => {
+                if let Some(c) = self.client.clone() {
+                    let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+                    self.spawn(crate::pages::open_track(c, id, emit, msgs));
+                }
+            }
             Action::SetFavorite { item, on } => {
                 if let Some(c) = self.client.clone() {
                     let (emit, msgs) = (self.emit.clone(), self.msgs.clone());

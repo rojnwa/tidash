@@ -16,7 +16,9 @@ mod backend;
 mod discord;
 mod i18n;
 mod images;
+mod instance;
 mod library;
+mod link;
 mod messages;
 mod model;
 mod now_playing;
@@ -29,9 +31,10 @@ mod tray;
 mod ui;
 
 use fastframe_shell::{Closed, Headless, Held, Resident, Waker};
-use model::{Action, Event, Model};
+use link::Link;
+use model::{Action, Event, Model, Route};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tray::TrayAction;
@@ -71,6 +74,10 @@ struct App {
     tray: Option<fastframe_tray::Tray>,
     /// What the tray's Play/Pause entry was last set for.
     tray_playing: bool,
+    /// What later launches asked for (`instance`), and this launch's own link.
+    inbox: instance::Inbox,
+    /// Links that came in, waiting for a login (`open_links`).
+    links: Vec<Link>,
     /// No window exists: the app runs headless.
     hidden: bool,
     /// The tray asked to close the window to it.
@@ -108,6 +115,7 @@ impl App {
     fn new(
         waker: &Waker,
         settings: settings::Settings,
+        inbox: instance::Inbox,
         started: Instant,
         switches: Switches,
     ) -> Self {
@@ -133,6 +141,8 @@ impl App {
             presence,
             tray,
             tray_playing: false,
+            inbox,
+            links: Vec::new(),
             hidden: false,
             hide: false,
             show: false,
@@ -219,8 +229,8 @@ impl App {
         }
     }
 
-    /// Backend events, the media controls and the tray: each window pass (also while the
-    /// window is minimized) and each headless tick.
+    /// Backend events, later launches, the media controls and the tray: each window pass (also
+    /// while the window is minimized) and each headless tick.
     fn pump(&mut self, ctx: &egui::Context) {
         let position = self.position();
         while let Ok(ev) = self.events.try_recv() {
@@ -243,7 +253,11 @@ impl App {
                 }
             }
         }
-        self.open_current(); // Home after `LoggedIn`
+        let launches =
+            std::mem::take(&mut *self.inbox.lock().unwrap_or_else(PoisonError::into_inner));
+        for asked in launches {
+            self.handle(ctx, asked);
+        }
         for asked in self.media.poll(&self.model.playback, position) {
             self.handle(ctx, asked);
         }
@@ -251,6 +265,8 @@ impl App {
         for click in clicks.unwrap_or_default() {
             self.handle(ctx, tray::action_for(&click));
         }
+        open_links(&mut self.model, &mut self.links, &self.actions);
+        self.open_current(); // Home after `LoggedIn`, a link's page
         let playing = matches!(self.model.playback.state, Some(player::PlayState::Playing));
         if let Some(tray) = &mut self.tray
             && self.tray_playing != playing
@@ -260,7 +276,7 @@ impl App {
         }
     }
 
-    /// Does what the tray or the media controls asked.
+    /// Does what the tray, the media controls or a later launch asked.
     fn handle(&mut self, ctx: &egui::Context, asked: TrayAction) {
         let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
         match asked {
@@ -268,6 +284,10 @@ impl App {
                 let _ = self.actions.send(action);
             }
             TrayAction::Quit => self.quit(ctx),
+            TrayAction::Open(link) => {
+                self.links.push(link);
+                self.handle(ctx, TrayAction::Show);
+            }
             TrayAction::Toggle if !self.hidden && !minimized => {
                 self.hide = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -359,6 +379,27 @@ fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool) -> bool {
     behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray)
 }
 
+/// Opens the links that wait, in order, once logged in: a track's album comes from the
+/// backend (`Action::OpenTrack`), the rest are routes.
+fn open_links(model: &mut Model, links: &mut Vec<Link>, actions: &UnboundedSender<Action>) {
+    if !model.logged_in {
+        return;
+    }
+    for link in links.drain(..) {
+        let route = match link {
+            Link::Track(id) => {
+                let _ = actions.send(Action::OpenTrack(id));
+                continue;
+            }
+            Link::Album(id) => Route::Album(id),
+            Link::Artist(id) => Route::Artist(id),
+            Link::Playlist(id) => Route::Playlist(id),
+            Link::Mix(id) => Route::Mix(id),
+        };
+        model.navigate(route);
+    }
+}
+
 /// One window around the app; dropping it with the window hands the app back to the shell.
 struct Window(Held<App>);
 
@@ -397,18 +438,30 @@ fn setup_look(ctx: &egui::Context, theme: settings::Theme) {
 
 fn main() -> eframe::Result {
     let started = Instant::now();
+    // A desktop hands a link over as an argument: the first that parses is this launch's.
+    let link = std::env::args_os()
+        .skip(1)
+        .find_map(|a| link::parse(a.to_str()?));
+    // Before any window: whether one opens at start depends on them. Blocks briefly.
+    let load = || settings::path().as_deref().map(settings::Settings::load);
+    let hidden = load().unwrap_or_default().behavior.start_minimized;
+    let waker = Waker::default();
+    let inbox = Arc::new(Mutex::new(Vec::from_iter(
+        link.clone().map(TrayAction::Open),
+    )));
+    // Before logging (a fresh file each run), the tray and the backend: a later launch only
+    // hands its request to the running one, and ends.
+    let Some(_instance) = instance::claim(link.as_ref(), hidden, &waker, Arc::clone(&inbox)) else {
+        return Ok(());
+    };
     let _ = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
         // symphonia's MP4 probe matches `ftyp` and reports every file's leading box size as
         // "4 bytes of junk".
         .filter("warn,tidash=info,symphonia_core::formats::probe=error")
         .init();
     let switches = Switches::parse(|k| std::env::var(k).ok());
-    // Before any window: whether one opens at start depends on them. Blocks briefly.
-    let settings = settings::path().as_deref().map(settings::Settings::load);
-    let settings = settings.unwrap_or_default();
-    let hidden = settings.behavior.start_minimized;
-    let waker = Waker::default();
-    let app = App::new(&waker, settings, started, switches);
+    let settings = load().unwrap_or_default(); // again, now that a read that fails is logged
+    let app = App::new(&waker, settings, inbox, started, switches);
     fastframe_shell::Shell::new(app, &waker)
         .idle(fastframe_tray::idle)
         .start_hidden(hidden)
@@ -434,8 +487,40 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{Switches, starts_hidden};
+    use super::{Action, Event, Link, Model, Route, Switches, open_links, starts_hidden};
     use crate::settings::Behavior;
+
+    /// Links that come in before the login open after it, in order: a track's album comes
+    /// from the backend.
+    #[test]
+    fn a_link_waits_for_login() {
+        let (actions, mut sent) = tokio::sync::mpsc::unbounded_channel();
+        let mut model = Model::default();
+        let mut links = vec![
+            Link::Artist(2),
+            Link::Track(7),
+            Link::Playlist("p".into()),
+            Link::Mix("m".into()),
+            Link::Album(1),
+        ];
+        open_links(&mut model, &mut links, &actions);
+        assert_eq!(links.len(), 5, "kept until logged in");
+        assert_eq!(model.history, [Route::Login]);
+        assert!(sent.try_recv().is_err());
+        model.apply(Event::LoggedIn(1));
+        open_links(&mut model, &mut links, &actions);
+        assert!(links.is_empty());
+        let want = [
+            Route::Home,
+            Route::Artist(2),
+            Route::Playlist("p".into()),
+            Route::Mix("m".into()),
+            Route::Album(1),
+        ];
+        assert_eq!(model.history, want);
+        assert!(matches!(sent.try_recv(), Ok(Action::OpenTrack(7))));
+        assert!(sent.try_recv().is_err());
+    }
 
     #[test]
     fn start_hidden_only_with_a_tray() {

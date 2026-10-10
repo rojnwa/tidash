@@ -29,6 +29,7 @@ fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.
 fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 directories = "6"
 md5 = "0.8"
 serde.workspace = true

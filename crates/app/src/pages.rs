@@ -1,5 +1,5 @@
-//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9); and the
-//! favorite writes, which make a collection tab stale.
+//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9), and a
+//! track link's album; and the favorite writes, which make a collection tab stale.
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
@@ -79,6 +79,19 @@ pub async fn open(c: Arc<Client>, route: Route, emit: Arc<Emitter>, msgs: Unboun
                 tr("Could not load the page")
             )));
         }
+    }
+}
+
+/// A track link: goes to the track's album page; a failure is one error. The backend spawns
+/// it.
+pub async fn open_track(c: Arc<Client>, id: u64, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) {
+    match c.track(id).await {
+        Ok(track) => emit.send(Event::Navigate(Route::Album(track.album.id))),
+        Err(e) if session_expired(&e, &c, &msgs) => {}
+        Err(e) => emit.send(Event::Error(format!(
+            "{}: {e}",
+            tr("Could not open the track")
+        ))),
     }
 }
 
@@ -343,6 +356,32 @@ pub(crate) mod tests {
             panic!("{events:?}");
         };
         assert!(!e.contains(&base) && !e.contains("countryCode"), "{e}");
+        assert!(!expired);
+    }
+
+    /// A track link opens its album; a track TIDAL refuses is one error.
+    #[tokio::test]
+    async fn track_link_opens_its_album() {
+        const TRACK: &str = include_str!("../../tidal/tests/fixtures/track.json");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/tracks/20115564"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(TRACK, "application/json"))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let c = client(&server.uri(), &cache("track-link"));
+        let open = |id| {
+            let c = Arc::clone(&c);
+            move |emit, msgs| open_track(c, id, emit, msgs)
+        };
+        let (events, _) = events_of(open(20115564)).await;
+        assert!(
+            matches!(events[..], [Event::Navigate(Route::Album(20115556))]),
+            "{events:?}"
+        );
+        let (events, expired) = events_of(open(1)).await; // 404
+        assert!(matches!(events[..], [Event::Error(_)]), "{events:?}");
         assert!(!expired);
     }
 

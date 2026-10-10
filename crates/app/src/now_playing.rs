@@ -1,7 +1,7 @@
 //! The OS media controls (fastframe-now-playing): the Windows media overlay, macOS Now
 //! Playing and MPRIS show the current track; media keys and overlay buttons come back as
-//! actions, and MPRIS Raise and Quit as the tray's Show and Quit. Driven from the main thread,
-//! where macOS wants the controls started and used.
+//! actions, MPRIS Raise and Quit as the tray's Show and Quit, and its OpenUri, a TIDAL link,
+//! as Open. Driven from the main thread, where macOS wants the controls started and used.
 
 use crate::model::{Action, PlaybackSnapshot};
 use crate::tray::TrayAction;
@@ -42,9 +42,11 @@ impl MediaControls {
     ) -> Self {
         let wake: Wake = Arc::new(wake);
         let mut app = App::new("tidash", "Tidash");
-        // The panel (MPRIS) brings the window up and quits.
+        // The panel (MPRIS) brings the window up, quits, and opens TIDAL links; which of
+        // these URIs are ones is `link::parse`'s to say.
         app.can_raise = true;
         app.can_quit = true;
+        app.uri_schemes = vec!["tidal".into(), "https".into()];
         let w = wake.clone();
         Self {
             controls: NowPlaying::start(app, move || w()),
@@ -178,11 +180,12 @@ fn state_for(
     }
 }
 
-/// Raise and Quit are the app's; the rest the backend's.
+/// Raise, Quit and OpenUri are the app's; the rest the backend's.
 fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Option<TrayAction> {
     Some(TrayAction::Play(match command {
         Command::Raise => return Some(TrayAction::Show),
         Command::Quit => return Some(TrayAction::Quit),
+        Command::OpenUri(uri) => return crate::link::parse(&uri).map(TrayAction::Open),
         Command::Play => Action::Play,
         Command::Pause | Command::Stop => Action::Pause,
         Command::PlayPause => Action::TogglePlay,
@@ -267,8 +270,15 @@ mod tests {
         // The app's, not the backend's: MPRIS Raise and Quit.
         assert_eq!(act(Command::Raise, PlayState::Paused), "Some(Show)");
         assert_eq!(act(Command::Quit, PlayState::Paused), "Some(Quit)");
-        let uri = Command::OpenUri("tidal://track/1".into());
-        assert_eq!(act(uri, PlayState::Paused), "None");
+        // A TIDAL link opens; nothing else does.
+        let uri = |u: &str| act(Command::OpenUri(u.into()), PlayState::Paused);
+        assert_eq!(uri("tidal://track/1"), "Some(Open(Track(1)))");
+        assert_eq!(
+            uri("https://tidal.com/browse/album/2?u"),
+            "Some(Open(Album(2)))"
+        );
+        assert_eq!(uri("https://evil.com/album/2"), "None");
+        assert_eq!(uri("tidal://track/1%2F..%2Fusers"), "None");
     }
 
     #[test]
