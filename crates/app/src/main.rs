@@ -347,7 +347,11 @@ impl App {
         let waited = since.elapsed();
         let route = self.model.route();
         let page = matches!(route, Route::Login | Route::Search | Route::Settings)
-            || self.model.pages.get(route).is_some_and(|s| s.data.is_some());
+            || self
+                .model
+                .pages
+                .get(route)
+                .is_some_and(|s| s.data.is_some());
         let settled = page && !self.ui.images.loading() && waited >= Duration::from_secs(1);
         if settled || waited >= Duration::from_secs(20) {
             self.shot_since = None;

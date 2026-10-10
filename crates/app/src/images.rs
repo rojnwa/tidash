@@ -175,7 +175,9 @@ impl TextureCache {
     /// Some requested artwork has no texture yet: it is on its way, or failed and waits out
     /// `RETRY`.
     pub fn loading(&self) -> bool {
-        self.requested.iter().any(|k| !self.textures.contains_key(k))
+        self.requested
+            .iter()
+            .any(|k| !self.textures.contains_key(k))
     }
 
     /// Adds a texture, then drops the least recently drawn beyond the budget, never one drawn
