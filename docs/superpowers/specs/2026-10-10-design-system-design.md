@@ -206,9 +206,11 @@ From `Visuals::dark()` or `light()` by `dark`, then:
   active surface_active, each composited over surface into an opaque colour (Dark's are translucent: on their own
   they would be darker than the idle fill); `weak_bg_fill` the same.
 - Text styles of §4.3; `item_spacing` (8, 8); `button_padding` (16, 8); `interact_size` (40, 32); `menu_margin` 4.
-- Sliders: `slider_rail_height` 4, circle handle, trailing fill in text colour.
-- Scroll bars stay `ScrollStyle::solid()` (the floating bars' fade repaints while idle, S3): 6 px wide, invisible
-  track, handle text at 35%, 55% hovered, text while dragged.
+- Sliders: `slider_rail_height` 4, circle handle; the trailing fill is egui's selection fill globally, and the player
+  bar's sliders set it to text locally (§5.7).
+- Scroll bars stay `ScrollStyle::solid()` (the floating bars' fade repaints while idle, S3): 6 px wide; egui's solid
+  bars always show their track (`surface`) and draw the handle at 55% text, full text hovered or dragged. TIDAL's
+  hidden track is out of reach without the floating bars.
 
 ## 5. Shell and components
 
@@ -352,7 +354,8 @@ neither sidebar nor top bar (as today).
   `Palette`; `apply` sets `panel_fill`, `window_fill` and `override_text_color` from the palette.
 - Settings: old `"Dark"` / `"Light"` files load; the default is Dark; a damaged `custom_theme_cache` loads as `None`.
 - Tier from `OutputInfo` (lossy, 16/44.1 FLAC, 24/96 FLAC, 16/96 FLAC).
-- Dominant colour: a 16 px image mostly grey with a vivid red patch gives red; `theme::tint` lands at lightness 0.30
+- Dominant colour: a 16 px image of greys spread over several shades with a vivid red patch gives red (a single flat
+  grey outweighs a small patch by design); `theme::tint` lands at lightness 0.30
   and 0.72. Settings default `accent_from_art` on and `sidebar_collapsed` off.
 - Views (headless, by AccessKit label): the existing player bar, shortcut and dismiss tests pass unchanged; Enter in
   the top-bar search sends `Search` and opens the Search page; Collection nav rows open their tab; picking a theme in
