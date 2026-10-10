@@ -442,16 +442,13 @@ fn main() -> eframe::Result {
     let link = std::env::args_os()
         .skip(1)
         .find_map(|a| link::parse(a.to_str()?));
-    // Before any window: whether one opens at start depends on them. Blocks briefly.
-    let load = || settings::path().as_deref().map(settings::Settings::load);
-    let hidden = load().unwrap_or_default().behavior.start_minimized;
     let waker = Waker::default();
     let inbox = Arc::new(Mutex::new(Vec::from_iter(
         link.clone().map(TrayAction::Open),
     )));
     // Before logging (a fresh file each run), the tray and the backend: a later launch only
     // hands its request to the running one, and ends.
-    let Some(_instance) = instance::claim(link.as_ref(), hidden, &waker, Arc::clone(&inbox)) else {
+    let Some(_instance) = instance::claim(link.as_ref(), &waker, Arc::clone(&inbox)) else {
         return Ok(());
     };
     let _ = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
@@ -460,7 +457,10 @@ fn main() -> eframe::Result {
         .filter("warn,tidash=info,symphonia_core::formats::probe=error")
         .init();
     let switches = Switches::parse(|k| std::env::var(k).ok());
-    let settings = load().unwrap_or_default(); // again, now that a read that fails is logged
+    // Before any window: whether one opens at start depends on them. Blocks briefly.
+    let settings = settings::path().as_deref().map(settings::Settings::load);
+    let settings = settings.unwrap_or_default();
+    let hidden = settings.behavior.start_minimized;
     let app = App::new(&waker, settings, inbox, started, switches);
     fastframe_shell::Shell::new(app, &waker)
         .idle(fastframe_tray::idle)
