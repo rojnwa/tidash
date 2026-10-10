@@ -145,14 +145,29 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Shelves: a quick second › click lands short of a page (it retargets from the animated offset); the
   arrows are never dimmed at the ends or when every card fits; "View all" lost its pointing-hand
   cursor (`ui/shelf.rs`).
-- Headers: the artist hero's picture is requested per 32 px of width (clamp to the largest
-  rendition); the exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`); a debug build
+- Headers: the exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`); a debug build
   logs egui's PERF WARNING when a header's height changes three frames running; the cover to action
   row gap is 40 against TIDAL's ~48 (check in the acceptance session).
+- The 960×600 minimum window (Ruling 16, `main.rs`) does not fit a 1366×768 display at 125 % scaling
+  (~1093×614 logical, ~576 tall above the taskbar): the player bar sits below the screen's edge. Keep
+  it, or lower the height floor (960×540 keeps the width reasoning); decision pending with the human.
+- `dominant()`'s heaviest bucket and `TextureCache::get`'s nearest size break ties in `HashMap` order,
+  so a tie can differ between runs: break them by key, the larger size for `get` (`theme.rs`,
+  `images.rs`).
+- A hovered square card's shade has sharp corners over the cover's 2 px radius (`ui/card.rs`).
+- In rows under ~121 px wide the duration column can overlap the cover and index (unreachable at the
+  960 px minimum): keep the time column from starting left of the title (`ui/tracks.rs`).
+- `icon_button` and `circle_button` repeat their scaffolding (a private disc helper); `badge` takes a
+  palette it does not use (`ui/widgets.rs`).
+- Test nits: the widgets tests' `run` repeats `testing::pass_with`'s input setup (`testing::pass_raw`
+  takes a whole `RawInput` now); the logged-in error strip (Dismiss below `TOP_BAR`) is untested; the
+  rows' long-title test compares against the next shape, not the next column's start; nothing tests
+  that a stand-in drawn this pass survives an eviction; the no-slab test's 700 px literal assumes the
+  800 px test window; the Settings fit test omits the token field and allows flush edges.
 - Settings' help texts under the rows are not AccessKit descriptions; the token field says "User token"
   twice (name and placeholder) (`ui/settings.rs`).
 - "Album", "Artist" and "Playlist" share one msgid across senses (type line, column header, setting)
-  without `msgctxt` (`tidash.pot`).
+  without `msgctxt`, and their location comments miss `src/ui/tracks.rs` (`tidash.pot`).
 - The player bar's slider knob copies egui's private slider geometry (height / 2.5, `shrink(radius)`),
   so an egui upgrade can move egui's handle out from under it; add a same-centre check
   (`ui/player_bar.rs`).

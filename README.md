@@ -27,7 +27,7 @@ Last.fm scrobbling and the Discord status need keys compiled in. Set these envir
 
 ## Themes
 
-Settings › Appearance offers Follow system, Dark (TIDAL's look, the default), Light and every palette in the `themes` folder beside `settings.json` in the config directory (Open themes folder opens it). The eight presets from fastframe (Nord, Catppuccin, Rose Pine, Tokyo Night, …) are installed there on the first run, and a palette file you drop in (a preset copied and edited is the easiest start) is listed the next time Settings opens.
+Settings › Appearance offers Follow system, Dark (TIDAL's look, the default), Light and every palette in the `themes` folder beside `settings.json` in the config directory (Open themes folder opens it). The eight presets from fastframe (Nord, Catppuccin, Rose Pine, Tokyo Night, …) are installed there on the first run, and a palette file you drop in (a preset copied and edited is the easiest start) is listed the next time Settings opens. On Linux, Follow system uses Dark where the desktop reports no theme to the window (often on X11, and on some Wayland compositors); pick Light there explicitly.
 
 ## License
 

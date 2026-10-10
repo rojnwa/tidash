@@ -377,6 +377,8 @@ Still owed: the human acceptance session (Step 5), as this checklist, release bu
 - [ ] The player bar while playing: cover, title, artists, the format pill (tier colour), times and seek; Play does
   not move between tracks or at start/stop. With Exclusive on at the 960×600 minimum, the title column is tight
   (~31 px, R25/R28): decide whether that is acceptable.
+- [ ] The 960×600 minimum (R16) does not fit a 1366×768 display at 125 % scaling (~576 logical px tall above the
+  taskbar): keep it, or lower the height floor to 540 (`docs/follow-ups.md`).
 - [ ] Collapse and expand the sidebar: it slides; collapsed, every row navigates and shows its name as a tooltip.
 - [ ] Tab through the top bar, the sidebar, a track list and the player bar: the 2 px focus ring shows on every
   control; Enter and Space activate.
