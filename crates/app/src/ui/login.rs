@@ -2,8 +2,10 @@
 //! with).
 
 use super::Ctx;
+use super::widgets::pill_button;
 use crate::i18n::tr;
 use crate::model::{Action, Redirect, Route};
+use crate::theme;
 
 #[derive(Default)]
 pub struct State {
@@ -14,14 +16,17 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     super::padded(ui, |ui| form(ui, ctx, state));
 }
 
+/// A centred column (spec §5.8): the primary pill and the Settings link, then the paste step.
+/// No top bar shows logged out: `ui::draw` pads the top, this the gap under it.
 fn form(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
-    ui.add_space(24.0);
+    ui.add_space(theme::MODULE_GAP);
     ui.vertical_centered(|ui| {
         ui.set_max_width(560.0);
-        if ui.button(tr("Log in with TIDAL")).clicked() {
+        let login = tr("Log in with TIDAL");
+        if pill_button(ui, &ctx.palette, None, &login, true).clicked() {
             ctx.send(Action::BeginLogin);
         }
-        if ui.small_button(tr("Settings")).clicked() {
+        if ui.link(tr("Settings")).clicked() {
             ctx.go(Route::Settings);
         }
         let Some(url) = &ctx.model.login_url else {

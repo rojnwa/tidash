@@ -649,7 +649,10 @@ fn main() -> eframe::Result {
         .start_hidden(hidden)
         .run(|lease| {
             // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
-            let mut viewport = eframe::egui::ViewportBuilder::default().with_app_id("tidash");
+            // The sidebar, the side panel and the player bar's columns need 960 × 600 (ruling 16).
+            let mut viewport = eframe::egui::ViewportBuilder::default()
+                .with_app_id("tidash")
+                .with_min_inner_size([960.0, 600.0]);
             if screenshot {
                 viewport = viewport.with_inner_size([1440.0, 900.0]); // as TIDAL's references
             }

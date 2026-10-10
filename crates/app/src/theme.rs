@@ -271,6 +271,11 @@ pub fn label() -> FontId {
     Weight::SemiBold.font_id(14.0)
 }
 
+/// 16 SemiBold: a synced lyrics line (spec §5.8).
+pub fn lyric() -> FontId {
+    Weight::SemiBold.font_id(16.0)
+}
+
 /// 19 Bold: shelf, side panel and settings section titles.
 pub fn heading() -> FontId {
     Weight::Bold.font_id(19.0)

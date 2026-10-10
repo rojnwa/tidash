@@ -2,7 +2,7 @@
 //! R7), with the dialogs that make and change them.
 
 use super::Ctx;
-use super::widgets::{NAV_PAD, fade, focus_ring, icon_button, line, paint_icon};
+use super::widgets::{NAV_PAD, fade, focus_ring, icon_button, line, paint_icon, pill_button};
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
 use crate::theme::{self, GLYPH, Icon, Palette, SIDEBAR_COVER};
@@ -380,6 +380,7 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
     let Some(mut open) = taken.flatten() else {
         return;
     };
+    let p = &ctx.palette;
     // `Some` once answered: the edit if confirmed.
     let answer = match &mut open {
         Dialog::NewPlaylist {
@@ -387,7 +388,7 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
             description,
             tracks,
         } => {
-            let ok = playlist_dialog(egui, &tr("New playlist"), title, description);
+            let ok = playlist_dialog(egui, p, &tr("New playlist"), title, description);
             ok.map(|ok| {
                 ok.then(|| PlaylistEdit::Create {
                     title: title.trim().to_owned(),
@@ -402,7 +403,7 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
             title,
             description,
         } => {
-            let ok = playlist_dialog(egui, &tr("Edit playlist"), title, description);
+            let ok = playlist_dialog(egui, p, &tr("Edit playlist"), title, description);
             ok.map(|ok| {
                 ok.then(|| PlaylistEdit::Edit {
                     uuid: uuid.clone(),
@@ -411,14 +412,14 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
                 })
             })
         }
-        Dialog::NewFolder(name) => name_dialog(egui, &tr("New folder"), name).map(|ok| {
+        Dialog::NewFolder(name) => name_dialog(egui, p, &tr("New folder"), name).map(|ok| {
             ok.then(|| PlaylistEdit::CreateFolder {
                 name: name.trim().to_owned(),
                 parent: None,
             })
         }),
         Dialog::RenameFolder { id, name } => {
-            let ok = name_dialog(egui, &tr("Rename folder"), name);
+            let ok = name_dialog(egui, p, &tr("Rename folder"), name);
             ok.map(|ok| {
                 ok.then(|| PlaylistEdit::RenameFolder {
                     id: id.clone(),
@@ -429,13 +430,13 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
         Dialog::DeleteFolder { id, name } => {
             let ask = tr("Delete the folder {name}?").replace("{name}", name);
             let id = id.clone();
-            confirm(egui, &ask).map(|ok| ok.then_some(PlaylistEdit::DeleteFolder { id }))
+            confirm(egui, p, &ask).map(|ok| ok.then_some(PlaylistEdit::DeleteFolder { id }))
         }
         Dialog::DeletePlaylist { uuid, title } => {
             let ask = tr("Delete the playlist {title}? This cannot be undone.");
             let ask = ask.replace("{title}", title);
             let uuid = uuid.clone();
-            confirm(egui, &ask).map(|ok| ok.then_some(PlaylistEdit::Delete { uuid }))
+            confirm(egui, p, &ask).map(|ok| ok.then_some(PlaylistEdit::Delete { uuid }))
         }
     };
     match answer {
@@ -452,11 +453,12 @@ pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
 /// or a click outside), else `None`: the caller keeps it open while `None`.
 pub fn playlist_dialog(
     egui: &egui::Context,
+    p: &Palette,
     heading: &str,
     title: &mut String,
     description: &mut String,
 ) -> Option<bool> {
-    modal(egui, heading, &tr("OK"), |ui, first| {
+    modal(egui, p, heading, &tr("OK"), |ui, first| {
         let enter = field(ui, &tr("Title"), title, first)
             | field(ui, &tr("Description"), description, false);
         (enter, !title.trim().is_empty())
@@ -464,35 +466,45 @@ pub fn playlist_dialog(
 }
 
 /// A dialog asking for a folder's name, as `playlist_dialog`.
-fn name_dialog(egui: &egui::Context, heading: &str, name: &mut String) -> Option<bool> {
-    modal(egui, heading, &tr("OK"), |ui, first| {
+fn name_dialog(
+    egui: &egui::Context,
+    p: &Palette,
+    heading: &str,
+    name: &mut String,
+) -> Option<bool> {
+    modal(egui, p, heading, &tr("OK"), |ui, first| {
         let enter = field(ui, &tr("Name"), name, first);
         (enter, !name.trim().is_empty())
     })
 }
 
 /// A dialog asking `question`, answered Delete or Cancel, as `playlist_dialog`.
-fn confirm(egui: &egui::Context, question: &str) -> Option<bool> {
-    modal(egui, question, &tr("Delete"), |_, _| (false, true))
+fn confirm(egui: &egui::Context, p: &Palette, question: &str) -> Option<bool> {
+    modal(egui, p, question, &tr("Delete"), |_, _| (false, true))
 }
 
-/// A modal: `heading`, the fields `body` draws (told whether the dialog just opened), then `ok`
-/// and Cancel. `body` says whether Enter was pressed in a field, and whether what they hold
-/// may be submitted, which enables `ok`. Answers as `playlist_dialog`.
+/// A modal (spec §5.8): `heading` in `heading()`, the fields `body` draws (told whether the
+/// dialog just opened), then `ok` as a primary pill and Cancel as a secondary one. `body` says
+/// whether Enter was pressed in a field, and whether what they hold may be submitted, which
+/// enables `ok`. Answers as `playlist_dialog`.
 fn modal(
     egui: &egui::Context,
+    p: &Palette,
     heading: &str,
     ok: &str,
     body: impl FnOnce(&mut egui::Ui, bool) -> (bool, bool),
 ) -> Option<bool> {
-    let modal = egui::Modal::new(dialog_id());
+    // egui's window frame: radius `R_DIALOG` (§4.6); a popup's would be a menu's.
+    let frame = egui::Frame::window(&egui.global_style()).inner_margin(theme::PAGE_PAD);
+    let modal = egui::Modal::new(dialog_id()).frame(frame);
     let first = !egui.memory(|m| m.areas().visible_last_frame(&modal.area.layer()));
     let shown = modal.show(egui, |ui| {
-        ui.heading(heading);
+        super::widgets::heading(ui, p, heading);
         let (enter, valid) = body(ui, first);
         ui.horizontal(|ui| {
-            let ok = ui.add_enabled(valid, egui::Button::new(ok)).clicked();
-            (ok || enter && valid, ui.button(tr("Cancel")).clicked())
+            let ok = ui.add_enabled_ui(valid, |ui| pill_button(ui, p, None, ok, true));
+            let cancel = pill_button(ui, p, None, &tr("Cancel"), false);
+            (ok.inner.clicked() || enter && valid, cancel.clicked())
         })
         .inner
     });

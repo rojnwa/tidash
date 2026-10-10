@@ -367,12 +367,13 @@ fn tint(
 fn bar_fill(ctx: &egui::Context, p: &Palette, tint: Option<egui::Color32>) -> egui::Color32 {
     let to = tint.map_or(p.panel, |t| theme::blend(p.panel, t, 0.12));
     let id = egui::Id::new("player tint");
-    let [r, g, b, a] = std::array::from_fn(|i| {
-        let v = f32::from(to.to_array()[i]);
-        let v = ctx.animate_value_with_time(id.with(i), v, theme::TINT_FADE);
-        v.round() as u8
-    });
-    egui::Color32::from_rgba_premultiplied(r, g, b, a)
+    // Channel by channel in place: a palette colour eased, never one written out here.
+    let mut fill = to;
+    for (i, c) in to.to_array().into_iter().enumerate() {
+        let v = ctx.animate_value_with_time(id.with(i), f32::from(c), theme::TINT_FADE);
+        fill[i] = v.round() as u8;
+    }
+    fill
 }
 
 /// Keyboard and mouse shortcuts but Quit (`draw`); Settings lists the keys
@@ -489,10 +490,15 @@ pub fn draw(
                 events: &mut events,
                 palette,
             };
+            // Spec §5.8; egui's separator line is its 1 px `outline` left edge (`theme::style`).
+            let frame = egui::Frame::NONE
+                .fill(palette.window)
+                .inner_margin(theme::PAGE_PAD);
             egui::Panel::right("side")
                 .resizable(true)
-                .default_size(320.0)
-                .size_range(260.0..=560.0)
+                .default_size(theme::SIDE_PANEL)
+                .size_range(theme::SIDE_PANEL_MIN..=theme::SIDE_PANEL_MAX)
+                .frame(frame)
                 .show(ui, |ui| match side {
                     Side::Queue => queue_panel::show(ui, &mut ctx),
                     Side::Lyrics => lyrics::show(ui, &mut ctx, at),

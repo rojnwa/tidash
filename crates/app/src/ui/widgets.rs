@@ -182,6 +182,11 @@ pub fn pill_button(
     r
 }
 
+/// `text` in `heading()`: a side panel's, a Settings section's or a dialog's title.
+pub fn heading(ui: &mut Ui, p: &Palette, text: &str) -> Response {
+    ui.label(RichText::new(text).font(theme::heading()).color(p.text))
+}
+
 /// A sidebar row (spec §5.2): a 24 px icon and `label`, inset 8, radius `R_CARD`, the
 /// width available. Idle `secondary`; hovered `text` on `surface_hover`; selected `text` on
 /// `surface_active`. `collapsed`, only the icon shows, and `label` is its tooltip.

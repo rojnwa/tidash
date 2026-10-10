@@ -5,11 +5,14 @@
 //! are actions. The Discord toggle and the behavior are settings like the others.
 
 use super::Ctx;
+use super::widgets::{heading, pill_button};
 use crate::i18n::tr;
 use crate::messages::Secret;
 use crate::model::{Action, Event, Model, Route};
 use crate::scrobble::Keys;
 use crate::settings::{Account, Audio, Normalization, Settings, Theme, nonblank};
+use crate::theme::{self, Palette};
+use egui::{Response, RichText, Ui, WidgetInfo, WidgetText, WidgetType};
 use fastframe_theme::Status;
 use std::borrow::Cow;
 
@@ -41,8 +44,9 @@ impl Default for State {
     }
 }
 
+/// Spec §5.8: the page's title, then a `heading()` per section, one row per setting.
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
-    let model = ctx.model;
+    let (model, p) = (ctx.model, ctx.palette);
     if !std::mem::replace(&mut state.listed, true) {
         ctx.send(Action::ListDevices);
         ctx.events.push(Event::RescanThemes); // a file just dropped in shows
@@ -57,49 +61,46 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         if !model.logged_in {
             back = ui.button(tr("Back")).clicked();
         }
-        ui.heading(tr("Settings"));
-        section(ui, tr("Account"));
+        ui.label(
+            RichText::new(tr("Settings"))
+                .font(theme::title())
+                .color(p.text),
+        );
+        section(ui, &p, tr("Account"));
+        account(ui, &p, state, &mut new.account);
         if model.logged_in {
-            logout = ui.button(tr("Log out")).clicked();
-            ui.add_space(8.0);
+            logout = pill_button(ui, &p, None, &tr("Log out"), false).clicked();
         }
-        account(ui, state, &mut new.account);
-        section(ui, tr("Appearance"));
+        section(ui, &p, tr("Appearance"));
         if appearance(ui, model, &mut new) {
             ctx.send(Action::OpenThemesFolder);
         }
-        section(ui, tr("Audio"));
+        section(ui, &p, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
-        section(ui, tr("Behavior"));
-        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
+        section(ui, &p, tr("Behavior"));
+        check(ui, &mut new.behavior.close_to_tray, &tr("Close to tray"));
         // Without Close to tray there would be no window to come back to (`starts_hidden`).
-        let start_minimized =
-            egui::Checkbox::new(&mut new.behavior.start_minimized, tr("Start minimized"));
-        ui.add_enabled(new.behavior.close_to_tray, start_minimized);
+        let start_minimized = &mut new.behavior.start_minimized;
+        ui.add_enabled_ui(new.behavior.close_to_tray, |ui| {
+            check(ui, start_minimized, &tr("Start minimized"));
+        });
         ui.weak(tr("Only where the desktop shows a tray icon."));
-        section(ui, tr("Integrations"));
+        section(ui, &p, tr("Integrations"));
         if state.lastfm {
             connect = lastfm(ui, model);
-            ui.add_space(8.0);
         }
         if let Some(action) = listenbrainz(ui, model, state) {
             connect = Some(action);
         }
         if state.discord {
-            ui.add_space(8.0);
-            ui.label(egui::RichText::new(tr("Discord")).strong());
             let toggle = tr("Show what you play in your Discord status");
-            ui.checkbox(&mut new.integrations.discord, toggle);
+            check(ui, &mut new.integrations.discord, &toggle);
             ui.weak(tr("Discord must be running on this computer."));
         }
-        section(ui, tr("Keyboard shortcuts"));
-        egui::Grid::new("shortcuts").num_columns(2).show(ui, |ui| {
-            for (keys, what) in shortcuts() {
-                ui.label(keys);
-                ui.label(what);
-                ui.end_row();
-            }
-        });
+        section(ui, &p, tr("Keyboard shortcuts"));
+        for (keys, what) in shortcuts() {
+            row(ui, what, |ui| ui.weak(keys));
+        }
     });
     if logout {
         ctx.send(Action::Logout);
@@ -136,17 +137,48 @@ pub fn shortcuts() -> Vec<(String, Cow<'static, str>)> {
     ]
 }
 
-/// A section's title, spaced from what comes before.
-fn section(ui: &mut egui::Ui, title: Cow<'static, str>) {
-    ui.add_space(16.0);
-    ui.label(egui::RichText::new(title).strong().size(16.0));
-    ui.add_space(8.0);
+/// A section's title in `heading()`, `MODULE_GAP` under what comes before.
+fn section(ui: &mut Ui, p: &Palette, title: Cow<'static, str>) {
+    ui.add_space(theme::MODULE_GAP);
+    heading(ui, p, &title);
+}
+
+/// A setting's row: `label` on the left, wrapping in the room `control` leaves, and what
+/// `control` adds right-aligned, right to left (the first it adds is the rightmost).
+fn row<R>(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    control: impl FnOnce(&mut Ui) -> R,
+) -> (Response, R) {
+    let sides = egui::Sides::new().shrink_left().wrap();
+    sides.show(ui, |ui| ui.label(label), control)
+}
+
+/// A switch's row: `label`, and on the right its checkbox, named after it.
+fn check(ui: &mut Ui, on: &mut bool, label: &str) {
+    row(ui, label, |ui| {
+        let r = ui.add(egui::Checkbox::without_text(on));
+        r.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, r.enabled(), *on, label));
+    });
+}
+
+/// A combo box showing `selected`, its choices drawn by `list`, named `label` for screen
+/// readers: egui would only link it to the label beside it.
+fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
+    let combo = egui::ComboBox::from_id_salt(label).selected_text(selected);
+    let shown = combo.show_ui(ui, list);
+    shown.response.widget_info(|| {
+        let mut info = WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label);
+        info.current_text_value = Some(selected.to_owned());
+        info
+    });
 }
 
 /// The theme picker (spec §5.8): the built-ins, then the catalog's files; a built-in clears
-/// the file and its cache, a file leaves the cache for `main` to fill. Then the status line and
-/// the album-art tint. Whether "Open themes folder" was clicked.
-fn appearance(ui: &mut egui::Ui, model: &Model, new: &mut Settings) -> bool {
+/// the file and its cache, a file leaves the cache for `main` to fill. Beside it "Open themes
+/// folder", under it the status line, then the album-art tint. Whether "Open themes folder"
+/// was clicked.
+fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
     let builtins = [
         (Theme::System, tr("Follow system")),
         (Theme::Dark, tr("Dark")),
@@ -161,12 +193,10 @@ fn appearance(ui: &mut egui::Ui, model: &Model, new: &mut Settings) -> bool {
                 .unwrap_or_default()
         }
     };
-    let mut open = false;
-    ui.horizontal(|ui| {
-        let title = tr("Theme");
-        ui.label(title.as_ref());
-        let combo = egui::ComboBox::from_id_salt("theme").selected_text(&selected);
-        let shown = combo.show_ui(ui, |ui| {
+    let title = tr("Theme");
+    let (_, open) = row(ui, title.as_ref(), |ui| {
+        let open = ui.button(tr("Open themes folder")).clicked();
+        combo(ui, &title, &selected, |ui| {
             // Closed by hand: egui closes it on a pointer's click only, not on Enter, Space
             // or a screen reader's.
             let item = |ui: &mut egui::Ui, on, label: &str| {
@@ -193,14 +223,7 @@ fn appearance(ui: &mut egui::Ui, model: &Model, new: &mut Settings) -> bool {
                 }
             }
         });
-        // Named after the label beside it, which egui would only link to it.
-        shown.response.widget_info(|| {
-            let combo = egui::WidgetType::ComboBox;
-            let mut info = egui::WidgetInfo::labeled(combo, ui.is_enabled(), title.as_ref());
-            info.current_text_value = Some(selected.clone());
-            info
-        });
-        open = ui.button(tr("Open themes folder")).clicked();
+        open
     });
     if let Some(status) = &model.theme_status {
         ui.weak(status_text(
@@ -208,7 +231,7 @@ fn appearance(ui: &mut egui::Ui, model: &Model, new: &mut Settings) -> bool {
             new.custom_theme.as_deref().unwrap_or_default(),
         ));
     }
-    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"));
+    check(ui, &mut new.accent_from_art, &tr("Colour from album art"));
     open
 }
 
@@ -230,51 +253,47 @@ pub fn status_text(status: &Status, selected: &str) -> String {
     text.into_owned()
 }
 
-/// The client fields; Apply makes what was typed the `account`.
-fn account(ui: &mut egui::Ui, state: &mut State, account: &mut Account) {
-    egui::Grid::new("account").num_columns(2).show(ui, |ui| {
-        let fields = [
-            (tr("Client ID"), &mut state.client_id),
-            (tr("Redirect URL"), &mut state.redirect_uri),
-        ];
-        for (label, text) in fields {
-            let label = ui.label(label);
-            ui.text_edit_singleline(text).labelled_by(label.id);
-            ui.end_row();
-        }
-    });
+/// The client fields; Apply, a primary pill, makes what was typed the `account`.
+fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
+    let fields = [
+        (tr("Client ID"), &mut state.client_id),
+        (tr("Redirect URL"), &mut state.redirect_uri),
+    ];
+    for (label, text) in fields {
+        let (label, edit) = row(ui, label, |ui| ui.text_edit_singleline(text));
+        edit.labelled_by(label.id);
+    }
     let typed = Account {
         client_id: nonblank(&state.client_id),
         redirect_uri: nonblank(&state.redirect_uri),
     };
-    let apply = egui::Button::new(tr("Apply"));
-    if ui.add_enabled(typed != *account, apply).clicked() {
+    let help = tr("Leave empty for the built-in client. Changing it logs you out.");
+    let (_, apply) = row(ui, RichText::new(help).weak(), |ui| {
+        let changed = typed != *account;
+        ui.add_enabled_ui(changed, |ui| pill_button(ui, p, None, &tr("Apply"), true))
+            .inner
+    });
+    if apply.clicked() {
         *account = typed;
     }
-    ui.weak(tr(
-        "Leave empty for the built-in client. Changing it logs you out.",
-    ));
 }
 
 /// Who Last.fm is connected as, with Disconnect; while a connect waits for the user, Cancel;
 /// else Connect. What was clicked, to send.
-fn lastfm(ui: &mut egui::Ui, model: &Model) -> Option<Action> {
-    ui.label(egui::RichText::new(tr("Last.fm")).strong());
-    let mut clicked = None;
+fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
     let user = &model.settings.integrations.lastfm_user;
-    ui.horizontal(|ui| {
+    let (_, clicked) = row(ui, tr("Last.fm"), |ui| {
         if let Some(user) = user {
+            let disconnect = ui.button(tr("Disconnect")).clicked();
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            if ui.button(tr("Disconnect")).clicked() {
-                clicked = Some(Action::DisconnectLastfm);
-            }
+            disconnect.then_some(Action::DisconnectLastfm)
         } else if model.lastfm_waiting {
+            let cancel = ui.button(tr("Cancel")).clicked();
             ui.label(tr("Waiting for you to allow Tidash on Last.fm…"));
-            if ui.button(tr("Cancel")).clicked() {
-                clicked = Some(Action::CancelLastfm);
-            }
-        } else if ui.button(tr("Connect")).clicked() {
-            clicked = Some(Action::ConnectLastfm);
+            cancel.then_some(Action::CancelLastfm)
+        } else {
+            let connect = ui.button(tr("Connect")).clicked();
+            connect.then_some(Action::ConnectLastfm)
         }
     });
     if user.is_none() && !model.lastfm_waiting {
@@ -285,70 +304,69 @@ fn lastfm(ui: &mut egui::Ui, model: &Model) -> Option<Action> {
     clicked
 }
 
-/// Who ListenBrainz is connected as, with Disconnect; or the token field with Connect. What
-/// was clicked, to send.
-fn listenbrainz(ui: &mut egui::Ui, model: &Model, state: &mut State) -> Option<Action> {
-    ui.label(egui::RichText::new(tr("ListenBrainz")).strong());
+/// Who ListenBrainz is connected as, with Disconnect; or the token field, and Connect beside
+/// what it is for (after the field, so it sees this pass's typing). What was clicked, to send.
+fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action> {
+    let name = tr("ListenBrainz");
     if let Some(user) = &model.settings.integrations.listenbrainz_user {
-        let mut disconnect = false;
-        ui.horizontal(|ui| {
+        let (_, disconnect) = row(ui, name, |ui| {
+            let disconnect = ui.button(tr("Disconnect")).clicked();
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            disconnect = ui.button(tr("Disconnect")).clicked();
+            disconnect
         });
         return disconnect.then_some(Action::DisconnectListenBrainz);
     }
-    let mut connect = None;
-    ui.horizontal(|ui| {
-        let label = ui.label(tr("User token"));
-        let field = egui::TextEdit::singleline(&mut state.listenbrainz_token).password(true);
-        ui.add(field).labelled_by(label.id);
+    let field = egui::TextEdit::singleline(&mut state.listenbrainz_token)
+        .password(true)
+        .hint_text(tr("User token"));
+    let (label, field) = row(ui, name, |ui| ui.add(field));
+    field.labelled_by(label.id);
+    let help = tr("Scrobbles what you play. Copy your user token from listenbrainz.org/settings.");
+    let (_, connect) = row(ui, RichText::new(help).weak(), |ui| {
         let token = nonblank(&state.listenbrainz_token);
         let button = egui::Button::new(tr("Connect"));
-        if ui.add_enabled(token.is_some(), button).clicked() {
-            state.listenbrainz_token.clear();
-            connect = token.map(|t| Action::ConnectListenBrainz(Secret(t)));
-        }
+        let clicked = ui.add_enabled(token.is_some(), button).clicked();
+        clicked.then_some(token).flatten()
     });
-    ui.weak(tr(
-        "Scrobbles what you play. Copy your user token from listenbrainz.org/settings.",
-    ));
-    connect
+    connect.map(|token| {
+        state.listenbrainz_token.clear();
+        Action::ConnectListenBrainz(Secret(token))
+    })
 }
 
 /// The output device and the stream choices.
-fn audio(ui: &mut egui::Ui, devices: &[String], audio: &mut Audio) {
+fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
     let system = tr("System default");
     // A saved device that is not plugged in shows by name.
     let selected = audio.device.clone().unwrap_or_else(|| system.to_string());
-    egui::ComboBox::from_label(tr("Output device"))
-        .selected_text(selected)
-        .show_ui(ui, |ui| {
+    let label = tr("Output device");
+    row(ui, label.as_ref(), |ui| {
+        combo(ui, &label, &selected, |ui| {
             ui.selectable_value(&mut audio.device, None, system);
             for name in devices {
                 ui.selectable_value(&mut audio.device, Some(name.clone()), name.as_str());
             }
         });
-    ui.add_space(8.0);
-    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"));
+    });
+    check(ui, &mut audio.exclusive, &tr("Exclusive mode"));
     ui.weak(tr(
         "Bit-perfect: each track plays at its own sample rate and bit depth, without other \
          apps' sound and without volume control. Falls back to shared mode when the device \
          refuses.",
     ));
-    ui.add_space(8.0);
-    ui.label(tr("Quality"));
-    ui.radio_value(
-        &mut audio.hi_res,
-        true,
-        tr("Hi-Res (up to 24-bit, 192 kHz)"),
-    );
-    ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
-    ui.add_space(8.0);
-    ui.label(tr("Normalization"));
-    ui.horizontal(|ui| {
-        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"));
-        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
+    // Right to left: the last added is the leftmost.
+    row(ui, tr("Quality"), |ui| {
+        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
+        ui.radio_value(
+            &mut audio.hi_res,
+            true,
+            tr("Hi-Res (up to 24-bit, 192 kHz)"),
+        );
+    });
+    row(ui, tr("Normalization"), |ui| {
         ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"));
+        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
+        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"));
     });
 }
 

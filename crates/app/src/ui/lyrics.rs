@@ -2,9 +2,12 @@
 //! line seeks there.
 
 use super::Ctx;
+use super::widgets::{fade, focus_ring, heading};
 use crate::i18n::tr;
 use crate::model::{Action, Event, Load};
-use egui::{Align, Layout, ScrollArea};
+use crate::theme;
+use egui::text::LayoutJob;
+use egui::{Align, Layout, RichText, ScrollArea, Sense, WidgetInfo, WidgetType, vec2};
 use std::time::Duration;
 
 /// The line playing at `at`: the last that has started.
@@ -12,11 +15,13 @@ pub fn current_line(lines: &[tidal::LyricLine], at: Duration) -> Option<usize> {
     lines.iter().rposition(|l| l.at <= at)
 }
 
-/// Draws into `ui`, the side panel's; `at` is the playback position.
+/// Draws into `ui`, the side panel's; `at` is the playback position. Unsynced lyrics are
+/// `body()`; the provider's credit `small()` `dim`.
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, at: Duration) {
     // The last current line, kept by the panel.
     let last_line = ui.id().with("lyrics-line");
-    ui.heading(tr("Lyrics"));
+    let p = ctx.palette;
+    heading(ui, &p, &tr("Lyrics"));
     let model = ctx.model;
     let ask = |id| (Event::Lyrics(id, Load::Loading), Action::LoadLyrics(id));
     let failed = tr("Couldn't load lyrics");
@@ -34,20 +39,23 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, at: Duration) {
         .show(ui, |ui| {
             ui.with_layout(Layout::top_down(align), |ui| {
                 if lyrics.lines.is_empty() {
-                    ui.label(&lyrics.text);
+                    ui.label(RichText::new(&lyrics.text).font(theme::body()));
                 } else {
                     synced(ui, ctx, &lyrics.lines, at, last_line);
                 }
                 if let Some(provider) = &lyrics.provider {
                     ui.add_space(12.0);
-                    ui.weak(tr("Lyrics provided by {provider}").replace("{provider}", provider));
+                    let credit =
+                        tr("Lyrics provided by {provider}").replace("{provider}", provider);
+                    ui.label(RichText::new(credit).font(theme::small()).color(p.dim));
                 }
             });
         });
 }
 
-/// A row per line that seeks to it; the one playing at `at` is highlighted, and scrolled to the
-/// centre when it changes (the last one is kept under `last_line`). A gap shows as "…".
+/// A row per line in `lyric()`, wrapped and aligned as the layout, that seeks to it: the one
+/// playing at `at` in `text`, the others `dim` (`text` hovered). The playing one is scrolled to
+/// the centre when it changes (the last one is kept under `last_line`). A gap shows as "…".
 fn synced(
     ui: &mut egui::Ui,
     ctx: &Ctx,
@@ -55,23 +63,49 @@ fn synced(
     at: Duration,
     last_line: egui::Id,
 ) {
+    let p = ctx.palette;
     let current = current_line(lines, at);
     let moved = ui.ctx().data_mut(|d| {
         let last = d.get_temp::<Option<usize>>(last_line);
         d.insert_temp(last_line, current);
         last != Some(current)
     });
+    let (width, align) = (ui.available_width(), ui.layout().horizontal_align());
     for (i, line) in lines.iter().enumerate() {
         let text = if line.text.is_empty() {
             "…"
         } else {
             &line.text
         };
-        let row = ui.selectable_label(current == Some(i), text);
+        let on = current == Some(i);
+        let mut job = LayoutJob::simple(text.to_owned(), theme::lyric(), p.text, width);
+        job.halign = align;
+        let galley = ui.painter().layout_job(job);
+        let (rect, row) = ui.allocate_exact_size(vec2(width, galley.size().y), Sense::click());
+        row.widget_info(|| {
+            WidgetInfo::selected(WidgetType::SelectableLabel, ui.is_enabled(), on, text)
+        });
+        if ui.is_rect_visible(rect) {
+            let lit = if on {
+                1.0
+            } else {
+                fade(ui, &row, row.hovered())
+            };
+            let ink = theme::blend(p.dim, p.text, lit);
+            // `halign` lays the galley out from its anchor: the left edge, or the right one.
+            let anchor = if align == Align::Max {
+                rect.right_top()
+            } else {
+                rect.left_top()
+            };
+            ui.painter()
+                .galley_with_override_text_color(anchor, galley, ink);
+        }
+        focus_ring(ui, &row, theme::R_ROW);
         if row.clicked() {
             ctx.send(Action::Seek(line.at));
         }
-        if moved && current == Some(i) {
+        if moved && on {
             // ponytail: follows every line change; pause after a manual scroll if users ask
             row.scroll_to_me(Some(Align::Center));
         }
@@ -126,7 +160,7 @@ mod tests {
     /// current track is asked for in turn.
     #[test]
     fn lyrics_load_once_per_track() {
-        let egui = egui::Context::default();
+        let egui = crate::ui::testing::context();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let mut model = playing(None);
         let mut asked = Vec::new();
@@ -152,7 +186,7 @@ mod tests {
             provider: Some("MUSIXMATCH".into()),
         };
         let model = playing(Some(Load::Ready(Some(lyrics))));
-        let egui = egui::Context::default();
+        let egui = crate::ui::testing::context();
         egui.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, view, vec![]);
@@ -162,11 +196,42 @@ mod tests {
         assert_eq!(sent(&mut rx), ["Seek(10s)"]);
     }
 
+    /// Spec §5.8: the line playing is drawn in `text`, the others in `dim`.
+    #[test]
+    fn the_current_line_is_brighter() {
+        fn third(ui: &mut egui::Ui, ctx: &mut Ctx<'_>, _: &Route) {
+            show(ui, ctx, Duration::from_secs(25)); // in line 3
+        }
+        let lines = [(5, "One"), (10, "Two"), (20, "Three"), (30, "Four")];
+        let lyrics = tidal::Lyrics {
+            lines: lines.iter().map(|&(at, text)| line(at, text)).collect(),
+            text: String::new(),
+            rtl: false,
+            provider: None,
+        };
+        let model = playing(Some(Load::Ready(Some(lyrics))));
+        let egui = crate::ui::testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, third, vec![]);
+        let ink = |text: &str| {
+            let shape = out.shapes.iter().find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.text() == text => Some(t),
+                _ => None,
+            });
+            let t = shape.unwrap_or_else(|| panic!("no {text:?} drawn"));
+            let c = t.override_text_color;
+            c.unwrap_or(t.galley.job.sections[0].format.color)
+        };
+        let p = crate::theme::Palette::dark();
+        assert_eq!(ink("Three"), p.text);
+        assert_eq!(ink("Two"), p.dim);
+    }
+
     /// None says so, and so does no current track (asking for nothing); failed lyrics say
     /// that, and Retry asks again.
     #[test]
     fn no_lyrics_says_so() {
-        let egui = egui::Context::default();
+        let egui = crate::ui::testing::context();
         egui.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (events, out) = pass(&egui, &tx, &at(Route::Home), view, vec![]);

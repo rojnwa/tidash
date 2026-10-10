@@ -2,13 +2,16 @@
 //! their pages.
 
 use super::Ctx;
+use super::widgets::heading;
 use crate::i18n::tr;
 use crate::model::{Action, Event, Load, Route};
-use egui::ScrollArea;
+use crate::theme;
+use egui::{RichText, ScrollArea};
 
-/// Draws into `ui`, the side panel's.
+/// Draws into `ui`, the side panel's: each role in `small()` `secondary` over its names.
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
-    ui.heading(tr("Credits"));
+    let p = ctx.palette;
+    heading(ui, &p, &tr("Credits"));
     let model = ctx.model;
     let ask = |id| (Event::Credits(id, Load::Loading), Action::LoadCredits(id));
     let failed = tr("Couldn't load credits");
@@ -24,7 +27,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for credit in credits {
-                ui.strong(&credit.role);
+                let role = RichText::new(&credit.role).font(theme::small());
+                ui.label(role.color(p.secondary));
                 for person in &credit.contributors {
                     if let Some(id) = person.id {
                         if ui.link(&person.name).clicked() {
@@ -63,7 +67,7 @@ mod tests {
         model.playback.track = Some(track(1));
         model.apply(Event::Credits(1, Load::Loading));
         model.apply(Event::Credits(1, Load::Ready(credits)));
-        let egui = egui::Context::default();
+        let egui = crate::ui::testing::context();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let (_, out) = pass(&egui, &tx, &model, view, vec![]);

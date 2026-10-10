@@ -28,7 +28,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
     let q = &model.queue;
     let tier = tracks::playing_colour(ctx);
     ui.horizontal(|ui| {
-        ui.heading(tr("Queue"));
+        super::widgets::heading(ui, &ctx.palette, &tr("Queue"));
         if !q.tracks.is_empty() {
             ui.weak(tracks::summary(&q.tracks));
         }
