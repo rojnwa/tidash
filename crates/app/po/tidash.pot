@@ -207,7 +207,6 @@ msgstr ""
 msgid "Scroll right"
 msgstr ""
 
-#: src/ui/artist.rs
 #: src/ui/shelf.rs
 msgid "Artist"
 msgstr ""

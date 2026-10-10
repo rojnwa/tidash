@@ -1,7 +1,7 @@
 //! A page's header (spec §5.4). Album, playlist and mix pages: the cover blurred behind the top
-//! of the page, then the cover beside the type line, title, lines of detail and the action row
-//! (Play, the favorite heart, the page's own pills). Artist pages: a hero, the picture across
-//! the page with the same column over its bottom-left.
+//! of the page, the cover beside the type line, title and lines of detail, and under them the
+//! action row (Play, the favorite heart, the page's own pills). Artist pages: a hero, the
+//! picture across the page with the name, details and actions over its bottom-left.
 
 use super::{Ctx, widgets};
 use crate::i18n::tr;
@@ -10,9 +10,9 @@ use crate::theme::{self, BACKDROP, HEADER_COVER, Icon, PAGE_PAD};
 use egui::{Align, Color32, Layout, Rect, RichText, UiBuilder, Vec2, pos2};
 
 /// `kind` is the type line ("Album"), shown upper-cased; `details` draws the lines under the
-/// title, in `secondary`. With `play`, a Play pill sends all of it from the start (disabled when
-/// empty); with `fav`, a heart adds it to the favorites or removes it. `extra` draws the page's
-/// own pills after them, in the same row.
+/// title, in `secondary`. Under the cover (ruling 22): with `play`, a Play pill sends all of it
+/// from the start (disabled when empty); with `fav`, a heart adds it to the favorites or removes
+/// it. `extra` draws the page's own pills after them, in the same row.
 #[expect(clippy::too_many_arguments)] // one call per page, each part named at the call
 pub fn header(
     ui: &mut egui::Ui,
@@ -33,21 +33,19 @@ pub fn header(
     let left = cover.right() + PAGE_PAD;
     let beside = Rect::from_x_y_ranges(left..=x.max.max(left), cover.y_range());
     let drawn = column(ui, beside, 0.5, |ui| {
-        info(ui, ctx, kind, title, details, |ui, ctx| {
-            actions(ui, ctx, play, fav, extra);
-        });
+        info(ui, ctx, Some(kind), title, details)
     });
     end(ui, top, cover.bottom().max(drawn.bottom()));
+    actions(ui, ctx, play, fav, extra);
+    gap(ui);
 }
 
 /// An artist page's header (ruling 9): the picture across the page and its top `BACKDROP`,
-/// sharp, fading into `window` over its lower 40%; over its bottom-left the column `header`
-/// draws beside a cover, without Play.
-#[expect(clippy::too_many_arguments)] // as `header`
+/// sharp, fading into `window` over its lower 40%; over its bottom-left the name, `details`,
+/// the heart and `extra`. No type line, and without a picture nothing behind them (ruling 23).
 pub fn hero(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
-    kind: &str,
     image: Option<&tidal::Image>,
     title: &str,
     details: impl FnOnce(&mut egui::Ui, &mut Ctx),
@@ -56,16 +54,18 @@ pub fn hero(
 ) {
     let top = ui.cursor().top();
     let picture = Rect::from_x_y_ranges(ui.clip_rect().x_range(), top..=top + BACKDROP);
-    super::cover(ui, ctx.images, ctx.tx, image, picture, 0.0);
-    let fade = picture.with_min_y(picture.bottom() - 0.4 * BACKDROP);
-    let window = ctx.palette.window;
-    widgets::vertical_gradient(ui.painter(), fade, Color32::TRANSPARENT, window);
+    if image.is_some() {
+        super::cover(ui, ctx.images, ctx.tx, image, picture, 0.0);
+        let fade = picture.with_min_y(picture.bottom() - 0.4 * BACKDROP);
+        let window = ctx.palette.window;
+        widgets::vertical_gradient(ui.painter(), fade, Color32::TRANSPARENT, window);
+    }
     let x = ui.max_rect().x_range();
     let over = Rect::from_x_y_ranges(x, top + PAGE_PAD..=picture.bottom() - PAGE_PAD);
     let drawn = column(ui, over, 1.0, |ui| {
-        info(ui, ctx, kind, title, details, |ui, ctx| {
-            actions(ui, ctx, None, fav, extra);
-        });
+        info(ui, ctx, None, title, details);
+        ui.add_space(ui.spacing().item_spacing.y);
+        actions(ui, ctx, None, fav, extra);
     });
     end(ui, top, picture.bottom().max(drawn.bottom()));
 }
@@ -125,38 +125,39 @@ fn column(ui: &mut egui::Ui, rect: Rect, align: f32, add: impl FnOnce(&mut egui:
     drawn
 }
 
-/// Takes the header's place, from `top` to `bottom`, and the gap after it.
+/// Takes the block's place, from `top` to `bottom`, and the gap after it.
 fn end(ui: &mut egui::Ui, top: f32, bottom: f32) {
     ui.advance_cursor_after_rect(Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=bottom));
+    gap(ui);
+}
+
+/// `MODULE_GAP` to the next module.
+fn gap(ui: &mut egui::Ui) {
     ui.add_space(theme::MODULE_GAP - ui.spacing().item_spacing.y);
 }
 
-/// The type line in `small()` `dim`, the title in `title()`, `details` in `secondary`, then
-/// the action row.
+/// The type line (if any) in `small()` `dim`, the title in `title()`, `details` in
+/// `secondary`.
 fn info(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
-    kind: &str,
+    kind: Option<&str>,
     title: &str,
     details: impl FnOnce(&mut egui::Ui, &mut Ctx),
-    actions: impl FnOnce(&mut egui::Ui, &mut Ctx),
 ) {
     let p = ctx.palette;
-    ui.label(
-        RichText::new(kind.to_uppercase())
-            .font(theme::small())
-            .color(p.dim),
-    );
+    if let Some(kind) = kind {
+        let line = RichText::new(kind.to_uppercase()).font(theme::small());
+        ui.label(line.color(p.dim));
+    }
     ui.label(RichText::new(title).font(theme::title()));
     ui.scope(|ui| {
         ui.visuals_mut().override_text_color = Some(p.secondary);
         details(ui, ctx);
     });
-    ui.add_space(ui.spacing().item_spacing.y);
-    ui.horizontal_wrapped(|ui| actions(ui, ctx));
 }
 
-/// Play, the heart, then the page's own pills.
+/// Play, the heart, then the page's own pills, in a row that wraps.
 fn actions(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
@@ -164,13 +165,15 @@ fn actions(
     fav: Option<tidal::Favorite>,
     extra: impl FnOnce(&mut egui::Ui, &mut Ctx),
 ) {
-    if let Some(list) = play {
-        play_button(ui, ctx, list);
-    }
-    if let Some(item) = fav {
-        heart(ui, ctx, item);
-    }
-    extra(ui, ctx);
+    ui.horizontal_wrapped(|ui| {
+        if let Some(list) = play {
+            play_button(ui, ctx, list);
+        }
+        if let Some(item) = fav {
+            heart(ui, ctx, item);
+        }
+        extra(ui, ctx);
+    });
 }
 
 /// A 40 px `surface` disc with a heart, filled for a favorite; a screen reader hears, and the

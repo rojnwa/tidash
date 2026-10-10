@@ -123,6 +123,25 @@ mod tests {
         assert!(sizes.contains(&header), "{sizes:?}");
     }
 
+    /// Ruling 22: the action row sits under the cover, at the page's padding, as TIDAL's.
+    #[test]
+    fn the_actions_sit_under_the_cover() {
+        let route = Route::Album(1);
+        let mut model = at(route.clone());
+        model.apply(Event::Page {
+            route,
+            data: data(),
+        });
+        let egui = context();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let play = crate::ui::testing::bounds(&out, "Play");
+        let cover_bottom = theme::PAGE_PAD + theme::HEADER_COVER; // the page starts at 0
+        assert!(play.top() > cover_bottom, "{play:?}");
+        assert!((play.left() - theme::PAGE_PAD).abs() < 1.0, "{play:?}");
+    }
+
     /// The header's "Add to playlist" pill opens the playlists to pick from.
     #[test]
     fn add_to_playlist_opens_its_menu() {

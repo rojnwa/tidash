@@ -34,7 +34,6 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         header::hero(
             ui,
             ctx,
-            &tr("Artist"),
             artist.image().as_ref(),
             &artist.name,
             bio,
@@ -149,6 +148,36 @@ mod tests {
             (radio.bottom() - (BACKDROP - PAGE_PAD)).abs() < 1.0,
             "{radio:?}"
         );
+    }
+
+    /// Ruling 23: without a picture the hero paints no slab (nothing the page's width and a fade
+    /// tall), and the hero has no type line.
+    #[test]
+    fn an_artist_without_a_picture_has_no_slab() {
+        use crate::theme::BACKDROP;
+        let route = Route::Artist(1);
+        let mut model = at(route.clone());
+        let artist = tidal::Artist {
+            picture: None,
+            ..artist(1)
+        };
+        let page = ArtistPage {
+            artist,
+            bio: None,
+            shelves: vec![],
+        };
+        let data = PageData::Artist(page);
+        model.apply(Event::Page { route, data });
+        let egui = context();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let mut shapes = out.shapes.iter().map(|s| s.shape.visual_bounding_rect());
+        let slab = shapes.find(|r| r.width() > 700.0 && r.height() >= 0.4 * BACKDROP - 1.0);
+        assert_eq!(slab, None);
+        let shown = shown(&out);
+        assert!(shown.contains(&"Artist 1".into()), "{shown:?}");
+        assert!(!shown.contains(&"ARTIST".into()), "{shown:?}");
     }
 
     #[test]
