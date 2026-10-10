@@ -275,13 +275,12 @@ pub fn search_field(
 }
 
 /// A pill of `small()` `text` in `color`, on `color` at 10% with a 1 px stroke of it at 50%,
-/// padded 12 by 6 (spec §4.2: the format badge, tier colours). It takes the palette like the
-/// rest of the kit, but `color` is all it paints.
+/// padded 12 by 6 (spec §4.2: the format badge, tier colours), cut with "…" to the width
+/// available. It takes the palette like the rest of the kit, but `color` is all it paints.
 pub fn badge(ui: &mut Ui, _p: &Palette, text: &str, color: Color32) -> Response {
-    let galley = ui
-        .painter()
-        .layout_no_wrap(text.to_owned(), theme::small(), color);
     let pad = vec2(12.0, 6.0);
+    let width = ui.available_width() - 2.0 * pad.x;
+    let galley = line(ui, text, theme::small(), color, width);
     let (rect, r) = ui.allocate_exact_size(galley.size() + 2.0 * pad, Sense::hover());
     r.widget_info(|| WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), text));
     if ui.is_rect_visible(rect) {

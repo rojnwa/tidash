@@ -22,10 +22,6 @@ mod shelf;
 mod sidebar;
 mod top_bar;
 mod tracks;
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the views draw with them from the next task on")
-)]
 mod widgets;
 
 use crate::i18n::tr;
@@ -437,6 +433,8 @@ pub fn draw(
             &mut state.bar,
             &mut state.images,
             &mut state.side,
+            &palette,
+            palette.panel,
         );
         let mut ctx = Ctx {
             model,
