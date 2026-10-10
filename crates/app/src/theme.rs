@@ -210,7 +210,6 @@ pub const BACKDROP: f32 = 450.0;
 pub const TINT_HEADER: f32 = 340.0;
 pub const PLAYER_COVER: f32 = 52.0;
 pub const SIDEBAR_COVER: f32 = 36.0;
-pub const QUEUE_COVER: f32 = 40.0;
 pub const ICON_BUTTON: f32 = 32.0;
 /// An icon button's glyph, a pill's, a notice's.
 pub const GLYPH: f32 = 16.0;
@@ -219,7 +218,6 @@ pub const TRANSPORT: f32 = 40.0;
 /// Previous and Next's glyphs; Play/Pause's is larger (ruling 26).
 pub const SKIP_GLYPH: f32 = 22.0;
 pub const PLAY_GLYPH: f32 = 24.0;
-pub const CARD_CONTROL: f32 = 36.0;
 /// A pill's height.
 pub const PILL: f32 = 40.0;
 pub const SEARCH_W: f32 = 280.0;
@@ -440,22 +438,16 @@ fastframe_icons::icons! {
         ChevronDown => lucide "chevron-down",
         Search => lucide "search",
         Settings => lucide "settings",
-        Plus => lucide "plus",
         Info => lucide "info",
-        Pause => lucide "pause",
-        Play => lucide "play",
         VolumeX => lucide "volume-x",
         Volume2 => lucide "volume-2",
         X => lucide "x",
-        Check => lucide "check",
-        Ellipsis => lucide "ellipsis",
         CircleAlert => lucide "circle-alert",
         User => lucide "user",
         Clock => lucide "clock",
         PanelLeft => lucide "panel-left",
         House => "house",
         Compass => "compass",
-        Library => "library",
         ListMusic => "list-music",
         ListPlus => "list-plus",
         Disc3 => "disc-3",

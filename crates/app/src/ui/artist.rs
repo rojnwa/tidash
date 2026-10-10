@@ -55,7 +55,9 @@ fn excerpt(text: &str, max: usize) -> Cow<'_, str> {
 #[cfg(test)]
 mod tests {
     use crate::model::{Event, Model, PageData, Route};
-    use crate::ui::testing::{album, artist, at, click, context, every_state, key, pass, shown};
+    use crate::ui::testing::{
+        album, artist, at, click, context, every_state, key, pass, pass_raw, shown,
+    };
     use egui::Key;
     use std::time::Instant;
     use tidal::{ArtistPage, Item, Layout, Shelf};
@@ -178,6 +180,37 @@ mod tests {
         let shown = shown(&out);
         assert!(shown.contains(&"Artist 1".into()), "{shown:?}");
         assert!(!shown.contains(&"ARTIST".into()), "{shown:?}");
+    }
+
+    /// However wide the hero is drawn, its picture is asked for no wider than the largest
+    /// rendition: `decode` never scales up, so a wider ask is the same picture again.
+    #[test]
+    fn the_hero_asks_for_no_more_than_the_largest_picture() {
+        use crate::model::Action;
+        use egui::{Pos2, Rect, ViewportId, vec2};
+        let model = with_mix(None);
+        let max = artist(1).image().expect("a picture").max_px();
+        for ppp in [1.0, 2.0] {
+            let mut input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1440.0, 900.0))),
+                ..Default::default()
+            };
+            let root = input.viewports.entry(ViewportId::ROOT).or_default();
+            root.native_pixels_per_point = Some(ppp);
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+            let route = model.route();
+            pass_raw(&context(), &tx, &model, input, |ui, c| {
+                super::show(ui, c, route)
+            });
+            let sizes: Vec<u32> = std::iter::from_fn(|| rx.try_recv().ok())
+                .filter_map(|a| match a {
+                    Action::LoadImage { px, .. } => Some(px),
+                    _ => None,
+                })
+                .collect();
+            assert!(!sizes.is_empty(), "{ppp}: the picture is asked for");
+            assert!(sizes.iter().all(|&px| px <= max), "{ppp}: {sizes:?}");
+        }
     }
 
     #[test]

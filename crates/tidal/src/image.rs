@@ -75,6 +75,14 @@ impl Image {
         }
     }
 
+    /// The largest rendition's width: asking for more gets no more.
+    pub fn max_px(&self) -> u32 {
+        match self {
+            Self::Tidal { kind, .. } => kind.sizes()[kind.sizes().len() - 1].0,
+            Self::Urls { .. } => 1500,
+        }
+    }
+
     /// Identifies the artwork whatever the size: the uuid, or the medium URL.
     pub fn key(&self) -> &str {
         match self {
@@ -115,6 +123,7 @@ mod tests {
     #[test]
     fn artist_sizes() {
         assert_eq!(file(ImageKind::Artist, 500), "750x750.jpg");
+        assert_eq!(tidal(ImageKind::Artist).max_px(), 750);
     }
 
     #[test]

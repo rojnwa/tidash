@@ -152,8 +152,8 @@ impl TextureCache {
     }
 
     /// The texture, now drawn in this pass, if cached. Otherwise calls `request` once per key
-    /// and meanwhile returns the cached size of the same image nearest `px`, now drawn in this
-    /// pass too; `None` with no size of it cached.
+    /// and meanwhile returns the cached size of the same image nearest `px` other than
+    /// `TINT_PX`, now drawn in this pass too; `None` with no such size cached.
     pub fn get(
         &mut self,
         ctx: &Context,
@@ -165,10 +165,12 @@ impl TextureCache {
             return Some(tex);
         }
         // ponytail: O(n) scan, only while a size loads; n is a few hundred textures.
+        // Never the `TINT_PX` one: a cover that small is a blur at a card's size. (A request
+        // for `TINT_PX` itself found it above.)
         let (_, (tex, _, used)) = self
             .textures
             .iter_mut()
-            .filter(|((k, _), _)| k == image)
+            .filter(|((k, at), _)| k == image && *at != TINT_PX)
             .min_by_key(|((_, at), _)| at.abs_diff(px))?;
         *used = ctx.cumulative_pass_nr();
         Some(tex.clone())
@@ -380,7 +382,8 @@ mod tests {
         assert_eq!(n, 1);
     }
 
-    /// While a new size loads, the nearest cached one of the same image stands in.
+    /// While a new size loads, the nearest cached one of the same image stands in, never its
+    /// `TINT_PX` one.
     #[test]
     fn a_missing_size_shows_the_nearest_cached_one() {
         let ctx = Context::default();
@@ -395,6 +398,12 @@ mod tests {
         }
         assert_eq!(n, 1, "192 px asked for once");
         assert!(c.get(&ctx, "b", 192, || {}).is_none(), "no size of b");
+        c.insert(&ctx, "b".into(), TINT_PX, img());
+        assert!(
+            c.get(&ctx, "b", 192, || {}).is_none(),
+            "never the tint's size"
+        );
+        assert!(c.get(&ctx, "b", TINT_PX, || {}).is_some(), "but at its own");
         c.insert(&ctx, "a".into(), 192, img());
         let exact = c.get(&ctx, "a", 192, || n += 1).map(|t| t.id());
         assert!(exact.is_some() && exact != near, "the 192 px one");

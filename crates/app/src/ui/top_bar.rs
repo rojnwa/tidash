@@ -266,9 +266,11 @@ mod tests {
             theme::apply(&ctx, &Palette::dark());
             let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
             let mut state = UiState::default();
-            let px = theme::TINT_PX;
-            let grey = egui::ColorImage::filled([px as usize; 2], egui::Color32::GRAY);
-            state.images.insert(&ctx, key.into(), px, grey);
+            // The backdrop takes only the tint's size; the hero any other while its own loads.
+            for px in [theme::TINT_PX, 64] {
+                let grey = egui::ColorImage::filled([px as usize; 2], egui::Color32::GRAY);
+                state.images.insert(&ctx, key.into(), px, grey);
+            }
             let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
             let wide = textured(&out)
                 .into_iter()

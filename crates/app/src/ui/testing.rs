@@ -128,15 +128,26 @@ pub fn pass_with(
     tx: &UnboundedSender<Action>,
     model: &Model,
     input: Vec<egui::Event>,
-    mut draw: impl FnMut(&mut egui::Ui, &mut Ctx<'_>),
+    draw: impl FnMut(&mut egui::Ui, &mut Ctx<'_>),
 ) -> (Vec<Event>, egui::FullOutput) {
-    let mut images = TextureCache::new(1 << 20);
-    let mut events = Vec::new();
     let input = egui::RawInput {
         events: input,
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
         ..Default::default()
     };
+    pass_raw(egui, tx, model, input, draw)
+}
+
+/// As `pass_with`, fed `input` whole: another window size or scale.
+pub fn pass_raw(
+    egui: &egui::Context,
+    tx: &UnboundedSender<Action>,
+    model: &Model,
+    input: egui::RawInput,
+    mut draw: impl FnMut(&mut egui::Ui, &mut Ctx<'_>),
+) -> (Vec<Event>, egui::FullOutput) {
+    let mut images = TextureCache::new(1 << 20);
+    let mut events = Vec::new();
     let mut out = egui.run_ui(input, |ui| {
         let mut c = Ctx {
             model,

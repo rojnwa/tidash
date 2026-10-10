@@ -304,8 +304,9 @@ fn track_data<'m, T>(
 }
 
 /// Paints `image` over `rect` with corners of `radius`, requested as many pixels wide as it
-/// is drawn; or a flat placeholder. Nothing out of view is requested. Artwork of another
-/// shape (a wide playlist image) is cropped around its centre, not stretched.
+/// is drawn (at most its largest rendition); or a flat placeholder. Nothing out of view is
+/// requested. Artwork of another shape (a wide playlist image) is cropped around its centre,
+/// not stretched.
 fn cover(
     ui: &egui::Ui,
     images: &mut TextureCache,
@@ -332,6 +333,9 @@ fn cover(
     };
     let px = request_px(width * ui.ctx().pixels_per_point());
     let tex = image.and_then(|img| {
+        // No wider than the largest rendition: `decode` never scales up, so a wider key would
+        // be the same picture again (the artist hero, at 750 px).
+        let px = px.min(img.max_px());
         images.get(ui.ctx(), img.key(), px, || {
             let _ = tx.send(Action::LoadImage {
                 image: img.clone(),

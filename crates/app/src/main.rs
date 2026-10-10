@@ -34,10 +34,6 @@ mod playback;
 mod queue;
 mod scrobble;
 mod settings;
-#[expect(
-    dead_code,
-    reason = "the sizes, type, tiers and tint are the later design-system tasks'"
-)]
 mod theme;
 mod tray;
 mod ui;
