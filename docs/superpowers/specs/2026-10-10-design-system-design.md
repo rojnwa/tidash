@@ -145,7 +145,8 @@ Not themed; one set per base. Tier from the playing stream's `OutputInfo`: lossy
 | Lossless | `#33ffee` | `#00897b` |
 | Low | `text` | `text` |
 
-The format badge draws the tier colour on a 10% tint of it, radius 4. The playing row's title takes the tier colour.
+The format badge is a pill: the tier colour on a 10% tint of it, with a 1 px stroke of the tier colour at 50%, as
+TIDAL's player pill. The playing row's title takes the tier colour.
 
 ### 4.3 Typography
 
@@ -237,9 +238,10 @@ neither sidebar nor top bar (as today).
 - Window fill, 1 px outline on its right edge, 16 px side margins.
 - Nav rows (`nav_row`): 24 px icon, Label text, radius 12, padding 8; idle secondary, hovered surface_hover and text,
   selected surface_active and text. Home (`house`), Explore (`compass`).
-- "COLLECTION" section header (Small, dim): Playlists, Albums, Tracks, Artists, Mixes, each a nav row to
-  `Route::Collection(tab)`. The Collection page drops its own tab row and titles itself with the tab's name.
-- "PLAYLISTS" section header with two 32 px icon buttons, `list-plus` "New playlist" and `folder-plus` "New folder"
+- "Collection" section header (Small, dim, sentence case as in TIDAL 2.43): Playlists, Albums, Tracks, Artists, Mixes,
+  each a nav row to `Route::Collection(tab)`. The Collection page drops its own tab row and titles itself with the tab's name.
+- "All playlists" section header (as TIDAL; also keeps it apart from the "Playlists" nav row) with two 32 px icon
+  buttons, `list-plus` "New playlist" and `folder-plus` "New folder"
   (today's two buttons, same labels and dialogs), then the library tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
   their open/closed chevron. Rename, move and delete menus are unchanged.
 - Back and Forward leave the sidebar for the top bar. Search and Settings leave it too.
@@ -251,10 +253,11 @@ neither sidebar nor top bar (as today).
 
 ### 5.3 Top bar and search
 
-- 56 tall, window fill, inside the central panel above the page scroll; page padding on both sides.
-- Back and Forward: 32 px `icon_button`s (`chevron-left` / `chevron-right`), disabled at the history's ends, labels
-  "Back" / "Forward".
-- `search_field`: a 40 px pill, 280 wide, surface fill, `search` icon and placeholder "Search TIDAL" in dim; focused
+- 56 tall, window fill, inside the central panel above the page scroll; page padding on both sides. As in TIDAL 2.43:
+  history on the left, search and the gear on the right.
+- Back and Forward: 32 px `icon_button`s (`chevron-left` / `chevron-right`) side by side on one `surface` pill,
+  disabled at the history's ends, labels "Back" / "Forward".
+- `search_field`: a 40 px pill, 280 wide, right-aligned before the gear, surface fill, `search` icon and placeholder "Search TIDAL" in dim; focused
   it inverts (text fill, window glyphs), as TIDAL does. It keeps `search::query_id()`, so Ctrl+F focuses it. Enter
   with a non-blank query sends `Action::Search` and navigates to Search. The query state moves from the Search page
   to `UiState` and still leaves with the session.
@@ -265,7 +268,10 @@ neither sidebar nor top bar (as today).
 
 ### 5.4 Pages, headers, shelves
 
-- Album, playlist, mix and artist headers: the cover requested at 16 px and painted stretched behind the top 450 px of
+- Artist pages, as TIDAL's: a hero instead of the cover and backdrop. The artist's picture fills the page's full
+  width and the top `BACKDROP` px (cropped, not blurred, requested at that width), fading into `window` over its
+  lower 40% with `vertical_gradient`; the name (Title), the details and the action row sit over its bottom-left.
+- Album, playlist and mix headers: the cover requested at 16 px and painted stretched behind the top 450 px of
   the page, under a `vertical_gradient` from window at 40% to window at 100%, so it scrolls with the page like TIDAL's
   blurred backdrop. Over it: the 240 px cover (round for artists), a Small dim type line ("ALBUM", "PLAYLIST"),
   the Title, the detail lines in secondary, then an action row: a primary `pill_button` Play with the `play-filled`
@@ -302,7 +308,8 @@ neither sidebar nor top bar (as today).
 - Panel fill, 88 tall, 1 px outline on its top edge; three columns 1 : 1.5 : 1.
 - Left: 52 px cover (radius 2); title Label; artists Small secondary.
 - Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc), Previous and Next (40,
-  `skip-back-filled` / `skip-forward-filled`), Play/Pause a 40 px accent `circle_button` with a 22 px on_accent glyph.
+  `skip-back-filled` / `skip-forward-filled`), Play/Pause a bare 24 px `play-filled` / `pause-filled` glyph in text
+  in a 40 px hit box (TIDAL 2.43 draws no disc).
   Below, the seek row (max 800 wide): times in Small secondary, tabular; a stock slider styled per §4.6.
 - Right: the format badge (`badge`, tier colours), then Queue (`list-music`), Lyrics (`mic-vocal`), Credits (`info`)
   icon buttons, text when their panel shows and secondary otherwise, then a volume icon and a 90 px slider.
