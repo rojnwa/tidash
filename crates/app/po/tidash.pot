@@ -463,7 +463,7 @@ msgid "Delete"
 msgstr ""
 
 #: src/ui/library.rs
-msgid "Move its playlists out first"
+msgid "Move its playlists out first."
 msgstr ""
 
 #: src/ui/library.rs

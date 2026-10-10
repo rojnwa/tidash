@@ -66,6 +66,8 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                 let shown = egui::CollapsingHeader::new(name)
                     .id_salt(("folder", sub))
                     .show(ui, |ui| folder(ui, ctx, state, sub));
+                let listed = ctx.model.folders.get(sub);
+                let empty = *count == 0 && listed.is_none_or(Vec::is_empty);
                 shown.header_response.context_menu(|ui| {
                     if ui.button(tr("Rename")).clicked() {
                         let (id, name) = (sub.clone(), name.clone());
@@ -73,11 +75,11 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                         ui.close();
                     }
                     // ponytail: what TIDAL does to the playlists in a deleted folder is unknown
-                    // (S5), so only an empty one goes; the edit could move them out first.
+                    // (S5), so only one known empty goes; the edit could move them out first.
                     let delete = egui::Button::new(tr("Delete"));
                     let delete = ui
-                        .add_enabled(*count == 0, delete)
-                        .on_disabled_hover_text(tr("Move its playlists out first"));
+                        .add_enabled(empty, delete)
+                        .on_disabled_hover_text(tr("Move its playlists out first."));
                     if delete.clicked() {
                         let (id, name) = (sub.clone(), name.clone());
                         state.dialog = Some(Dialog::DeleteFolder { id, name });
@@ -387,30 +389,52 @@ mod tests {
             let out = tree.settle(&m);
             tree.pass(&m, vec![click(&out, "New playlist")]);
             let out = tree.settle(&m);
-            let ok = out.platform_output.accesskit_update.as_ref();
-            let ok = ok.and_then(|t| t.nodes.iter().find(|(_, n)| n.label() == Some("OK")));
-            assert!(ok.expect("OK shown").1.is_disabled(), "no title yet");
+            assert!(disabled(&out, "OK"), "no title yet");
             tree.pass(&m, vec![egui::Event::Text("Road trip".into())]);
             tree.pass(&m, vec![submit]);
             let out = tree.settle(&m);
             assert!(!shown(&out).contains(&"OK".into()), "closed");
         }
-        let create = r#"EditPlaylist(Create { title: "Road trip", description: "", folder: None, tracks: [] })"#;
+        let create = concat!(
+            r#"EditPlaylist(Create { title: "Road trip", description: "", "#,
+            "folder: None, tracks: [] })"
+        );
         assert_eq!(tree.sent(), [create]);
     }
 
-    /// A folder's Delete asks first; only an empty folder offers it, since what TIDAL does to
-    /// the playlists in one is unknown (S5).
+    /// Whether the node labelled `label` in `out` is shown disabled.
+    fn disabled(out: &egui::FullOutput, label: &str) -> bool {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
+        node.unwrap_or_else(|| panic!("no {label:?} shown"))
+            .1
+            .is_disabled()
+    }
+
+    /// A folder's Delete asks first. Only a folder known to be empty offers it, since what
+    /// TIDAL does to the playlists in one is unknown (S5): not one counting items, nor one
+    /// whose listing holds some though its count says none.
     #[test]
     fn delete_folder_asks_first() {
-        let m = model(vec![folder("f", "Road", 0), folder("g", "Full", 2)]);
+        let mut m = model(vec![
+            folder("f", "Road", 0),
+            folder("g", "Full", 2),
+            folder("s", "Stale", 0),
+        ]);
+        let items = vec![FolderItem::Playlist(playlist())];
+        m.apply(Event::Folder {
+            id: "s".into(),
+            items,
+        });
         let mut tree = Tree::new();
-        let out = tree.menu(&m, "Full");
-        let delete = out.platform_output.accesskit_update.as_ref();
-        let delete = delete.and_then(|t| t.nodes.iter().find(|(_, n)| n.label() == Some("Delete")));
-        assert!(delete.expect("Delete shown").1.is_disabled(), "not empty");
-        tree.pass(&m, vec![key(Key::Escape)]); // the menu closes
+        for full in ["Full", "Stale"] {
+            let out = tree.menu(&m, full);
+            assert!(disabled(&out, "Delete"), "{full}");
+            tree.pass(&m, vec![key(Key::Escape)]); // the menu closes
+        }
         let out = tree.menu(&m, "Road");
+        assert!(!disabled(&out, "Delete"));
         tree.pass(&m, vec![click(&out, "Delete")]);
         let out = tree.settle(&m);
         assert!(tree.sent().is_empty(), "asked first");
