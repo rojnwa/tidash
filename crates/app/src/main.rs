@@ -9,6 +9,7 @@
 //! The OpenGL renderer in use is logged at start either way.
 
 mod backend;
+mod discord;
 mod i18n;
 mod images;
 mod library;
@@ -53,6 +54,8 @@ struct App {
     events: Receiver<Event>,
     ui: ui::UiState,
     media: now_playing::MediaControls,
+    /// With a Discord application ID compiled in.
+    presence: Option<discord::Presence>,
     /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
     repaint_log: bool,
@@ -87,6 +90,7 @@ impl App {
         let ctx = cc.egui_ctx.clone();
         let wake = move || ctx.request_repaint();
         let image_base = tidal::ClientConfig::default().image_base;
+        let presence = discord::app_id().map(|id| discord::Presence::start(id, image_base.clone()));
         let media = now_playing::MediaControls::start(wake, artwork, image_base);
         if let Some(speed) = switches.autoscroll {
             ui::autoscroll(&cc.egui_ctx, speed);
@@ -97,6 +101,7 @@ impl App {
             events,
             ui: ui::UiState::default(),
             media,
+            presence,
             started: Some(started),
             repaint_log: switches.repaint_log,
         }
@@ -113,7 +118,25 @@ impl App {
             });
             ctx.request_repaint(); // a change from the UI's pass shows in the next
         }
+        let settings = matches!(ev, Event::Settings(_));
         self.model.apply(ev);
+        if settings {
+            self.show_presence(self.position()); // turned off, it clears at once
+        }
+    }
+
+    /// The player's position, now.
+    fn position(&self) -> Duration {
+        let player = self.ui.player.as_ref();
+        player.map_or(Duration::ZERO, player::Player::position)
+    }
+
+    /// The playback at `position` in the Discord status, if the settings say so.
+    fn show_presence(&mut self, position: Duration) {
+        if let Some(p) = &mut self.presence {
+            let on = self.model.settings.integrations.discord;
+            p.show(&self.model.playback, position, on);
+        }
     }
 
     /// Asks the backend for the current route's page when the model says to.
@@ -155,20 +178,20 @@ fn setup_look(ctx: &egui::Context) {
 impl eframe::App for App {
     /// Backend events and media commands; also runs while the window is hidden or minimized.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let position = self
-            .ui
-            .player
-            .as_ref()
-            .map_or(Duration::ZERO, player::Player::position);
+        let position = self.position();
         while let Ok(ev) = self.events.try_recv() {
             match ev {
                 Event::Image { key, px, image } => self.ui.images.insert(ctx, key, px, image),
                 Event::ImageFailed { key, px } => self.ui.images.forget(key, px),
                 Event::Player(p) => self.ui.player = Some(p),
-                Event::Seeked(at) => self.media.seeked(at),
+                Event::Seeked(at) => {
+                    self.media.seeked(at);
+                    self.show_presence(at);
+                }
                 Event::Playback(p) => {
                     self.model.apply(Event::Playback(p));
                     self.media.show(&self.model.playback, position);
+                    self.show_presence(position);
                 }
                 ev => {
                     self.ui.apply(ctx, &ev);

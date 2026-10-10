@@ -486,6 +486,7 @@ fn set_settings_saves_and_announces() {
     b.settings_path = Some(file.clone());
     let mut settings = Settings::default();
     settings.audio.exclusive = true;
+    settings.integrations.discord = true; // the user's, unlike the users connected
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

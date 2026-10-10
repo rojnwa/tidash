@@ -1,7 +1,8 @@
 //! Settings view: account, appearance, audio, integrations, and the keyboard shortcuts; the
 //! login page leads here too, logged out. A change shows at once (`Event::Settings`) and goes
 //! to the backend (`Action::SetSettings`), which saves it and sends the settings back. The
-//! integrations are the backend's to set: Connect and Disconnect are actions.
+//! scrobbling services are the backend's to set: Connect and Disconnect are actions. The
+//! Discord toggle is a setting like the others.
 
 use super::Ctx;
 use crate::i18n::tr;
@@ -22,6 +23,8 @@ pub struct State {
     listenbrainz_token: String,
     /// Last.fm's keys are compiled in: its row shows.
     lastfm: bool,
+    /// A Discord application ID is compiled in: its toggle shows.
+    discord: bool,
 }
 
 impl Default for State {
@@ -32,6 +35,7 @@ impl Default for State {
             redirect_uri: String::new(),
             listenbrainz_token: String::new(),
             lastfm: Keys::compiled().is_some(),
+            discord: crate::discord::app_id().is_some(),
         }
     }
 }
@@ -73,6 +77,13 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         }
         if let Some(action) = listenbrainz(ui, model, state) {
             connect = Some(action);
+        }
+        if state.discord {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(tr("Discord")).strong());
+            let toggle = tr("Show what you play in your Discord status");
+            ui.checkbox(&mut new.integrations.discord, toggle);
+            ui.weak(tr("Discord must be running on this computer."));
         }
         section(ui, tr("Keyboard shortcuts"));
         egui::Grid::new("shortcuts").num_columns(2).show(ui, |ui| {
@@ -441,6 +452,27 @@ mod tests {
         let click = vec![testing::click(&out, "Disconnect")];
         let (sent, _) = pass(&ctx, &mut state, &mut model, click);
         assert!(matches!(sent[..], [Action::DisconnectLastfm]), "{sent:?}");
+    }
+
+    /// Hidden without an application ID; with one, a setting like the others.
+    #[test]
+    fn discord_toggle_is_a_setting() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        let toggle = "Show what you play in your Discord status";
+        state.settings.discord = false;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(!labels(&out).iter().any(|l| l == toggle), "hidden");
+        state.settings.discord = true;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let click = vec![testing::click(&out, toggle)];
+        let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+        let mut on = Settings::default();
+        on.integrations.discord = true;
+        assert_eq!(set_settings(sent), [on]);
+        assert!(model.settings.integrations.discord, "shown at once");
     }
 
     #[test]

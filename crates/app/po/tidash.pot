@@ -626,3 +626,19 @@ msgstr ""
 #: src/ui/settings.rs
 msgid "Scrobbles what you play. Connect opens Last.fm in the browser, where you allow Tidash."
 msgstr ""
+
+#: src/discord.rs
+msgid "Open in TIDAL"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Discord"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Show what you play in your Discord status"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Discord must be running on this computer."
+msgstr ""

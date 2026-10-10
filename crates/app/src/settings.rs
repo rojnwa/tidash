@@ -16,12 +16,15 @@ pub struct Settings {
 }
 
 /// Who each scrobbling service is connected as; its secret is in the credential store, never
-/// here. The backend sets these, on a connect, a disconnect, or a refused token.
+/// here. The backend sets these, on a connect, a disconnect, or a refused token. Discord is
+/// the user's to turn on.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Integrations {
     pub lastfm_user: Option<String>,
     pub listenbrainz_user: Option<String>,
+    /// Show what plays in the Discord status (`discord::Presence`).
+    pub discord: bool,
 }
 
 impl Integrations {
@@ -260,6 +263,7 @@ mod tests {
             integrations: Integrations {
                 lastfm_user: Some("ann".into()),
                 listenbrainz_user: Some("rob".into()),
+                discord: true,
             },
         };
         saved.save(&file).expect("saved");

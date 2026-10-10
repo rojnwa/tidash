@@ -31,6 +31,7 @@ directories = "6"
 md5 = "0.8"
 serde.workspace = true
 serde_json.workspace = true
+discord-rich-presence = "1.1"
 
 [dev-dependencies]
 wiremock = "0.6"
