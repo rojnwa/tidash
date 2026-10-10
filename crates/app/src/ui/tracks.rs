@@ -235,13 +235,25 @@ pub fn paint_row(
 /// A track row's context menu; with `edit`, the playlist's rows and this one's index in them,
 /// it can remove the row. `ui.close()` also closes it when an entry is picked from the
 /// keyboard or a screen reader, which no pointer click does.
+///
+/// A row's ids are its index's, so a list replaced under an open menu (a playlist reloaded
+/// after an edit) would hand it another track and listing: it closes instead.
 fn menu(
     row: &egui::Response,
     ctx: &mut Ctx,
     t: &tidal::Track,
     edit: Option<(&PlaylistRows, usize)>,
 ) {
+    let id = row.id.with("menu-for");
+    let now = || (t.id, edit.map(|(e, _)| e.etag.to_owned()));
+    if row.secondary_clicked() {
+        row.ctx.data_mut(|d| d.insert_temp(id, now())); // as the menu opens
+    }
     row.context_menu(|ui| {
+        if ui.data(|d| d.get_temp(id)) != Some(now()) {
+            ui.close();
+            return;
+        }
         if ui.button(tr("Play next")).clicked() {
             ctx.send(Action::PlayNext(vec![t.clone()]));
             ui.close();

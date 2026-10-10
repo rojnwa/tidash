@@ -77,8 +77,8 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
 /// While a row's payload `T` is dragged over the list of `len` rows `ROW_H` tall (scrolled so
 /// its top is at `top`): a line where it would land, and scrolling near an edge, or past it.
 /// On release over the visible list: the payload and the slot (`0..=len`) it lands in.
-/// Released elsewhere (over the heading or the player bar, say), egui drops the payload and
-/// nothing moves.
+/// Released elsewhere (over the heading, a page's header above the list, or the player bar,
+/// say), egui drops the payload and nothing moves.
 pub fn dragging<T: Any + Send + Sync>(
     ui: &egui::Ui,
     len: usize,
@@ -105,6 +105,9 @@ pub fn dragging<T: Any + Send + Sync>(
     }
     if !view.y_range().contains(p.y) {
         return None; // the slot under it is out of view
+    }
+    if p.y < top - ROW_H / 2.0 {
+        return None; // above the list, over what the page shows there
     }
     let slot = drop_slot(p.y, top, ROW_H, len);
     // The accent's stroke, which shows on the current row's highlight too.

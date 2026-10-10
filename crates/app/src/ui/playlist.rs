@@ -276,8 +276,43 @@ mod tests {
         assert_eq!(page.sent(), [remove]);
     }
 
+    /// The page reloads under row 2's open menu (row 1 removed, a new ETag), so row 2 holds
+    /// another track: the menu closes, and neither its Remove nor its "Add to playlist" acts.
+    #[test]
+    fn a_reload_closes_an_open_row_menu() {
+        let mut page = Page::new(1, Some("e1"));
+        let own = tidal::Playlist {
+            uuid: "p-2".into(),
+            title: "Road trip".into(),
+            ..playlist()
+        };
+        page.model.apply(Event::OwnPlaylists(vec![own]));
+        let out = page.menu(&row(2));
+        page.pass(vec![click(&out, "Add to playlist")]);
+        let out = page.settle();
+        let data = PageData::Playlist {
+            playlist: tidal::Playlist {
+                creator_id: Some(1),
+                ..playlist()
+            },
+            tracks: tracks(3)[1..].to_vec(),
+            positions: vec![0, 1],
+            etag: Some("e2".into()),
+        };
+        let route = page.model.route().clone();
+        page.model.apply(Event::Page { route, data });
+        let picks = ["Remove from this playlist", "Road trip"].map(|s| click(&out, s));
+        page.pass(picks.into());
+        assert_eq!(page.sent(), Vec::<String>::new());
+        assert!(
+            !shown(&page.settle()).contains(&"Play next".into()),
+            "closed"
+        );
+    }
+
     /// Row 1 dropped on row 3's top edge goes before position 3; dropped on its own bottom
-    /// edge it stays. Without the listing's ETag (R11) rows do not move.
+    /// edge, or over the header above the list, it stays. Without the listing's ETag (R11)
+    /// rows do not move.
     #[test]
     fn dragging_a_row_sends_move() {
         let mut page = Page::new(1, Some("e1"));
@@ -286,6 +321,8 @@ mod tests {
         assert_eq!(page.sent(), [to]);
         page.drag(&row(1), &row(2));
         assert_eq!(page.sent(), Vec::<String>::new(), "its own edge");
+        page.drag(&row(2), "Play");
+        assert_eq!(page.sent(), Vec::<String>::new(), "over the header");
         let mut page = Page::new(1, None);
         page.drag(&row(1), &row(3));
         assert_eq!(page.sent(), Vec::<String>::new(), "no ETag");
