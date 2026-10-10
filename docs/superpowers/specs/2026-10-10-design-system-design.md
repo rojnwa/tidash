@@ -238,6 +238,8 @@ neither sidebar nor top bar (as today).
 ### 5.2 Sidebar
 
 - Window fill, 1 px outline on its right edge, 16 px side margins.
+- Below the collapse button everything scrolls as one (nav rows, Collection, All playlists, the tree), so the
+  library stays reachable in a short window.
 - Nav rows (`nav_row`): 24 px icon, Label text, radius 12, padding 8; idle secondary, hovered surface_hover and text,
   selected surface_active and text. Home (`house`), Explore (`compass`).
 - "Collection" section header (Small, dim, sentence case as in TIDAL 2.43): Playlists, Albums, Tracks, Artists, Mixes,
