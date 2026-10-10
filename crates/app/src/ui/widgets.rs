@@ -65,12 +65,26 @@ pub fn focus_ring(ui: &Ui, response: &Response, radius: f32) {
     }
 }
 
-/// A 32 px square button with a 16 px glyph: `secondary`, `text` when hovered or `active`;
-/// an `active` one sits on a `surface_active` disc.
-pub fn icon_button(ui: &mut Ui, p: &Palette, icon: Icon, label: &str, active: bool) -> Response {
+/// A 32 px square button with a 16 px glyph: `secondary`, `text` when hovered. `toggle` is
+/// `None` for a plain button; `Some(on)` makes it a toggle that screen readers hear as on or
+/// off, and one that is on shows `text` on a `surface_active` disc.
+pub fn icon_button(
+    ui: &mut Ui,
+    p: &Palette,
+    icon: Icon,
+    label: &str,
+    toggle: Option<bool>,
+) -> Response {
     let size = Vec2::splat(theme::ICON_BUTTON);
     let (rect, r) = ui.allocate_exact_size(size, Sense::click());
-    r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
+    r.widget_info(|| {
+        let enabled = ui.is_enabled();
+        match toggle {
+            Some(on) => WidgetInfo::selected(WidgetType::Button, enabled, on, label),
+            None => WidgetInfo::labeled(WidgetType::Button, enabled, label),
+        }
+    });
+    let active = toggle == Some(true);
     if ui.is_rect_visible(rect) {
         let s = scale(ui, &r);
         if active {
@@ -331,7 +345,7 @@ mod tests {
         let row = |ui: &mut egui::Ui| {
             ui.horizontal(|ui| {
                 [
-                    icon_button(ui, &p, Icon::Shuffle, "Shuffle", false),
+                    icon_button(ui, &p, Icon::Shuffle, "Shuffle", Some(false)),
                     pill_button(ui, &p, Some(Icon::PlayFilled), "Play", true),
                     nav_row(ui, &p, Icon::House, "Home", false, false),
                 ]
@@ -351,7 +365,7 @@ mod tests {
     fn icon_button_is_labelled() {
         let ctx = context();
         let p = Palette::dark();
-        let shuffle = |ui: &mut egui::Ui| icon_button(ui, &p, Icon::Shuffle, "Shuffle", true);
+        let shuffle = |ui: &mut egui::Ui| icon_button(ui, &p, Icon::Shuffle, "Shuffle", Some(true));
         let (_, out) = run(&ctx, vec![], shuffle);
         let tree = out.platform_output.accesskit_update.as_ref();
         let nodes = &tree.expect("AccessKit is on").nodes;
@@ -360,6 +374,32 @@ mod tests {
         assert_eq!(role, egui::accesskit::Role::Button);
         let (clicked, _) = run(&ctx, vec![testing::click(&out, "Shuffle")], shuffle);
         assert!(clicked.clicked());
+    }
+
+    /// A toggle tells screen readers whether it is on; a plain button is no toggle.
+    #[test]
+    fn icon_buttons_tell_toggles_apart() {
+        use egui::accesskit::Toggled;
+        let p = Palette::dark();
+        let cases = [
+            ("Shuffle", Some(true), Some(Toggled::True)),
+            ("Shuffle", Some(false), Some(Toggled::False)),
+            ("Back", None, None),
+        ];
+        for (label, toggle, want) in cases {
+            let ctx = context();
+            let (_, out) = run(&ctx, vec![], |ui| {
+                icon_button(ui, &p, Icon::Shuffle, label, toggle)
+            });
+            let tree = out.platform_output.accesskit_update.as_ref();
+            let nodes = &tree.expect("AccessKit is on").nodes;
+            let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
+            let node = node
+                .unwrap_or_else(|| panic!("no {label:?} node"))
+                .1
+                .clone();
+            assert_eq!(node.toggled(), want, "{label} {toggle:?}");
+        }
     }
 
     #[test]
