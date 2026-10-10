@@ -610,6 +610,9 @@ fn setup_look(ctx: &egui::Context) {
     let mut fonts = fastframe_fonts::FontSetup::default().definitions();
     theme::rendering().apply_to(&mut fonts);
     ctx.set_fonts(fonts);
+    // SVG only (egui_extras' `svg` feature); the icons' bytes loader never forgets them.
+    egui_extras::install_image_loaders(ctx);
+    fastframe_icons::install::<theme::Icon>(ctx);
     ctx.options_mut(|o| o.quit_shortcuts.clear());
 }
 

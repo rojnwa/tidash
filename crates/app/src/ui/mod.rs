@@ -20,6 +20,11 @@ pub mod settings;
 mod shelf;
 mod sidebar;
 mod tracks;
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the views draw with them from the next task on")
+)]
+mod widgets;
 
 use crate::i18n::tr;
 use crate::images::TextureCache;

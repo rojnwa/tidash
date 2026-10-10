@@ -402,6 +402,57 @@ pub fn card_columns(width: f32) -> (usize, f32) {
     (n, (width - (n - 1) as f32 * CARD_GAP) / n as f32)
 }
 
+fastframe_icons::icons! {
+    /// Every icon the interface draws: Lucide's shared set from fastframe-icons, and the app's
+    /// own Lucide files in `assets/icons/` (licences in `LICENSE.txt` there). All are drawn in
+    /// white, so the tint is the colour on screen.
+    pub enum Icon {
+        prefix: "tidash-icon-",
+        directory: "../assets/icons/",
+        ChevronLeft => lucide "chevron-left",
+        ChevronRight => lucide "chevron-right",
+        ChevronDown => lucide "chevron-down",
+        Search => lucide "search",
+        Settings => lucide "settings",
+        Plus => lucide "plus",
+        Info => lucide "info",
+        Pause => lucide "pause",
+        Play => lucide "play",
+        VolumeX => lucide "volume-x",
+        Volume2 => lucide "volume-2",
+        X => lucide "x",
+        Check => lucide "check",
+        Ellipsis => lucide "ellipsis",
+        CircleAlert => lucide "circle-alert",
+        User => lucide "user",
+        Clock => lucide "clock",
+        PanelLeft => lucide "panel-left",
+        House => "house",
+        Compass => "compass",
+        Library => "library",
+        ListMusic => "list-music",
+        ListPlus => "list-plus",
+        Disc3 => "disc-3",
+        Music => "music",
+        Radio => "radio",
+        AudioLines => "audio-lines",
+        Heart => "heart",
+        HeartFilled => "heart-filled",
+        PlayFilled => "play-filled",
+        PauseFilled => "pause-filled",
+        SkipBackFilled => "skip-back-filled",
+        SkipForwardFilled => "skip-forward-filled",
+        Shuffle => "shuffle",
+        Repeat => "repeat",
+        Repeat1 => "repeat-1",
+        Volume1 => "volume-1",
+        MicVocal => "mic-vocal",
+        FolderPlus => "folder-plus",
+        Folder => "folder",
+        FolderOpen => "folder-open",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
