@@ -11,6 +11,13 @@
 //! - `TIDASH_REPAINT_LOG=1`: logs each pass's repaint causes at info.
 //!
 //! The OpenGL renderer in use is logged for each window either way.
+//!
+//! Switches for looking at the UI (design system spec §6.2), also read once at start; blank is
+//! unset:
+//! - `TIDASH_SCREENSHOT=<file.png>`: the window opens at 1440×900 on the launch link's page
+//!   (Home without one); once the page has loaded and no artwork is still loading, at least
+//!   1 s after start (at most 20 s), it saves a screenshot of the window there and quits.
+//! - `TIDASH_THEME=<dark|light|system|filename>`: the theme for this run, never saved.
 
 mod backend;
 mod discord;
@@ -33,30 +40,39 @@ mod ui;
 use fastframe_shell::{Closed, Headless, Held, Resident, Waker};
 use link::Link;
 use model::{Action, Event, Model, Route};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tray::TrayAction;
 
-/// The debug switches the crate docs list.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// The switches the crate docs list.
+#[derive(Clone, Debug, PartialEq)]
 struct Switches {
     autoscroll: Option<f32>,
     repaint_log: bool,
+    screenshot: Option<PathBuf>,
+    theme: Option<String>,
 }
 
 impl Switches {
     /// From `var`, which reads an environment variable.
     fn parse(var: impl Fn(&str) -> Option<String>) -> Self {
+        let text = |k| Some(var(k)?.trim().to_owned()).filter(|v| !v.is_empty());
         Self {
             autoscroll: var("TIDASH_AUTOSCROLL")
                 .and_then(|v| v.trim().parse().ok())
                 .filter(|v: &f32| v.is_normal()),
             repaint_log: var("TIDASH_REPAINT_LOG").is_some_and(|v| v.trim() == "1"),
+            screenshot: text("TIDASH_SCREENSHOT").map(PathBuf::from),
+            theme: text("TIDASH_THEME"),
         }
     }
 }
+
+/// Tags `TIDASH_SCREENSHOT`'s screenshot, so it is not taken for anyone else's.
+struct Shot;
 
 /// What lives as long as the process: the model, the backend's channels, the media controls,
 /// the Discord status and the tray. Windows come and go around it (`Window`).
@@ -88,6 +104,8 @@ struct App {
     quit: bool,
     /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
+    /// With `TIDASH_SCREENSHOT`, when `main` began, until the screenshot is asked for.
+    shot_since: Option<Instant>,
     switches: Switches,
 }
 
@@ -148,6 +166,7 @@ impl App {
             show: false,
             quit: false,
             started: Some(started),
+            shot_since: switches.screenshot.as_ref().map(|_| started),
             switches,
         }
     }
@@ -314,6 +333,54 @@ impl App {
             self.apply(ui.ctx(), ev);
         }
         self.open_current();
+        self.ask_for_screenshot(ui.ctx());
+    }
+
+    /// With `TIDASH_SCREENSHOT`, once: asks for the screenshot when the page has loaded and no
+    /// artwork is still loading, at least 1 s after start, or 20 s after it regardless.
+    fn ask_for_screenshot(&mut self, ctx: &egui::Context) {
+        let Some(since) = self.shot_since else {
+            return;
+        };
+        let waited = since.elapsed();
+        let route = self.model.route();
+        let page = matches!(route, Route::Login | Route::Search | Route::Settings)
+            || self.model.pages.get(route).is_some_and(|s| s.data.is_some());
+        let settled = page && !self.ui.images.loading() && waited >= Duration::from_secs(1);
+        if settled || waited >= Duration::from_secs(20) {
+            self.shot_since = None;
+            let shot = egui::UserData::new(Shot);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(shot));
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(100)); // the clock moves on
+        }
+    }
+
+    /// Saves `TIDASH_SCREENSHOT`'s screenshot once it arrives, and quits, saved or not. Other
+    /// screenshots are someone else's.
+    fn save_screenshot(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.switches.screenshot.clone() else {
+            return;
+        };
+        let image = ctx.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Screenshot {
+                    user_data, image, ..
+                } if user_data.data.as_ref().is_some_and(|d| d.is::<Shot>()) => {
+                    Some(Arc::clone(image))
+                }
+                _ => None,
+            })
+        });
+        let Some(image) = image else {
+            return;
+        };
+        let [w, h] = image.size.map(|n| n as u32);
+        match image::save_buffer(&path, image.as_raw(), w, h, image::ColorType::Rgba8) {
+            Ok(()) => log::info!("screenshot saved to {}", path.display()),
+            Err(e) => log::error!("screenshot not saved to {}: {e}", path.display()),
+        }
+        self.quit(ctx);
     }
 }
 
@@ -413,6 +480,7 @@ struct Window(Held<App>);
 impl eframe::App for Window {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.0.pump(ctx);
+        self.0.save_screenshot(ctx);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
@@ -467,18 +535,24 @@ fn main() -> eframe::Result {
     // Before any window: whether one opens at start depends on them. Blocks briefly.
     let settings = settings::path().as_deref().map(settings::Settings::load);
     let settings = settings.unwrap_or_default();
-    let hidden = settings.behavior.start_minimized;
+    // A screenshot needs a window.
+    let screenshot = switches.screenshot.is_some();
+    let hidden = settings.behavior.start_minimized && !screenshot;
     let app = App::new(&waker, settings, inbox, started, switches);
     fastframe_shell::Shell::new(app, &waker)
         .idle(fastframe_tray::idle)
         .start_hidden(hidden)
         .run(|lease| {
+            // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
+            let mut viewport = eframe::egui::ViewportBuilder::default().with_app_id("tidash");
+            if screenshot {
+                viewport = viewport.with_inner_size([1440.0, 900.0]); // as TIDAL's references
+            }
             // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu
             // whenever anything in the graph turns on its `wgpu` feature.
             let options = eframe::NativeOptions {
                 renderer: eframe::Renderer::Glow,
-                // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
-                viewport: eframe::egui::ViewportBuilder::default().with_app_id("tidash"),
+                viewport,
                 ..Default::default()
             };
             eframe::run_native(
@@ -499,6 +573,7 @@ mod tests {
     use super::{Action, Event, Link, Model, Route, Switches, on_close, open_links, starts_hidden};
     use crate::settings::Behavior;
     use fastframe_shell::Closed;
+    use std::path::PathBuf;
 
     /// Closing the login page quits, Close to tray or not: a first-run user expects the app
     /// to end. Logged in, the setting hides; Quit and the tray's own hide win either way.
@@ -582,14 +657,27 @@ mod tests {
         let off = Switches {
             autoscroll: None,
             repaint_log: false,
+            screenshot: None,
+            theme: None,
         };
         assert_eq!(parse(&[]), off);
-        let on = [("TIDASH_AUTOSCROLL", "1500"), ("TIDASH_REPAINT_LOG", "1")];
+        let on = [
+            ("TIDASH_AUTOSCROLL", "1500"),
+            ("TIDASH_REPAINT_LOG", "1"),
+            ("TIDASH_SCREENSHOT", r"C:\x\home.png"),
+            ("TIDASH_THEME", " Nord.json "),
+        ];
         let want = Switches {
             autoscroll: Some(1500.0),
             repaint_log: true,
+            screenshot: Some(PathBuf::from(r"C:\x\home.png")),
+            theme: Some("Nord.json".into()),
         };
         assert_eq!(parse(&on), want);
+        for blank in ["", "  "] {
+            assert_eq!(parse(&[("TIDASH_SCREENSHOT", blank)]), off, "{blank:?}");
+            assert_eq!(parse(&[("TIDASH_THEME", blank)]), off, "{blank:?}");
+        }
         assert_eq!(
             parse(&[("TIDASH_AUTOSCROLL", "-200.5")]).autoscroll,
             Some(-200.5)

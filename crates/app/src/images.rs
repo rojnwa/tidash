@@ -172,6 +172,12 @@ impl TextureCache {
         self.requested.remove(&(key, px));
     }
 
+    /// Some requested artwork has no texture yet: it is on its way, or failed and waits out
+    /// `RETRY`.
+    pub fn loading(&self) -> bool {
+        self.requested.iter().any(|k| !self.textures.contains_key(k))
+    }
+
     /// Adds a texture, then drops the least recently drawn beyond the budget, never one drawn
     /// in this pass or the last: the app inserts in `logic`, before this pass draws, so the
     /// last pass's are what is on screen. A screenful larger than the budget stays over it
@@ -343,5 +349,20 @@ mod tests {
         c.forget("a".into(), 160);
         c.get(&ctx, "a", 160, || n += 1);
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn loading_until_inserted_or_forgotten() {
+        let ctx = Context::default();
+        let mut c = TextureCache::new(1 << 20);
+        assert!(!c.loading(), "nothing asked for");
+        c.get(&ctx, "a", 160, || {});
+        assert!(c.loading(), "requested");
+        c.insert(&ctx, "a".into(), 160, img());
+        assert!(!c.loading(), "inserted");
+        c.get(&ctx, "b", 160, || {});
+        assert!(c.loading(), "requested");
+        c.forget("b".into(), 160);
+        assert!(!c.loading(), "forgotten");
     }
 }
