@@ -26,7 +26,7 @@ pub fn header(
     extra: impl FnOnce(&mut egui::Ui, &mut Ctx),
 ) {
     let top = ui.cursor().top();
-    backdrop(ui, ctx, image);
+    backdrop(ui, ctx, image, top);
     let x = ui.max_rect().x_range();
     let cover = Rect::from_min_size(pos2(x.min, top + PAGE_PAD), Vec2::splat(HEADER_COVER));
     super::cover(ui, ctx.images, ctx.tx, image, cover, theme::R_ART);
@@ -42,10 +42,9 @@ pub fn header(
 }
 
 /// An artist page's header (ruling 9): the picture across the page and its top `BACKDROP`
-/// (from the page's top, behind the top bar: `ui::page` insets the header), sharp, fading into
-/// `window` over its lower 40%; over its bottom-left the name, `details`, the heart and
-/// `extra`. No type line, and without a picture nothing behind them (ruling 23). The shelves
-/// after it keep their own gap.
+/// (from behind the top bar, `ui::behind_bar`), sharp, fading into `window` over its lower
+/// 40%; over its bottom-left the name, `details`, the heart and `extra`. No type line, and
+/// without a picture nothing behind them (ruling 23). The shelves after it keep their own gap.
 pub fn hero(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
@@ -55,13 +54,14 @@ pub fn hero(
     fav: Option<tidal::Favorite>,
     extra: impl FnOnce(&mut egui::Ui, &mut Ctx),
 ) {
-    let (page, top) = (ui.max_rect().top(), ui.cursor().top());
-    let picture = Rect::from_x_y_ranges(ui.clip_rect().x_range(), page..=page + BACKDROP);
+    let top = ui.cursor().top();
+    let (behind, from) = super::behind_bar(ui, top);
+    let picture = Rect::from_x_y_ranges(behind.clip_rect().x_range(), from..=from + BACKDROP);
     if image.is_some() {
-        super::cover(ui, ctx.images, ctx.tx, image, picture, 0.0);
+        super::cover(&behind, ctx.images, ctx.tx, image, picture, 0.0);
         let fade = picture.with_min_y(picture.bottom() - 0.4 * BACKDROP);
         let window = ctx.palette.window;
-        widgets::vertical_gradient(ui.painter(), fade, Color32::TRANSPARENT, window);
+        widgets::vertical_gradient(behind.painter(), fade, Color32::TRANSPARENT, window);
     }
     let x = ui.max_rect().x_range();
     let over = Rect::from_x_y_ranges(x, top + PAGE_PAD..=picture.bottom() - PAGE_PAD);
@@ -86,13 +86,13 @@ pub fn play_button(ui: &mut egui::Ui, ctx: &Ctx, list: &[tidal::Track]) {
     }
 }
 
-/// The cover at `TINT_PX` stretched over the page's full width from the page's top (behind the
-/// top bar: `ui::page` insets the header), `BACKDROP` tall, under a fade from `window` at 60% to
+/// The cover at `TINT_PX` stretched over the page's full width from the header's `top` (or from
+/// behind the top bar, `ui::behind_bar`), `BACKDROP` tall, under a fade from `window` at 60% to
 /// `window`: TIDAL's blurred backdrop, scrolling with the page. Only that size is painted
 /// (ruling 20): nothing until it loads.
-fn backdrop(ui: &egui::Ui, ctx: &mut Ctx, image: Option<&tidal::Image>) {
+fn backdrop(ui: &mut egui::Ui, ctx: &mut Ctx, image: Option<&tidal::Image>, top: f32) {
+    let (ui, top) = super::behind_bar(ui, top);
     // The scroll's clip, not the page's padded width.
-    let top = ui.max_rect().top();
     let rect = Rect::from_x_y_ranges(ui.clip_rect().x_range(), top..=top + BACKDROP);
     if !ui.is_rect_visible(rect) {
         return;

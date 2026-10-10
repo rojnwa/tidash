@@ -1,5 +1,5 @@
-//! Drawing: the player bar, the sidebar and the side panel; then dismissible errors under the
-//! top bar's place, the current route, and the top bar over it.
+//! Drawing: the player bar, the sidebar and the side panel; then the top bar, dismissible
+//! errors under it, and the current route.
 
 mod album;
 mod artist;
@@ -166,44 +166,25 @@ impl Ctx<'_> {
 
 /// A route's one vertical scroll; each route keeps its own offset, and the ids inside (a
 /// shelf's sideways offset, say) are the route's own: egui does not salt them by the scroll's.
-/// Right under the top bar, with nothing between (`draw`), it runs behind the bar (spec §5.3):
-/// from the bar's top, its content a bar's height down; scrolled, it fills the bar `window`
-/// (egui's panel fill), under the controls `draw` puts over it next.
+/// Right under the top bar, with nothing between (`draw`), its header paints up behind the bar
+/// (`behind_bar`); nothing else on it goes there (ruling 31).
 pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let bar = ui.data(|d| d.get_temp::<Option<egui::Rect>>(bar_id()).flatten());
     let bar = bar.filter(|b| ui.cursor().top() <= b.bottom());
-    let mut rect = ui.available_rect_before_wrap();
-    if let Some(b) = bar {
-        rect.min.y = b.top();
-    }
-    let inset = bar.map_or(0.0, |b| b.height());
+    ui.data_mut(|d| d.insert_temp(bar_id(), bar));
     let speed = ui.ctx().data(|d| d.get_temp::<f32>(autoscroll_id()));
     let step = speed.map(|v| v * ui.input(|i| i.stable_dt));
-    let scroll = egui::ScrollArea::vertical()
+    let out = egui::ScrollArea::vertical()
         .id_salt(("page", route))
-        .auto_shrink([false, false]);
-    let out = ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-        scroll.show(ui, |ui| {
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
             if let Some(step) = step {
                 let animation = egui::style::ScrollAnimation::none();
                 ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
                 ui.ctx().request_repaint();
             }
-            padded(ui, |ui| {
-                ui.push_id(route, |ui| {
-                    ui.add_space(inset);
-                    f(ui)
-                })
-                .inner
-            })
-        })
-    });
-    let out = out.inner;
-    if let Some(b) = bar.filter(|_| out.state.offset.y > 0.0) {
-        // Not over the scroll bar beside it.
-        let fill = b.with_max_x(out.inner_rect.right());
-        ui.painter().rect_filled(fill, 0.0, ui.visuals().panel_fill);
-    }
+            padded(ui, |ui| ui.push_id(route, f).inner)
+        });
     if let (Some(v), Some(step)) = (speed, step) {
         // This step lands next pass; turn round now if it reaches an end (give or take float
         // error), so no pass stands still there.
@@ -227,9 +208,25 @@ fn autoscroll_id() -> egui::Id {
     egui::Id::new("autoscroll")
 }
 
-/// Where `draw` keeps the top bar this pass (an `Option<Rect>`, none logged out), for `page`.
+/// Where `draw` keeps the top bar this pass (an `Option<Rect>`, none logged out); `page` keeps
+/// it only when it starts right under it, for its header (`behind_bar`).
 fn bar_id() -> egui::Id {
     egui::Id::new("top bar")
+}
+
+/// For what a page's header paints from the page's top (spec §5.4: the backdrop, the artist
+/// hero): a child of `ui` and the top to paint from. On a page right under the top bar
+/// (`page`), that is a bar's height above `top` (the header's), and the child's clip reaches up
+/// to the bar, so at scroll 0 it starts at the window's top, behind the bar; otherwise `top`,
+/// and the page's view.
+fn behind_bar(ui: &mut egui::Ui, top: f32) -> (egui::Ui, f32) {
+    let bar = ui.data(|d| d.get_temp::<Option<egui::Rect>>(bar_id()).flatten());
+    let mut behind = ui.new_child(egui::UiBuilder::new());
+    let Some(bar) = bar else {
+        return (behind, top);
+    };
+    behind.set_clip_rect(behind.clip_rect().with_min_y(bar.top()));
+    (behind, top - bar.height())
 }
 
 /// `MODULE_GAP` to the next module, the item spacing after the last one included.
@@ -567,13 +564,15 @@ pub fn draw(
             let from = theme::blend(palette.window, t, 0.35);
             widgets::vertical_gradient(ui.painter(), top, from, palette.window);
         }
-        // The top bar's place, then the notices under it; the bar itself comes last, over the
-        // page (`page` runs behind it).
+        // The top bar first, for Tab and screen readers (on a layer over the page's, ruling 31),
+        // then the notices under it.
         let bar = model.logged_in.then(|| {
             let bar = ui.available_rect_before_wrap();
+            let bar = bar.with_max_y(bar.top() + theme::TOP_BAR);
+            top_bar::show(ui, &mut ctx, &mut state.search, bar);
             ui.add_space(theme::TOP_BAR);
             top_bar::notices(ui, &mut ctx);
-            bar.with_max_y(bar.top() + theme::TOP_BAR)
+            bar
         });
         if bar.is_none() {
             ui.add_space(theme::PAGE_PAD);
@@ -589,9 +588,6 @@ pub fn draw(
             Route::Mix(_) => mix::show(ui, &mut ctx, route),
             Route::Collection(_) => collection::show(ui, &mut ctx, route),
             Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
-        }
-        if let Some(bar) = bar {
-            top_bar::show(ui, &mut ctx, &mut state.search, bar);
         }
     });
     state.transition.paint(ui.ctx()); // over everything

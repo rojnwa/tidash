@@ -6,18 +6,23 @@ use super::{Ctx, search};
 use crate::i18n::tr;
 use crate::model::{Action, Event, Route};
 use crate::theme::{self, Icon};
-use egui::{Align, Key, Layout, Rect, Sense, Ui, UiBuilder, vec2};
+use egui::{Align, Key, LayerId, Layout, Rect, Ui, UiBuilder, vec2};
 
-/// In `bar`, inset `PAGE_PAD`, over the page drawn before it (`ui::page` runs behind it), so
-/// its controls take the clicks; so does the rest of it, so nothing scrolled under it is hit.
-/// Enter in the search pill with a query searches and opens Search.
+/// In `bar`, inset `PAGE_PAD`. Drawn before the page, so Tab and screen readers meet it first,
+/// on a layer right above the page's, so it paints over and takes the clicks from what a page's
+/// header paints up behind it (ruling 31). Enter in the search pill with a query searches and
+/// opens Search.
 pub fn show(ui: &mut Ui, ctx: &mut Ctx, search: &mut search::State, bar: Rect) {
     let p = ctx.palette;
-    // Not focusable: Tab and screen readers pass it by.
-    ui.interact(bar, ui.id().with("top bar"), Sense::CLICK | Sense::DRAG);
+    let layer = LayerId::new(ui.layer_id().order, egui::Id::new("top bar"));
+    ui.ctx().set_sublayer(ui.layer_id(), layer);
     let row = bar.shrink2(vec2(theme::PAGE_PAD, 0.0));
     let layout = Layout::left_to_right(Align::Center);
-    let mut bar = ui.new_child(UiBuilder::new().max_rect(row).layout(layout));
+    let builder = UiBuilder::new()
+        .layer_id(layer)
+        .max_rect(row)
+        .layout(layout);
+    let mut bar = ui.new_child(builder);
     history(&mut bar, ctx);
     // The gear first, at the right end: in a narrow window the search pill shrinks, the gear
     // stays.
@@ -228,22 +233,22 @@ mod tests {
         after_home(Route::Album(1), data)
     }
 
-    /// The textured shapes' rects in `out`: covers, backdrops, pictures.
-    fn textured(out: &egui::FullOutput) -> Vec<Rect> {
-        let shapes = out.shapes.iter().map(|s| &s.shape);
-        shapes
-            .filter_map(|s| match s {
+    /// The textured shapes in `out` (covers, backdrops, pictures): each one's rect and clip.
+    fn textured(out: &egui::FullOutput) -> Vec<(Rect, Rect)> {
+        (out.shapes.iter())
+            .filter_map(|s| match &s.shape {
                 egui::Shape::Mesh(m) if m.texture_id != egui::TextureId::default() => {
-                    Some(m.calc_bounds())
+                    Some((m.calc_bounds(), s.clip_rect))
                 }
-                egui::Shape::Rect(r) if r.brush.is_some() => Some(r.rect),
+                egui::Shape::Rect(r) if r.brush.is_some() => Some((r.rect, s.clip_rect)),
                 _ => None,
             })
             .collect()
     }
 
     /// At scroll 0 the album's backdrop and the artist's hero start at the window's top, behind
-    /// the bar, and Back, drawn over them, still takes a pointer's click.
+    /// the bar, and show there (their clip reaches up too); Back, over them, still takes a
+    /// pointer's click.
     #[test]
     fn the_backdrop_starts_behind_the_top_bar() {
         let artist = PageData::Artist(tidal::ArtistPage {
@@ -267,8 +272,9 @@ mod tests {
             let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
             let wide = textured(&out)
                 .into_iter()
-                .filter(|r| r.width() > theme::HEADER_COVER);
-            let top = wide.map(|r| r.top()).reduce(f32::min).expect("a backdrop");
+                .filter(|(r, _)| r.width() > theme::HEADER_COVER);
+            let top = wide.map(|(r, clip)| r.top().max(clip.top()));
+            let top = top.reduce(f32::min).expect("a backdrop");
             assert!(top <= 1.0, "{key}: {top}");
             let at = testing::middle(&out, "Back");
             let mut pass = |events| pass(&ctx, &tx, &mut state, &model, 1000.0, events).0;
@@ -284,44 +290,140 @@ mod tests {
         }
     }
 
-    /// At its top the page shows through the bar; scrolled, `window` fills the bar's height
-    /// across it, under the history pill.
+    /// `model`'s page scrolled down `passes` steps of 100 pt, and still: the last step lands
+    /// in the pass after it.
+    fn scrolled(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        state: &mut UiState,
+        model: &Model,
+        passes: usize,
+    ) {
+        super::super::autoscroll(ctx, 6000.0);
+        for _ in 0..passes {
+            pass(ctx, tx, state, model, 1000.0, vec![]);
+        }
+        super::super::autoscroll(ctx, 0.0);
+        pass(ctx, tx, state, model, 1000.0, vec![]);
+    }
+
+    /// Scrolled, the track list goes under no part of the bar: rows reach up there (a row's
+    /// AccessKit bounds are its whole rect, cut or not, and `virtual_rows` builds one above the
+    /// view), but what they paint is cut at the bar's bottom.
     #[test]
-    fn the_bar_is_opaque_once_scrolled() {
+    fn the_page_scrolls_below_the_bar() {
         let ctx = testing::context();
         ctx.enable_accesskit();
         theme::apply(&ctx, &Palette::dark());
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
         let model = album_page(30);
-        let p = Palette::dark();
-        let mut pass = || pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]).1;
-        // The fill over the bar's height from the top, across Back to the gear, and its place
-        // in the paint order.
-        let fill = |out: &egui::FullOutput| {
-            let (back, gear) = (
-                testing::bounds(out, "Back"),
-                testing::bounds(out, "Settings"),
+        scrolled(&ctx, &tx, &mut state, &model, 8);
+        let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let reached = (tree.expect("AccessKit is on").nodes.iter()).any(|(_, n)| {
+            let row = n.label().is_some_and(|l| l.contains(". Track "));
+            row && n.bounds().is_some_and(|b| (b.y0 as f32) < theme::TOP_BAR)
+        });
+        assert!(reached, "no row reached the bar");
+        let titles: Vec<_> = (out.shapes.iter())
+            .filter(|s| {
+                let text = |t: &egui::epaint::TextShape| t.galley.text().starts_with("Track ");
+                matches!(&s.shape, egui::Shape::Text(t) if text(t))
+            })
+            .collect();
+        assert!(!titles.is_empty());
+        for s in titles {
+            assert!(
+                s.clip_rect.top() >= theme::TOP_BAR - 0.5,
+                "{:?}",
+                s.clip_rect
             );
-            let over = |r: &Rect| {
-                r.top() <= 0.5
-                    && (r.height() - theme::TOP_BAR).abs() < 0.5
-                    && r.left() <= back.left()
-                    && r.right() >= gear.right()
-            };
-            filled(out, p.window, over)
-        };
-        assert_eq!(fill(&pass()), None, "at the top");
-        super::super::autoscroll(&ctx, 3000.0);
-        let mut out = pass();
-        for _ in 0..3 {
-            out = pass();
         }
-        let (at, _) = fill(&out).expect("a fill once scrolled");
-        // Not the album's cover scrolled under it, a placeholder of the same colour.
-        let back = testing::bounds(&out, "Back").center();
-        let pill = |r: &Rect| r.contains(back) && r.height() <= theme::PILL;
-        let (pill, _) = filled(&out, p.surface, pill).expect("the pill");
-        assert!(at < pill, "the fill is under the pill");
+    }
+
+    /// The node `out` has focused: its label and where it is drawn.
+    fn focused(out: &egui::FullOutput) -> Option<(String, Rect)> {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let tree = tree.expect("AccessKit is on");
+        let node = tree.nodes.iter().find(|(id, _)| *id == tree.focus)?;
+        let b = node.1.bounds()?;
+        let at = |x: f64, y: f64| Pos2::new(x as f32, y as f32);
+        let label = node.1.label()?.to_owned();
+        Some((label, Rect::from_min_max(at(b.x0, b.y0), at(b.x1, b.y1))))
+    }
+
+    /// Tab from nothing focused reaches the bar's controls before the page's (ruling 31).
+    #[test]
+    fn the_top_bar_comes_first_in_tab_order() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        theme::apply(&ctx, &Palette::dark());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = album_page(3);
+        pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
+        let bar = ["Back", "Forward", "Search TIDAL", "Settings"];
+        // The album's own controls: its Play pill (the player's is disabled), heart and pill.
+        let page = ["Play", "Add to favorites", "Add to playlist"];
+        for _ in 0..200 {
+            let tab = vec![testing::key(egui::Key::Tab)];
+            let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, tab);
+            let Some((label, _)) = focused(&out) else {
+                continue;
+            };
+            assert!(!page.contains(&label.as_str()), "{label} before the bar");
+            if bar.contains(&label.as_str()) {
+                return;
+            }
+        }
+        panic!("Tab never reached the bar");
+    }
+
+    /// Scrolled down, Shift+Tab from the first row wholly in view to the one above it, cut by
+    /// the bar's edge: the list scrolls it into view below the bar, not under it.
+    #[test]
+    fn focus_stays_clear_of_the_bar() {
+        use egui::accesskit::{Action as Act, ActionRequest, TreeId};
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        theme::apply(&ctx, &Palette::dark());
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = album_page(30);
+        scrolled(&ctx, &tx, &mut state, &model, 8);
+        let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let rows = (tree.expect("AccessKit is on").nodes.iter()).filter_map(|(id, n)| {
+            let row = n.label()?.contains(". Track ");
+            let top = n.bounds()?.y0 as f32;
+            (row && top >= theme::TOP_BAR).then_some((top, *id))
+        });
+        let (_, first) = rows
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .expect("rows in view");
+        let focus = egui::Event::AccessKitActionRequest(ActionRequest {
+            action: Act::Focus,
+            target_tree: TreeId::ROOT,
+            target_node: first,
+            data: None,
+        });
+        let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![focus]);
+        let (from, _) = focused(&out).expect("a focused row");
+        let back = egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        pass(&ctx, &tx, &mut state, &model, 1000.0, vec![back]);
+        let mut out = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]).1;
+        for _ in 0..30 {
+            out = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]).1;
+        }
+        let (to, at) = focused(&out).expect("a focused row");
+        assert_ne!(to, from, "Shift+Tab moved");
+        assert!(at.top() >= theme::TOP_BAR - 0.5, "{to}: {at:?}");
     }
 }
