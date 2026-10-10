@@ -303,7 +303,7 @@ fn cover(
     } else {
         rect.width()
     };
-    let px = (width * ui.ctx().pixels_per_point()).ceil().max(1.0) as u32;
+    let px = request_px(width * ui.ctx().pixels_per_point());
     let tex = image.and_then(|img| {
         images.get(ui.ctx(), img.key(), px, || {
             let _ = tx.send(Action::LoadImage {
@@ -324,6 +324,14 @@ fn cover(
             painter.rect_filled(rect, radius, ui.visuals().faint_bg_color);
         }
     }
+}
+
+/// The width to ask for a cover drawn `width_px` pixels wide: exact up to 64 px (rows, the
+/// sidebar, tint sources), else rounded up to a multiple of 32, so a card that widens with the
+/// window keeps its texture.
+fn request_px(width_px: f32) -> u32 {
+    let px = width_px.ceil().max(1.0) as u32;
+    if px > 64 { px.next_multiple_of(32) } else { px }
 }
 
 /// The centred part of a texture `tex` wide per unit of height that fills a rect `rect` wide
@@ -806,5 +814,15 @@ mod tests {
             r(0.0, 1.0, 0.5 - 1.0 / 3.0, 0.5 + 1.0 / 3.0)
         );
         assert_eq!(crop(1.0, 1.0), r(0.0, 1.0, 0.0, 1.0));
+    }
+
+    /// Small covers are asked for exactly; larger ones in steps of 32 px, so a card that
+    /// widens a little keeps its texture.
+    #[test]
+    fn cover_sizes_round_up_above_64_px() {
+        let cases = [(16.0, 16), (40.0, 40), (64.0, 64), (65.0, 96), (172.3, 192)];
+        for (width, px) in cases {
+            assert_eq!(request_px(width), px, "{width}");
+        }
     }
 }

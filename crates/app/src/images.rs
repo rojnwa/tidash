@@ -147,24 +147,33 @@ impl TextureCache {
         }
     }
 
-    /// The texture, now drawn in this pass, if cached; otherwise calls `request` once per key
-    /// and returns `None`.
+    /// The texture, now drawn in this pass, if cached. Otherwise calls `request` once per key
+    /// and meanwhile returns the cached size of the same image nearest `px`, now drawn in this
+    /// pass too; `None` with no size of it cached.
     pub fn get(
         &mut self,
         ctx: &Context,
-        key: &str,
+        image: &str,
         px: u32,
         request: impl FnOnce(),
     ) -> Option<TextureHandle> {
-        let key = (key.to_owned(), px);
+        let key = (image.to_owned(), px);
+        let now = ctx.cumulative_pass_nr();
         if let Some((tex, _, used)) = self.textures.get_mut(&key) {
-            *used = ctx.cumulative_pass_nr();
+            *used = now;
             return Some(tex.clone());
         }
         if self.requested.insert(key) {
             request();
         }
-        None
+        // ponytail: O(n) scan, only while a size loads; n is a few hundred textures.
+        let (_, (tex, _, used)) = self
+            .textures
+            .iter_mut()
+            .filter(|((k, _), _)| k == image)
+            .min_by_key(|((_, at), _)| at.abs_diff(px))?;
+        *used = now;
+        Some(tex.clone())
     }
 
     /// The artwork could not be loaded: the next `get` requests it again.
@@ -339,6 +348,27 @@ mod tests {
         assert_eq!(n, 1);
         c.insert(&ctx, "a".into(), 160, img());
         assert!(c.get(&ctx, "a", 160, || n += 1).is_some());
+        assert_eq!(n, 1);
+    }
+
+    /// While a new size loads, the nearest cached one of the same image stands in.
+    #[test]
+    fn a_missing_size_shows_the_nearest_cached_one() {
+        let ctx = Context::default();
+        let mut c = TextureCache::new(1 << 20);
+        c.insert(&ctx, "a".into(), 64, img());
+        c.insert(&ctx, "a".into(), 128, img());
+        let near = c.get(&ctx, "a", 128, || {}).map(|t| t.id());
+        let mut n = 0;
+        for _ in 0..2 {
+            let shown = c.get(&ctx, "a", 192, || n += 1).map(|t| t.id());
+            assert_eq!(shown, near, "128 px meanwhile");
+        }
+        assert_eq!(n, 1, "192 px asked for once");
+        assert!(c.get(&ctx, "b", 192, || {}).is_none(), "no size of b");
+        c.insert(&ctx, "a".into(), 192, img());
+        let exact = c.get(&ctx, "a", 192, || n += 1).map(|t| t.id());
+        assert!(exact.is_some() && exact != near, "the 192 px one");
         assert_eq!(n, 1);
     }
 
