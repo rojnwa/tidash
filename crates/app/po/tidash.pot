@@ -200,6 +200,14 @@ msgid "View all"
 msgstr ""
 
 #: src/ui/shelf.rs
+msgid "Scroll left"
+msgstr ""
+
+#: src/ui/shelf.rs
+msgid "Scroll right"
+msgstr ""
+
+#: src/ui/shelf.rs
 msgid "Artist"
 msgstr ""
 

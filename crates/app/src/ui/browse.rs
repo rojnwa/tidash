@@ -5,6 +5,7 @@
 use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
 use crate::model::{PageData, Route};
+use crate::theme;
 use tidal::Layout;
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
@@ -25,7 +26,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             &page.title
         };
         if !title.is_empty() {
-            ui.heading(title);
+            ui.label(egui::RichText::new(title).font(theme::title()));
         }
         let Some(s) = one else {
             shelf::shelves(ui, &page.shelves, ctx);

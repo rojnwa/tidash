@@ -234,6 +234,9 @@ pub const R_FIELD: f32 = 8.0;
 pub const R_CARD: f32 = 12.0;
 pub const R_DIALOG: f32 = 20.0;
 
+/// The shade a hovered card's cover darkens to: black at 70%, on any palette (spec §5.6).
+pub const SCRIM: Color32 = Color32::from_black_alpha(179);
+
 // Durations in seconds (spec §4.5).
 /// Hover colour; egui's `animation_time`, so the sidebar's slide too.
 pub const HOVER: f32 = 0.15;
@@ -409,6 +412,7 @@ pub fn dominant(image: &egui::ColorImage) -> Option<Color32> {
 /// How many cards a row `width` wide holds, and each one's width (spec §4.4): as many as
 /// fit at `CARD` wide, 1 to `CARDS_MAX`, sharing the width less the gaps.
 pub fn card_columns(width: f32) -> (usize, f32) {
+    let width = width.max(0.0); // NaN too
     let n = ((width / CARD) as usize).clamp(1, CARDS_MAX);
     (n, (width - (n - 1) as f32 * CARD_GAP) / n as f32)
 }
@@ -594,5 +598,7 @@ mod tests {
         assert_eq!(card_columns(100.0), (1, 100.0));
         assert_eq!(card_columns(CARD * 3.0 + 2.0 * CARD_GAP), (3, CARD));
         assert_eq!(card_columns(5000.0).0, CARDS_MAX);
+        assert_eq!(card_columns(-5.0), (1, 0.0));
+        assert_eq!(card_columns(f32::NAN), (1, 0.0));
     }
 }

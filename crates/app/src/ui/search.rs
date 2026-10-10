@@ -4,6 +4,7 @@
 use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
 use crate::model::Route;
+use crate::theme;
 use std::borrow::Cow;
 use tidal::{Item, Layout, Shelf};
 
@@ -34,7 +35,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
         .collect();
         shelf::shelves(ui, &shelves, ctx);
         if !results.tracks.is_empty() {
-            ui.add_space(16.0);
+            ui.add_space(theme::MODULE_GAP);
             ui.heading(tr("Tracks"));
             tracks::show(ui, ctx, "search-tracks", &results.tracks, false, None);
         }
