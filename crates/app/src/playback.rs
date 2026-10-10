@@ -123,8 +123,9 @@ pub enum Msg {
         client: Arc<Client>,
         result: Result<Resolved, Box<dyn std::error::Error + Send + Sync>>,
     },
-    /// This client's session is dead (`backend::session_expired`).
-    SessionExpired(Arc<Client>),
+    /// This client's session is dead (`backend::session_expired`); true if TIDAL refused the
+    /// client ID.
+    SessionExpired(Arc<Client>, bool),
 }
 
 /// A player error this far from where the track was last restarted is a new hiccup.
@@ -356,7 +357,7 @@ impl Playback {
             Msg::Loaded { seq, result, .. } => {
                 log::debug!("stream {seq} resolved: {}", result.is_ok());
             }
-            Msg::SessionExpired(_) => {}
+            Msg::SessionExpired(..) => {}
         }
         if let Msg::Player(PlayerEvent::TrackStarted(id) | PlayerEvent::Error { id, .. }) = &msg {
             self.went_on(c, *id);
@@ -403,8 +404,8 @@ impl Playback {
                     Err(e) => log::debug!("preload of track {}: {e}", pre.track_id),
                 }
             }
-            Msg::Loaded { .. } => {}     // superseded
-            Msg::SessionExpired(_) => {} // the backend's
+            Msg::Loaded { .. } => {}      // superseded
+            Msg::SessionExpired(..) => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
                 if s == PlayState::Stopped {

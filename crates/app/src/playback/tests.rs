@@ -223,7 +223,7 @@ fn a_dead_session_stops_the_load_but_fails_no_track() {
     };
     fail_load(&mut p, tidal::Error::Auth("invalid_grant".into()));
     assert!(
-        matches!(sent.try_recv(), Ok(Msg::SessionExpired(dead)) if Arc::ptr_eq(&dead, &c)),
+        matches!(sent.try_recv(), Ok(Msg::SessionExpired(dead, _)) if Arc::ptr_eq(&dead, &c)),
         "the load's client is the dead one"
     );
     assert!(errors(&rx).is_empty(), "no track reported unavailable");

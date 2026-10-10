@@ -177,7 +177,7 @@ mod tests {
         });
         let (msgs, mut msg_rx) = unbounded_channel();
         task(emit, msgs).await;
-        let expired = matches!(msg_rx.try_recv(), Ok(Msg::SessionExpired(_)));
+        let expired = matches!(msg_rx.try_recv(), Ok(Msg::SessionExpired(..)));
         (events.try_iter().collect(), expired)
     }
 

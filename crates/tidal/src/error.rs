@@ -24,6 +24,18 @@ pub enum Error {
     NotCached,
 }
 
+impl Error {
+    /// The token endpoint refused the client ID: OAuth `invalid_client` or
+    /// `unauthorized_client` (`Auth` starts with the OAuth error code there).
+    pub fn client_refused(&self) -> bool {
+        let Self::Auth(m) = self else { return false };
+        matches!(
+            m.split(':').next(),
+            Some("invalid_client" | "unauthorized_client")
+        )
+    }
+}
+
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         Self::Http(e.without_url())

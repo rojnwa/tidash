@@ -34,8 +34,7 @@ pub struct UiState {
     scrolling: fastframe_scroll::Scrolling,
     /// The queue panel shows; the player bar toggles it.
     pub queue_open: bool,
-    /// The Settings view asked for the devices on this visit.
-    settings_listed: bool,
+    settings: settings::State,
 }
 
 impl Default for UiState {
@@ -48,7 +47,7 @@ impl Default for UiState {
             player: None,
             scrolling: Default::default(),
             queue_open: false,
-            settings_listed: false,
+            settings: Default::default(),
         }
     }
 }
@@ -230,8 +229,9 @@ fn crop(tex: f32, rect: f32) -> egui::Rect {
     egui::Rect::from_center_size(egui::pos2(0.5, 0.5), size)
 }
 
-/// Keyboard and mouse shortcuts. None while typing but the mouse's back and forward; Space
-/// also leaves a focused widget alone (it clicks it).
+/// Keyboard and mouse shortcuts; Settings lists the keys (`settings::shortcuts`). None while
+/// typing but the mouse's back and forward; Space also leaves a focused widget alone (it
+/// clicks it).
 fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events: &mut Vec<Event>) {
     use egui::{Key, Modifiers, PointerButton};
     let ctx = ui.ctx();
@@ -244,6 +244,9 @@ fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events:
     let find = ctx.input_mut(|i| {
         let mut key = |mods: Modifiers, k: Key| !typing && i.consume_key(mods, k);
         let find = key(Modifiers::COMMAND, Key::F);
+        if key(Modifiers::COMMAND, Key::Comma) {
+            events.push(Event::Navigate(Route::Settings));
+        }
         let back = key(Modifiers::ALT, Key::ArrowLeft);
         let forward = key(Modifiers::ALT, Key::ArrowRight);
         if pb.track.is_some() {
@@ -285,10 +288,9 @@ pub fn draw(
         shortcuts(ui, model, tx, &mut events);
     }
     if *model.route() != Route::Settings {
-        state.settings_listed = false; // the next visit lists them again
+        state.settings.listed = false; // the next visit starts afresh
     }
-    let mut logout = false;
-    if !model.errors.is_empty() || model.logged_in {
+    if !model.errors.is_empty() || model.offline {
         egui::Panel::top("top").show(ui, |ui| {
             if model.offline {
                 let warn = ui.visuals().warn_fg_color;
@@ -302,13 +304,7 @@ pub fn draw(
                     }
                 });
             }
-            if model.logged_in {
-                logout = ui.small_button(tr("Log out")).clicked();
-            }
         });
-    }
-    if logout {
-        let _ = tx.send(Action::Logout);
     }
     if *model.route() != Route::Login {
         // Before the sidebar, so the bar spans the full width.
@@ -344,7 +340,7 @@ pub fn draw(
             Route::Playlist(_) => playlist::show(ui, &mut ctx, route),
             Route::Mix(_) => mix::show(ui, &mut ctx, route),
             Route::Collection(_) => collection::show(ui, &mut ctx, route),
-            Route::Settings => settings::show(ui, &mut ctx, &mut state.settings_listed),
+            Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
         }
     });
     events
@@ -585,6 +581,32 @@ mod tests {
         assert!(ctx.text_edit_focused());
         let events = pass(&model, alt_left());
         assert!(events.is_empty(), "{events:?}");
+    }
+
+    #[test]
+    fn ctrl_comma_opens_settings() {
+        let ctx = egui::Context::default();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        let comma = egui::Event::Key {
+            key: Key::Comma,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        };
+        let input = egui::RawInput {
+            events: vec![comma],
+            ..Default::default()
+        };
+        let mut events = Vec::new();
+        let mut out = ctx.run_ui(input, |ui| events = draw(ui, &model, &tx, &mut state));
+        out.textures_delta.clear(); // nothing renders them
+        for ev in events {
+            model.apply(ev);
+        }
+        assert_eq!(model.route(), &Route::Settings);
     }
 
     /// As a screen reader finds them: Space and Play send `TogglePlay` (the backend decides),

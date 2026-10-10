@@ -94,7 +94,7 @@ fn new_backend(
         waker: Box::new(|| {}),
     });
     let (msg_tx, msgs) = unbounded_channel();
-    let b = Backend::new(emit, msg_tx, (store, stored), None);
+    let b = Backend::new(emit, msg_tx, Settings::default(), (store, stored), None);
     (b, events, msgs)
 }
 
@@ -130,8 +130,8 @@ fn deliver(b: &mut Backend, msgs: &mut UnboundedReceiver<Msg>) {
         .enable_all()
         .build()
         .expect("a runtime");
-    while let Ok(Msg::SessionExpired(dead)) = msgs.try_recv() {
-        rt.block_on(b.expire(dead));
+    while let Ok(Msg::SessionExpired(dead, refused)) = msgs.try_recv() {
+        rt.block_on(b.expire(dead, refused));
     }
 }
 
@@ -186,7 +186,7 @@ fn session_end_stops_requests_in_flight() {
                 .await
                 .expect("both requests are in flight");
             match b.client.clone() {
-                Some(dead) if !logout => b.expire(dead).await,
+                Some(dead) if !logout => b.expire(dead, false).await,
                 _ => b.handle(Action::Logout).await,
             }
             tokio::time::sleep(Duration::from_millis(600)).await; // past their replies
@@ -395,8 +395,8 @@ fn a_report_refresh_after_logout_is_not_saved() {
             tx,
             waker: Box::new(|| {}),
         });
-        let mut backend =
-            Backend::new(emit, unbounded_channel().0, (store.clone(), Ok(None)), None);
+        let (msgs, settings) = (unbounded_channel().0, Settings::default());
+        let mut backend = Backend::new(emit, msgs, settings, (store.clone(), Ok(None)), None);
         backend.cfg = ClientConfig {
             events_url: format!("{}/events", server.uri()).parse().expect("a URL"),
             auth_base: format!("{}/", server.uri()).parse().expect("a URL"),
@@ -438,27 +438,114 @@ fn unreadable_store_warns_and_stays_logged_out() {
 
 /// The change is saved (creating the config dir) and the model told.
 #[test]
-fn set_audio_saves_and_announces() {
+fn set_settings_saves_and_announces() {
     let dir = std::env::temp_dir().join(format!("tidash-backend-settings-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let file = dir.join("config").join("settings.json");
     let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
     b.settings_path = Some(file.clone());
-    let audio = crate::settings::Audio {
-        exclusive: true,
-        ..Default::default()
-    };
+    let mut settings = Settings::default();
+    settings.audio.exclusive = true;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("a runtime");
-    rt.block_on(b.handle(Action::SetAudio(audio.clone())));
+    rt.block_on(b.handle(Action::SetSettings(settings.clone())));
     let saved = std::fs::read_to_string(&file).unwrap_or_default();
     let _ = std::fs::remove_dir_all(&dir);
     assert!(saved.contains(r#""exclusive": true"#), "{saved}");
     let events: Vec<_> = events.try_iter().collect();
     assert!(
-        matches!(&events[..], [Event::Settings(s)] if s.audio == audio),
+        matches!(&events[..], [Event::Settings(s)] if *s == settings),
         "{events:?}"
     );
+}
+
+const CLIENT_ID_CHANGED: &str = "Logged out: the client ID changed. Log in again.";
+const CLIENT_REFUSED: &str = "TIDAL refused the client ID. Check Settings › Account.";
+
+/// Another client ID ends the session it logged in with: logged out, told why once. Other
+/// changes, and a blank ID (the built-in one), leave it alone.
+#[test]
+fn changing_the_client_id_logs_out() {
+    let store = Arc::new(tidal::MemoryStore::default());
+    store.save(&session("a")).expect("saved");
+    let (mut b, events, _msgs) = new_backend(store.clone(), Ok(Some(session("a"))));
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    let mut settings = Settings::default();
+    settings.theme = crate::settings::Theme::Light;
+    settings.account.client_id = Some("  ".into());
+    rt.block_on(b.handle(Action::SetSettings(settings.clone())));
+    assert!(b.client.is_some(), "still logged in");
+    settings.account.client_id = Some("other".into());
+    rt.block_on(b.handle(Action::SetSettings(settings.clone())));
+    assert!(b.client.is_none());
+    assert_eq!(b.cfg.client_id, "other");
+    assert_eq!(store.load().expect("read"), None, "the session is removed");
+    let events: Vec<_> = events.try_iter().collect();
+    let out = events.iter().filter(|e| matches!(e, Event::LoggedOut));
+    assert_eq!(out.count(), 1, "{events:?}");
+    let errors: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Error(e) => Some(e.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(errors, [CLIENT_ID_CHANGED]);
+    assert!(
+        matches!(events.last(), Some(Event::Error(_))),
+        "after LoggedOut: {events:?}"
+    );
+}
+
+/// The token endpoint refuses the client ID, on the login exchange and on a refresh (which
+/// first ends the session): the error points to the setting.
+#[test]
+fn invalid_client_points_to_the_setting() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(async {
+        let server = MockServer::start().await;
+        let refused = ResponseTemplate::new(400)
+            .set_body_raw(r#"{"error":"invalid_client"}"#, "application/json");
+        let token = Mock::given(method("POST")).and(path("/oauth2/token"));
+        token.respond_with(refused).expect(2).mount(&server).await;
+        let search = Mock::given(method("GET")).and(path("/v1/search"));
+        search
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let (mut b, events, mut msgs) = new_backend(Arc::new(NoReads), Ok(None));
+        b.cfg = ClientConfig {
+            api_base: format!("{}/v1/", server.uri()).parse().expect("a URL"),
+            auth_base: format!("{}/", server.uri()).parse().expect("a URL"),
+            ..ClientConfig::default()
+        };
+        b.pkce = Some(tidal::Pkce::from_parts("v", "st"));
+        let redirect = Redirect("https://x.test/cb?code=c&state=st".into());
+        b.handle(Action::FinishLogin(redirect)).await;
+        b.log_in(session("a"));
+        b.handle(Action::Search("q".into())).await;
+        let expired = tokio::time::timeout(Duration::from_secs(5), msgs.recv()).await;
+        let Ok(Some(Msg::SessionExpired(dead, refused))) = expired else {
+            panic!("no expiry");
+        };
+        b.expire(dead, refused).await;
+        let events: Vec<_> = events.try_iter().collect();
+        let shown: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Error(e) => Some(e.as_str()),
+                Event::SessionExpired => Some("expired"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(shown, [CLIENT_REFUSED, "expired", CLIENT_REFUSED]);
+    });
 }

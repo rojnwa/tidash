@@ -18,7 +18,8 @@ type Wake = Arc<dyn Fn() + Send + Sync>;
 
 pub struct MediaControls {
     controls: NowPlaying,
-    cfg: tidal::ClientConfig,
+    /// Where the cover URLs point (`tidal::ClientConfig::image_base`).
+    image_base: Url,
     wake: Wake,
     /// The images cache, once the backend opened it; until then (or without one) the controls
     /// get only the cover URL.
@@ -29,11 +30,13 @@ pub struct MediaControls {
 }
 
 impl MediaControls {
-    /// `wake` repaints the window; the next frame's `poll` picks up what arrived. Cover files
-    /// go into `cache` once the backend sets it (`images::open_cache`).
+    /// `wake` repaints the window; the next frame's `poll` picks up what arrived. Covers come
+    /// from `image_base`; their files go into `cache` once the backend sets it
+    /// (`images::open_cache`).
     pub fn start(
         wake: impl Fn() + Send + Sync + 'static,
         cache: Arc<OnceLock<Arc<DiskCache>>>,
+        image_base: Url,
     ) -> Self {
         let wake: Wake = Arc::new(wake);
         let mut app = App::new("tidash", "Tidash");
@@ -43,7 +46,7 @@ impl MediaControls {
         let w = wake.clone();
         Self {
             controls: NowPlaying::start(app, move || w()),
-            cfg: tidal::ClientConfig::default(),
+            image_base,
             wake,
             cache,
             requested: None,
@@ -54,7 +57,7 @@ impl MediaControls {
     /// Shows a playback change; `position` is the player's, now.
     pub fn show(&mut self, pb: &PlaybackSnapshot, position: Duration) {
         let cache = self.cache.get();
-        let (art_url, file) = art(pb, &self.cfg.image_base, cache.map(Arc::as_ref));
+        let (art_url, file) = art(pb, &self.image_base, cache.map(Arc::as_ref));
         let on_disk = file.as_ref().is_some_and(|f| f.is_file());
         if let (Some(cache), Some(url)) = (cache, &art_url)
             && !on_disk

@@ -49,19 +49,20 @@ pub fn start(
             let settings = settings_path.as_deref().map(Settings::load);
             let settings = settings.unwrap_or_default();
             emit.send(Event::Settings(settings.clone()));
+            let audio = settings.audio.clone();
             let (msg_tx, msg_rx) = unbounded_channel();
             let mut backend = Backend::new(
                 Arc::clone(&emit),
                 msg_tx.clone(),
+                settings,
                 tidal::default_store(),
                 open_api_cache(),
             );
             backend.artwork = Artwork::new(crate::images::open_cache(&images));
-            backend.playback = open_player(&msg_tx, settings.audio.output()).map(|p| {
+            backend.playback = open_player(&msg_tx, audio.output()).map(|p| {
                 emit.send(Event::Player(p.clone()));
-                Playback::new(p, emit, msg_tx, settings.audio.clone())
+                Playback::new(p, emit, msg_tx, audio)
             });
-            backend.settings = settings;
             backend.settings_path = settings_path;
             rt.block_on(backend.run(action_rx, msg_rx));
         });
@@ -129,12 +130,18 @@ pub(crate) fn session_expired(
     client: &Arc<Client>,
     msgs: &UnboundedSender<Msg>,
 ) -> bool {
-    let dead = matches!(e.downcast_ref(), Some(tidal::Error::Auth(_)));
-    if dead {
-        log::warn!("session expired: {e}");
-        let _ = msgs.send(Msg::SessionExpired(Arc::clone(client))); // backend gone = app closing
-    }
-    dead
+    let Some(auth @ tidal::Error::Auth(_)) = e.downcast_ref() else {
+        return false;
+    };
+    log::warn!("session expired: {e}");
+    let expired = Msg::SessionExpired(Arc::clone(client), auth.client_refused());
+    let _ = msgs.send(expired); // backend gone = app closing
+    true
+}
+
+/// A login exchange or a token refresh refused the client ID.
+fn client_refused() -> Event {
+    Event::Error(tr("TIDAL refused the client ID. Check Settings › Account.").into_owned())
 }
 
 struct Backend {
@@ -165,17 +172,18 @@ struct Backend {
 
 impl Backend {
     /// `store` comes with what its probe read (`tidal::default_store`); the session logs in
-    /// from that.
+    /// from that, on the client `settings` name.
     fn new(
         emit: Arc<Emitter>,
         msgs: UnboundedSender<Msg>,
+        settings: Settings,
         (store, stored): (Arc<dyn TokenStore>, tidal::Result<Option<tidal::Session>>),
         api_cache: Option<Arc<DiskCache>>,
     ) -> Self {
         let mut backend = Self {
             emit,
             msgs,
-            cfg: ClientConfig::default(),
+            cfg: settings.client_config(),
             // The token exchange is awaited in the action loop: a stalled server must not hold
             // it. `Client::new` would panic where this fails (no TLS backend).
             http: reqwest::Client::builder()
@@ -191,7 +199,7 @@ impl Backend {
             api_cache,
             artwork: Artwork::new(None),
             playback: None,
-            settings: Settings::default(),
+            settings,
             settings_path: None,
         };
         backend.resume(stored);
@@ -210,7 +218,7 @@ impl Backend {
             tokio::select! {
                 biased; // a pending player error goes before a sample of its reset clock
                 Some(msg) = msgs.recv() => match msg {
-                    Msg::SessionExpired(dead) => self.expire(dead).await,
+                    Msg::SessionExpired(dead, refused) => self.expire(dead, refused).await,
                     msg => {
                         if let Some(p) = &mut self.playback {
                             p.on_msg(self.client.as_ref(), msg);
@@ -289,7 +297,8 @@ impl Backend {
 
     /// `dead`'s session is gone (see `session_expired`): back to the login screen, playback
     /// stopped, the stored copy removed if it can be. The queue stays for the next login.
-    async fn expire(&mut self, dead: Arc<Client>) {
+    /// `refused`: by TIDAL refusing the client ID, which is then shown.
+    async fn expire(&mut self, dead: Arc<Client>, refused: bool) {
         // Already out, or a request from before a newer login: that session is not dead.
         if !self.client.as_ref().is_some_and(|c| Arc::ptr_eq(c, &dead)) {
             return;
@@ -304,6 +313,9 @@ impl Backend {
             log::warn!("could not remove the expired session: {e}");
         }
         self.emit.send(Event::SessionExpired);
+        if refused {
+            self.emit.send(client_refused());
+        }
     }
 
     async fn handle(&mut self, action: Action) {
@@ -319,33 +331,7 @@ impl Backend {
                 }
             }
             Action::FinishLogin(Redirect(redirect)) => self.finish_login(&redirect).await,
-            Action::Logout => {
-                let client = self.client.take();
-                self.stop_requests().await; // before the cache is cleared
-                // What the old session still sends (the play report below, a request in flight)
-                // may refresh it, but must not write it back once the store is cleared.
-                if let Some(c) = &client {
-                    c.detach_store().await;
-                }
-                // The next user must not find this one's pages, even offline.
-                if let Some(cache) = self.api_cache.clone() {
-                    let cleared = tokio::task::spawn_blocking(move || cache.clear()).await;
-                    if !matches!(cleared, Ok(Ok(()))) {
-                        log::warn!("could not clear the API cache: {cleared:?}");
-                    }
-                }
-                self.pkce = None;
-                // The user asked to log out: do so even if the stored copy could not be removed.
-                if let Err(e) = self.with_store(|s| s.clear()).await {
-                    self.emit
-                        .send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
-                }
-                self.emit.send(Event::LoggedOut);
-                // After LoggedOut, whose model reset the playback snapshots then refill.
-                if let Some(p) = &mut self.playback {
-                    p.reset(client.as_ref());
-                }
-            }
+            Action::Logout => self.log_out().await,
             Action::Search(q) => {
                 let Some(c) = self.client.clone() else { return };
                 let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
@@ -374,24 +360,7 @@ impl Backend {
                     self.spawn(crate::pages::set_favorite(c, item, on, emit, msgs));
                 }
             }
-            Action::SetAudio(audio) => {
-                self.settings.audio = audio.clone();
-                // Awaited, so two quick changes land in order.
-                if let Some(path) = self.settings_path.clone() {
-                    let settings = self.settings.clone();
-                    let saved = tokio::task::spawn_blocking(move || settings.save(&path)).await;
-                    if let Err(e) = saved.unwrap_or_else(|e| Err(std::io::Error::other(e))) {
-                        self.emit.send(Event::Error(format!(
-                            "{}: {e}",
-                            tr("Settings could not be saved")
-                        )));
-                    }
-                }
-                self.emit.send(Event::Settings(self.settings.clone()));
-                if let Some(p) = &mut self.playback {
-                    p.set_audio(audio);
-                }
-            }
+            Action::SetSettings(settings) => self.set_settings(settings).await,
             Action::ListDevices => {
                 let emit = self.emit.clone();
                 tokio::task::spawn_blocking(move || {
@@ -437,6 +406,65 @@ impl Backend {
         }
     }
 
+    async fn log_out(&mut self) {
+        let client = self.client.take();
+        self.stop_requests().await; // before the cache is cleared
+        // What the old session still sends (the play report below, a request in flight)
+        // may refresh it, but must not write it back once the store is cleared.
+        if let Some(c) = &client {
+            c.detach_store().await;
+        }
+        // The next user must not find this one's pages, even offline.
+        if let Some(cache) = self.api_cache.clone() {
+            let cleared = tokio::task::spawn_blocking(move || cache.clear()).await;
+            if !matches!(cleared, Ok(Ok(()))) {
+                log::warn!("could not clear the API cache: {cleared:?}");
+            }
+        }
+        self.pkce = None;
+        // The user asked to log out: do so even if the stored copy could not be removed.
+        if let Err(e) = self.with_store(|s| s.clear()).await {
+            self.emit
+                .send(Event::Error(format!("{}: {e}", tr("Logout failed"))));
+        }
+        self.emit.send(Event::LoggedOut);
+        // After LoggedOut, whose model reset the playback snapshots then refill.
+        if let Some(p) = &mut self.playback {
+            p.reset(client.as_ref());
+        }
+    }
+
+    /// Saves `settings`, sends them back, and works by them: the audio at once; another client
+    /// for the next login, logging out of a session made with the old one.
+    async fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+        // Awaited, so two quick changes land in order.
+        if let Some(path) = self.settings_path.clone() {
+            let settings = self.settings.clone();
+            let saved = tokio::task::spawn_blocking(move || settings.save(&path)).await;
+            if let Err(e) = saved.unwrap_or_else(|e| Err(std::io::Error::other(e))) {
+                self.emit.send(Event::Error(format!(
+                    "{}: {e}",
+                    tr("Settings could not be saved")
+                )));
+            }
+        }
+        self.emit.send(Event::Settings(self.settings.clone()));
+        if let Some(p) = &mut self.playback {
+            p.set_audio(self.settings.audio.clone());
+        }
+        let new = self.settings.client_config();
+        if (&new.client_id, &new.redirect_uri) == (&self.cfg.client_id, &self.cfg.redirect_uri) {
+            return;
+        }
+        (self.cfg.client_id, self.cfg.redirect_uri) = (new.client_id, new.redirect_uri);
+        if self.client.is_some() {
+            self.log_out().await;
+            let why = tr("Logged out: the client ID changed. Log in again.");
+            self.emit.send(Event::Error(why.into_owned()));
+        }
+    }
+
     async fn finish_login(&mut self, redirect: &str) {
         let Some(pkce) = self.pkce.clone() else {
             self.emit.send(Event::Error(
@@ -461,6 +489,7 @@ impl Backend {
                 self.log_in(session);
                 self.load_favorites();
             }
+            Err(e) if e.client_refused() => self.emit.send(client_refused()),
             Err(e) => self
                 .emit
                 .send(Event::Error(format!("{}: {e}", tr("Login failed")))),

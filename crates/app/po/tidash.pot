@@ -29,7 +29,7 @@ msgstr ""
 msgid "Dismiss"
 msgstr ""
 
-#: src/ui/mod.rs
+#: src/ui/settings.rs
 msgid "Log out"
 msgstr ""
 
@@ -54,10 +54,12 @@ msgid "Login will not be remembered: no system credential store available"
 msgstr ""
 
 #: src/ui/sidebar.rs
+#: src/ui/settings.rs
 msgid "Back"
 msgstr ""
 
 #: src/ui/sidebar.rs
+#: src/ui/settings.rs
 msgid "Search"
 msgstr ""
 
@@ -146,6 +148,7 @@ msgid "Your TIDAL session has expired; please log in again"
 msgstr ""
 
 #: src/ui/sidebar.rs
+#: src/ui/settings.rs
 msgid "Forward"
 msgstr ""
 
@@ -337,4 +340,64 @@ msgstr ""
 
 #: src/ui/player_bar.rs
 msgid "resampled to {rate} kHz"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Account"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Client ID"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Redirect URL"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Apply"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Leave empty for the built-in client. Changing it logs you out."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Appearance"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Theme"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Dark"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Light"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Play or pause"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Previous track"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Next track"
+msgstr ""
+
+#: src/backend.rs
+msgid "Logged out: the client ID changed. Log in again."
+msgstr ""
+
+#: src/backend.rs
+msgid "TIDAL refused the client ID. Check Settings › Account."
 msgstr ""

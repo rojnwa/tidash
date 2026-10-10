@@ -1,13 +1,36 @@
-//! The user's settings, saved as JSON in the config dir: the audio output and the streams.
+//! The user's settings, saved as JSON in the config dir: the audio output and the streams,
+//! the theme, and the TIDAL client.
 
 use serde::{Deserialize, Serialize};
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub audio: Audio,
+    pub theme: Theme,
+    pub account: Account,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+}
+
+/// The TIDAL client to log in with; `None` or blank is the built-in one.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Account {
+    pub client_id: Option<String>,
+    pub redirect_uri: Option<String>,
+}
+
+/// `s` trimmed; `None` if that leaves nothing.
+pub fn nonblank(s: &str) -> Option<String> {
+    Some(s.trim()).filter(|s| !s.is_empty()).map(str::to_owned)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -64,15 +87,31 @@ impl Settings {
         })
     }
 
-    /// Writes a `.tmp` beside `path`, then renames it over: a crash leaves the old file whole.
-    /// Blocks.
+    /// Writes a `.tmp` beside `path` through to the disk, then renames it over: a crash leaves
+    /// the old file whole. Blocks.
     pub fn save(&self, path: &Path) -> io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
         let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(&serde_json::to_vec_pretty(self)?)?;
+        file.sync_all()?;
+        drop(file); // closed before it is renamed
         std::fs::rename(&tmp, path)
+    }
+
+    /// The built-in client config with the account's overrides.
+    pub fn client_config(&self) -> tidal::ClientConfig {
+        let mut cfg = tidal::ClientConfig::default();
+        let own = |field: &Option<String>| field.as_deref().and_then(nonblank);
+        if let Some(id) = own(&self.account.client_id) {
+            cfg.client_id = id;
+        }
+        if let Some(uri) = own(&self.account.redirect_uri) {
+            cfg.redirect_uri = uri;
+        }
+        cfg
     }
 }
 
@@ -175,6 +214,8 @@ mod tests {
             hi_res: true,
         };
         assert_eq!(defaults.audio, want);
+        assert_eq!(defaults.theme, Theme::Dark);
+        assert_eq!(defaults.account, Account::default());
         assert_eq!(Settings::load(&file), defaults, "missing");
         let saved = Settings {
             audio: Audio {
@@ -183,17 +224,55 @@ mod tests {
                 normalization: Normalization::Album,
                 hi_res: false,
             },
+            theme: Theme::Light,
+            account: Account {
+                client_id: Some("id".into()),
+                redirect_uri: Some("https://example.test/cb".into()),
+            },
         };
         saved.save(&file).expect("saved");
         assert_eq!(Settings::load(&file), saved);
-        std::fs::write(&file, r#"{"audio":{"exclusive":true}}"#).expect("written");
-        let partial = Audio {
-            exclusive: true,
-            ..want
+        let json = r#"{"audio":{"exclusive":true},"account":{"client_id":"id"}}"#;
+        std::fs::write(&file, json).expect("written");
+        let partial = Settings {
+            audio: Audio {
+                exclusive: true,
+                ..want
+            },
+            account: Account {
+                client_id: Some("id".into()),
+                redirect_uri: None,
+            },
+            ..defaults.clone()
         };
-        assert_eq!(Settings::load(&file).audio, partial, "the rest default");
+        assert_eq!(Settings::load(&file), partial, "the rest default");
         std::fs::write(&file, "not json {").expect("written");
         assert_eq!(Settings::load(&file), defaults, "garbage");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn client_config_overrides_and_blank_is_builtin() {
+        let builtin = tidal::ClientConfig::default();
+        let config = |client_id: Option<&str>, redirect_uri: Option<&str>| {
+            let account = Account {
+                client_id: client_id.map(Into::into),
+                redirect_uri: redirect_uri.map(Into::into),
+            };
+            let c = Settings {
+                account,
+                ..Settings::default()
+            }
+            .client_config();
+            (c.client_id, c.redirect_uri)
+        };
+        let own = config(Some(" mine "), Some("https://example.test/cb"));
+        assert_eq!(own, ("mine".into(), "https://example.test/cb".into()));
+        let want = (builtin.client_id, builtin.redirect_uri);
+        for blank in [None, Some(""), Some("  \t")] {
+            assert_eq!(config(blank, blank), want, "{blank:?}");
+        }
+        assert_eq!(nonblank("  "), None);
+        assert_eq!(nonblank(" a b "), Some("a b".into()));
     }
 }

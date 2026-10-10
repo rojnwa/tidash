@@ -83,7 +83,9 @@ impl App {
         let ctx = cc.egui_ctx.clone();
         let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
         let ctx = cc.egui_ctx.clone();
-        let media = now_playing::MediaControls::start(move || ctx.request_repaint(), artwork);
+        let wake = move || ctx.request_repaint();
+        let image_base = tidal::ClientConfig::default().image_base;
+        let media = now_playing::MediaControls::start(wake, artwork, image_base);
         if let Some(speed) = switches.autoscroll {
             ui::autoscroll(&cc.egui_ctx, speed);
         }
@@ -96,6 +98,20 @@ impl App {
             started: Some(started),
             repaint_log: switches.repaint_log,
         }
+    }
+
+    /// Applies `ev` to the model; a new theme restyles the window.
+    fn apply(&mut self, ctx: &egui::Context, ev: Event) {
+        if let Event::Settings(s) = &ev
+            && s.theme != self.model.settings.theme
+        {
+            ctx.set_theme(match s.theme {
+                settings::Theme::Dark => egui::Theme::Dark,
+                settings::Theme::Light => egui::Theme::Light,
+            });
+            ctx.request_repaint(); // a change from the UI's pass shows in the next
+        }
+        self.model.apply(ev);
     }
 
     /// Asks the backend for the current route's page when the model says to.
@@ -120,8 +136,8 @@ impl Drop for App {
     }
 }
 
-/// Fonts, text rendering and the dark theme, as fastframe's getting-started guide shows;
-/// scroll bars that keep their place beside the content.
+/// Fonts, text rendering and the dark theme (until the settings say otherwise), as fastframe's
+/// getting-started guide shows; scroll bars that keep their place beside the content.
 fn setup_look(ctx: &egui::Context) {
     let mut fonts = fastframe_fonts::FontSetup::default().definitions();
     let rendering = fastframe_text::detect();
@@ -154,7 +170,7 @@ impl eframe::App for App {
                 }
                 ev => {
                     self.ui.apply(ctx, &ev);
-                    self.model.apply(ev);
+                    self.apply(ctx, ev);
                 }
             }
         }
@@ -174,7 +190,7 @@ impl eframe::App for App {
             log::info!("pass {pass}: repaint causes {causes:?}");
         }
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
-            self.model.apply(ev);
+            self.apply(ui.ctx(), ev);
         }
         self.open_current();
     }

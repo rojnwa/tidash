@@ -56,8 +56,9 @@ pub enum Action {
         item: tidal::Favorite,
         on: bool,
     },
-    /// Saves these audio settings and plays by them from now on.
-    SetAudio(crate::settings::Audio),
+    /// Saves these settings and works by them from now on; the UI has applied
+    /// `Event::Settings` already. Another client ID logs out.
+    SetSettings(crate::settings::Settings),
     /// Lists the output devices (`Event::Devices`).
     ListDevices,
 }
@@ -117,7 +118,8 @@ pub enum Event {
     },
     /// The audio output is open; the UI reads the position from it.
     Player(player::Player),
-    /// The settings in force: read at start, and after each change.
+    /// The settings in force: read at start; on a change, from the UI at once and from the
+    /// backend once saved.
     Settings(crate::settings::Settings),
     /// The output devices' names; empty when they could not be listed.
     Devices(Vec<String>),
