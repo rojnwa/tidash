@@ -7,10 +7,10 @@ use super::Ctx;
 use crate::i18n::tr;
 use crate::messages::Secret;
 use crate::model::{Action, Event, Model, Route};
+use crate::scrobble::Keys;
 use crate::settings::{Account, Audio, Normalization, Theme, nonblank};
 use std::borrow::Cow;
 
-#[derive(Default)]
 pub struct State {
     /// The devices were asked for, and the fields filled in, on this visit (`ui::draw` clears
     /// it on any other route).
@@ -20,6 +20,20 @@ pub struct State {
     redirect_uri: String,
     /// The ListenBrainz token as typed, until Connect sends it; never in the model.
     listenbrainz_token: String,
+    /// Last.fm's keys are compiled in: its row shows.
+    lastfm: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            listed: false,
+            client_id: String::new(),
+            redirect_uri: String::new(),
+            listenbrainz_token: String::new(),
+            lastfm: Keys::compiled().is_some(),
+        }
+    }
 }
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
@@ -53,7 +67,13 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         section(ui, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
         section(ui, tr("Integrations"));
-        connect = listenbrainz(ui, model, state);
+        if state.lastfm {
+            connect = lastfm(ui, model);
+            ui.add_space(8.0);
+        }
+        if let Some(action) = listenbrainz(ui, model, state) {
+            connect = Some(action);
+        }
         section(ui, tr("Keyboard shortcuts"));
         egui::Grid::new("shortcuts").num_columns(2).show(ui, |ui| {
             for (keys, what) in shortcuts() {
@@ -128,6 +148,35 @@ fn account(ui: &mut egui::Ui, state: &mut State, account: &mut Account) {
     ui.weak(tr(
         "Leave empty for the built-in client. Changing it logs you out.",
     ));
+}
+
+/// Who Last.fm is connected as, with Disconnect; while a connect waits for the user, Cancel;
+/// else Connect. What was clicked, to send.
+fn lastfm(ui: &mut egui::Ui, model: &Model) -> Option<Action> {
+    ui.label(egui::RichText::new(tr("Last.fm")).strong());
+    let mut clicked = None;
+    let user = &model.settings.integrations.lastfm_user;
+    ui.horizontal(|ui| {
+        if let Some(user) = user {
+            ui.label(tr("Connected as {user}").replace("{user}", user));
+            if ui.button(tr("Disconnect")).clicked() {
+                clicked = Some(Action::DisconnectLastfm);
+            }
+        } else if model.lastfm_waiting {
+            ui.label(tr("Waiting for you to allow Tidash on Last.fm…"));
+            if ui.button(tr("Cancel")).clicked() {
+                clicked = Some(Action::CancelLastfm);
+            }
+        } else if ui.button(tr("Connect")).clicked() {
+            clicked = Some(Action::ConnectLastfm);
+        }
+    });
+    if user.is_none() && !model.lastfm_waiting {
+        ui.weak(tr(
+            "Scrobbles what you play. Connect opens Last.fm in the browser, where you allow Tidash.",
+        ));
+    }
+    clicked
 }
 
 /// Who ListenBrainz is connected as, with Disconnect; or the token field with Connect. What
@@ -329,6 +378,7 @@ mod tests {
         ctx.enable_accesskit();
         let mut state = UiState::default();
         let mut model = testing::at(Route::Settings);
+        state.settings.lastfm = false; // its Connect aside, whatever the build's keys
         state.settings.listenbrainz_token = " tok \n".into(); // as pasted
         let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
         let (sent, _) = pass(
@@ -355,6 +405,42 @@ mod tests {
         );
         let disconnect = |a: &Action| matches!(a, Action::DisconnectListenBrainz);
         assert_eq!(sent.iter().filter(|a| disconnect(a)).count(), 1, "{sent:?}");
+    }
+
+    /// Hidden without keys. With them: Connect; while it waits, Cancel; connected, the user
+    /// with Disconnect.
+    #[test]
+    fn lastfm_connect_cancel_and_disconnect() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        state.settings.lastfm = false;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(!labels(&out).iter().any(|l| l == "Last.fm"), "hidden");
+        state.settings.lastfm = true;
+        // ListenBrainz connected: the one Connect is Last.fm's.
+        model.settings.integrations.listenbrainz_user = Some("rob".into());
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let click = vec![testing::click(&out, "Connect")];
+        let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+        assert!(matches!(sent[..], [Action::ConnectLastfm]), "{sent:?}");
+        model.lastfm_waiting = true;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let waiting = "Waiting for you to allow Tidash on Last.fm…";
+        assert!(labels(&out).iter().any(|l| l == waiting));
+        let click = vec![testing::click(&out, "Cancel")];
+        let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+        assert!(matches!(sent[..], [Action::CancelLastfm]), "{sent:?}");
+        // Last.fm connected, ListenBrainz not: the one Disconnect is Last.fm's.
+        model.lastfm_waiting = false;
+        model.settings.integrations.lastfm_user = Some("ann".into());
+        model.settings.integrations.listenbrainz_user = None;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(labels(&out).iter().any(|l| l == "Connected as ann"));
+        let click = vec![testing::click(&out, "Disconnect")];
+        let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+        assert!(matches!(sent[..], [Action::DisconnectLastfm]), "{sent:?}");
     }
 
     #[test]

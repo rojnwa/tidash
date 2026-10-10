@@ -1,7 +1,10 @@
 //! Scrobbling: the rule, the plays it sends, and the queue that keeps the ones not yet taken
 //! for a later flush. One `Scrobbler` on the backend runtime sends to every connected service.
 
+mod lastfm;
 mod listenbrainz;
+
+pub use lastfm::Keys;
 
 use crate::backend::store_call;
 use crate::i18n::tr;
@@ -64,6 +67,9 @@ pub enum Service {
     ListenBrainz,
 }
 
+/// Every service, in the order a play goes out to them.
+const SERVICES: [Service; 2] = [Service::LastFm, Service::ListenBrainz];
+
 impl Service {
     /// Its secret's name in the credential store.
     fn secret(self) -> &'static str {
@@ -72,22 +78,32 @@ impl Service {
             Service::ListenBrainz => "listenbrainz",
         }
     }
+
+    /// The most listens one send takes.
+    fn batch(self) -> usize {
+        match self {
+            Service::LastFm => lastfm::MAX_SCROBBLES,
+            Service::ListenBrainz => listenbrainz::MAX_LISTENS,
+        }
+    }
 }
 
-/// The services' API roots.
-#[derive(Clone, Debug)]
-pub struct Urls {
+/// The services' API roots, and Last.fm's keys.
+#[derive(Clone)]
+pub struct Apis {
     pub listenbrainz: Url,
-    #[expect(dead_code, reason = "read once Last.fm sends")]
     pub lastfm: Url,
+    /// `None`: Last.fm is never connected (`Keys::compiled`).
+    pub lastfm_keys: Option<Keys>,
 }
 
-impl Default for Urls {
+impl Default for Apis {
     fn default() -> Self {
         let url = |s: &str| Url::parse(s).expect("valid constant URL");
-        Urls {
+        Apis {
             listenbrainz: url("https://api.listenbrainz.org/"),
             lastfm: url("https://ws.audioscrobbler.com/2.0/"),
+            lastfm_keys: Keys::compiled(),
         }
     }
 }
@@ -127,7 +143,7 @@ pub struct Scrobbler(Arc<Inner>);
 struct Inner {
     http: reqwest::Client,
     store: Arc<dyn TokenStore>,
-    urls: Urls,
+    apis: Apis,
     /// Where the queue is saved; `None`: it lives in memory only.
     path: Option<PathBuf>,
     /// The plays not yet taken, oldest first. Held across a flush, so adds and flushes go one
@@ -157,37 +173,43 @@ fn load(path: &Path) -> Vec<Entry> {
 }
 
 impl Scrobbler {
-    /// Sends to the `connected` services, those the settings name a user for. Reads the queue
-    /// saved at `queue`, if any. Blocks.
+    /// Sends to the `connected` services, those the settings name a user for; Last.fm only
+    /// with its keys. Reads the queue saved at `queue`, if any. Blocks.
     pub fn new(
         http: reqwest::Client,
         store: Arc<dyn TokenStore>,
         queue: Option<PathBuf>,
-        urls: Urls,
+        apis: Apis,
         connected: &[Service],
     ) -> Scrobbler {
         let saved = queue.as_deref().map(load).unwrap_or_default();
+        let usable = |s: &&Service| **s != Service::LastFm || apis.lastfm_keys.is_some();
+        let tokens = connected
+            .iter()
+            .filter(usable)
+            .map(|&s| (s, None))
+            .collect();
         Scrobbler(Arc::new(Inner {
             http,
             store,
-            urls,
+            apis,
             path: queue,
             queue: tokio::sync::Mutex::new(saved),
-            tokens: Mutex::new(connected.iter().map(|&s| (s, None)).collect()),
+            tokens: Mutex::new(tokens),
         }))
     }
 
     /// "Now playing" to every connected service: never queued nor retried.
     pub async fn now_playing(&self, l: Listen) -> Outcome {
         let mut out = Outcome::default();
-        let service = Service::ListenBrainz;
-        let Some(token) = self.token(service).await else {
-            return out;
-        };
-        let (http, base) = (&self.0.http, &self.0.urls.listenbrainz);
-        let sent = listenbrainz::submit(http, base, &token, Kind::PlayingNow, &[&l]).await;
-        if sent == Verdict::Reconnect && self.forget(service, &token).await {
-            out.refused.push(service);
+        for service in SERVICES {
+            let Some(token) = self.token(service).await else {
+                continue;
+            };
+            let sent = self.send(service, &token, Kind::PlayingNow, &[&l]).await;
+            if sent == Verdict::Reconnect && self.forget(service, &token).await {
+                out.refused.push(service);
+            }
         }
         out
     }
@@ -196,9 +218,19 @@ impl Scrobbler {
     /// whose token cannot be read yet gets it queued all the same.
     pub async fn scrobble(&self, l: Listen) -> Outcome {
         let mut queue = self.0.queue.lock().await;
-        let service = Service::ListenBrainz;
-        if self.tokens().contains_key(&service) {
-            queue.push(Entry { service, listen: l });
+        let on: Vec<Service> = {
+            let tokens = self.tokens();
+            SERVICES
+                .into_iter()
+                .filter(|s| tokens.contains_key(s))
+                .collect()
+        };
+        if !on.is_empty() {
+            let entries = on.into_iter().map(|service| Entry {
+                service,
+                listen: l.clone(),
+            });
+            queue.extend(entries);
             let over = queue.len().saturating_sub(MAX_QUEUED);
             queue.drain(..over);
             self.save(&queue).await;
@@ -214,53 +246,90 @@ impl Scrobbler {
 
     async fn flush_queue(&self, queue: &mut Vec<Entry>) -> Outcome {
         let mut out = Outcome::default();
-        let service = Service::ListenBrainz;
-        loop {
-            let of_service = queue.iter().filter(|e| e.service == service);
-            let batch: Vec<&Listen> = of_service
-                .map(|e| &e.listen)
-                .take(listenbrainz::MAX_LISTENS)
-                .collect();
-            if batch.is_empty() {
-                break;
-            }
-            // Not connected, or no token readable yet: kept for later.
-            let Some(token) = self.token(service).await else {
-                break;
-            };
-            let n = batch.len();
-            let kind = if n == 1 { Kind::Single } else { Kind::Import };
-            let (http, base) = (&self.0.http, &self.0.urls.listenbrainz);
-            match listenbrainz::submit(http, base, &token, kind, &batch).await {
-                // ponytail: a refused batch goes whole; ListenBrainz refuses a batch for one
-                // bad listen, so send a refused import singly if bad data ever shows up.
-                Verdict::Done | Verdict::Drop => {
-                    let mut left = n;
-                    queue.retain(|e| {
-                        let sent = e.service == service && left > 0;
-                        left -= usize::from(sent);
-                        !sent
-                    });
-                    self.save(queue).await;
-                }
-                Verdict::Retry => {
-                    out.retry = true;
+        for service in SERVICES {
+            loop {
+                let of_service = queue.iter().filter(|e| e.service == service);
+                let batch: Vec<&Listen> = of_service
+                    .map(|e| &e.listen)
+                    .take(service.batch())
+                    .collect();
+                if batch.is_empty() {
                     break;
                 }
-                Verdict::Reconnect => {
-                    if self.forget(service, &token).await {
-                        out.refused.push(service);
+                // Not connected, or no token readable yet: kept for later.
+                let Some(token) = self.token(service).await else {
+                    break;
+                };
+                let n = batch.len();
+                let kind = if n == 1 { Kind::Single } else { Kind::Import };
+                match self.send(service, &token, kind, &batch).await {
+                    // ponytail: a refused batch goes whole; ListenBrainz refuses a batch for
+                    // one bad listen, so send a refused import singly if bad data ever shows
+                    // up. Last.fm takes a batch and ignores the bad ones: those go too.
+                    Verdict::Done | Verdict::Drop => {
+                        let mut left = n;
+                        queue.retain(|e| {
+                            let sent = e.service == service && left > 0;
+                            left -= usize::from(sent);
+                            !sent
+                        });
+                        self.save(queue).await;
                     }
-                    break;
+                    Verdict::Retry => {
+                        out.retry = true;
+                        break;
+                    }
+                    Verdict::Reconnect => {
+                        if self.forget(service, &token).await {
+                            out.refused.push(service);
+                        }
+                        break;
+                    }
                 }
             }
         }
         out
     }
 
+    /// Sends `listens` to `service` with `token`, as `kind`.
+    async fn send(
+        &self,
+        service: Service,
+        token: &str,
+        kind: Kind,
+        listens: &[&Listen],
+    ) -> Verdict {
+        let (http, apis) = (&self.0.http, &self.0.apis);
+        match (service, apis.lastfm_keys) {
+            (Service::ListenBrainz, _) => {
+                listenbrainz::submit(http, &apis.listenbrainz, token, kind, listens).await
+            }
+            (Service::LastFm, Some(keys)) => {
+                lastfm::submit(http, &apis.lastfm, keys, token, kind, listens).await
+            }
+            // Never: not connected without keys (`new`). Kept.
+            (Service::LastFm, None) => Verdict::Retry,
+        }
+    }
+
+    /// Last.fm's desktop auth (`lastfm::authorize`, which hands `open` the page where the user
+    /// allows Tidash), then keeps the session key: whose it is, or the error to show.
+    pub async fn connect_lastfm(&self, open: impl FnOnce(String) + Send) -> Result<String, String> {
+        let (http, apis) = (&self.0.http, &self.0.apis);
+        // Settings offers no Connect without keys.
+        let Some(keys) = apis.lastfm_keys else {
+            return Err(tr("Last.fm could not be reached. Try again later.").into_owned());
+        };
+        let session = lastfm::authorize(http, &apis.lastfm, keys, open).await?;
+        match self.set_token(Service::LastFm, Some(session.key)).await {
+            Ok(()) => Ok(session.name),
+            Err(e) => Err(format!("{}: {e}", tr("The token could not be stored"))),
+        }
+    }
+
     /// Checks `token` with ListenBrainz and keeps it: whose it is, or the error to show.
     pub async fn connect_listenbrainz(&self, token: String) -> Result<String, String> {
-        let (http, base) = (&self.0.http, &self.0.urls.listenbrainz);
+        let (http, base) = (&self.0.http, &self.0.apis.listenbrainz);
         match listenbrainz::validate(http, base, &token).await {
             Ok(Some(user)) => match self.set_token(Service::ListenBrainz, Some(token)).await {
                 Ok(()) => Ok(user),
@@ -395,7 +464,7 @@ pub(crate) mod tests {
         assert!(!due(600, s(239)) && due(600, s(240)), "4 minutes");
     }
 
-    fn runtime() -> tokio::runtime::Runtime {
+    pub(crate) fn runtime() -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -427,12 +496,12 @@ pub(crate) mod tests {
         store: Arc<MemoryStore>,
         on: &[Service],
     ) -> Scrobbler {
-        let urls = Urls {
+        let apis = Apis {
             listenbrainz: format!("{}/", server.uri()).parse().expect("a URL"),
-            ..Urls::default()
+            ..Apis::default()
         };
         let queue = dir.map(|d| d.join("scrobbles.json"));
-        Scrobbler::new(reqwest::Client::new(), store, queue, urls, on)
+        Scrobbler::new(reqwest::Client::new(), store, queue, apis, on)
     }
 
     /// When each listen saved in `dir`'s queue started.

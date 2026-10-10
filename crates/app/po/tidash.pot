@@ -492,6 +492,7 @@ msgid "OK"
 msgstr ""
 
 #: src/ui/library.rs
+#: src/ui/settings.rs
 msgid "Cancel"
 msgstr ""
 
@@ -591,4 +592,37 @@ msgstr ""
 
 #: src/ui/settings.rs
 msgid "Scrobbles what you play. Copy your user token from listenbrainz.org/settings."
+msgstr ""
+
+#: src/scrobble.rs
+#: src/scrobble/lastfm.rs
+msgid "Last.fm could not be reached. Try again later."
+msgstr ""
+
+#: src/scrobble/lastfm.rs
+msgid "Last.fm did not connect. Try again."
+msgstr ""
+
+#: src/scrobble/lastfm.rs
+msgid "Last.fm was not connected within 5 minutes. Try again."
+msgstr ""
+
+#: src/backend.rs
+msgid "Last.fm needs to be connected again in Settings."
+msgstr ""
+
+#: src/backend.rs
+msgid "Last.fm could not be disconnected"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Last.fm"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Waiting for you to allow Tidash on Last.fm…"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Scrobbles what you play. Connect opens Last.fm in the browser, where you allow Tidash."
 msgstr ""

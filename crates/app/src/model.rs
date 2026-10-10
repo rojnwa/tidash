@@ -159,6 +159,9 @@ pub struct Model {
     pub folders: HashMap<String, Vec<tidal::FolderItem>>,
     /// The playlists the user made, last updated first.
     pub own_playlists: Vec<tidal::Playlist>,
+    /// A Last.fm connect waits for the user to allow Tidash; kept across logout, as the
+    /// settings are.
+    pub lastfm_waiting: bool,
 }
 
 impl Default for Model {
@@ -187,6 +190,7 @@ impl Default for Model {
             devices: Vec::new(),
             folders: HashMap::new(),
             own_playlists: Vec::new(),
+            lastfm_waiting: false,
         }
     }
 }
@@ -231,6 +235,7 @@ impl Model {
                     error_id: self.error_id,
                     settings: std::mem::take(&mut self.settings),
                     devices: std::mem::take(&mut self.devices),
+                    lastfm_waiting: self.lastfm_waiting,
                     ..Self::default()
                 };
             }
@@ -242,6 +247,7 @@ impl Model {
                     error_id: self.error_id,
                     settings: std::mem::take(&mut self.settings),
                     devices: std::mem::take(&mut self.devices),
+                    lastfm_waiting: self.lastfm_waiting,
                     ..Self::default()
                 };
                 self.error(tr("Your TIDAL session has expired; please log in again").into_owned());
@@ -334,6 +340,7 @@ impl Model {
             Event::Seeked(_) => {}                                // handled by the media controls
             Event::Settings(s) => self.settings = s,
             Event::Devices(d) => self.devices = d,
+            Event::LastfmWaiting(w) => self.lastfm_waiting = w,
             Event::Error(e) => self.error(e),
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {

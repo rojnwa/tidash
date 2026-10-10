@@ -5,7 +5,7 @@ use crate::images::Artwork;
 use crate::messages::Secret;
 use crate::model::{Action, Event, Load, Redirect};
 use crate::playback::{Msg, Playback};
-use crate::scrobble::{Outcome, Scrobbler, Service, Urls};
+use crate::scrobble::{Apis, Outcome, Scrobbler, Service};
 use crate::settings::Settings;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -14,7 +14,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use tokio::task::{AbortHandle, JoinSet};
+use tokio::task::{AbortHandle, JoinHandle, JoinSet};
 
 /// Spawns the backend. Before it handles actions it reads the settings and the stored session
 /// and opens the audio output, off the UI thread: all can take a while. Every event sent is
@@ -65,7 +65,7 @@ pub fn start(
             let (http, store) = (backend.http.clone(), Arc::clone(&backend.store));
             let on = backend.settings.integrations.connected();
             let queue = crate::scrobble::path();
-            backend.scrobbler = Scrobbler::new(http, store, queue, Urls::default(), &on);
+            backend.scrobbler = Scrobbler::new(http, store, queue, Apis::default(), &on);
             backend.playback = open_player(&msg_tx, audio.output()).map(|p| {
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx, audio)
@@ -151,6 +151,16 @@ fn client_refused() -> Event {
     Event::Error(tr("TIDAL refused the client ID. Check Settings › Account.").into_owned())
 }
 
+/// Opens `url` in the browser off the async workers: some launchers (xdg-open) block until
+/// the browser exits. A failure is logged.
+fn open_url(url: String) {
+    tokio::task::spawn_blocking(move || {
+        if let Err(e) = open::that_detached(&url) {
+            log::warn!("could not open the browser: {e}");
+        }
+    });
+}
+
 /// Runs `call` on `store` off the async workers (see `TokenStore`).
 pub(crate) async fn store_call<T: Send + 'static>(
     store: &Arc<dyn TokenStore>,
@@ -197,6 +207,8 @@ struct Backend {
     scrobbler: Scrobbler,
     /// When the flush after a failed one runs: failures until then arm no other.
     scrobble_retry_at: Option<tokio::time::Instant>,
+    /// The Last.fm connect, waiting for the user (`connect_lastfm`); Cancel aborts it.
+    lastfm_connect: Option<JoinHandle<()>>,
 }
 
 impl Backend {
@@ -217,8 +229,8 @@ impl Backend {
             .build()
             .expect("an HTTP client");
         // Its queue only in memory; `start` gives it the file.
-        let (on, urls) = (settings.integrations.connected(), Urls::default());
-        let scrobbler = Scrobbler::new(http.clone(), Arc::clone(&store), None, urls, &on);
+        let (on, apis) = (settings.integrations.connected(), Apis::default());
+        let scrobbler = Scrobbler::new(http.clone(), Arc::clone(&store), None, apis, &on);
         let mut backend = Self {
             emit,
             msgs,
@@ -237,6 +249,7 @@ impl Backend {
             settings_path: None,
             scrobbler,
             scrobble_retry_at: None,
+            lastfm_connect: None,
         };
         backend.resume(stored);
         backend
@@ -281,6 +294,10 @@ impl Backend {
             Msg::Connected(service, user) => {
                 let connected = user.is_some();
                 self.set_user(service, user).await;
+                if service == Service::LastFm {
+                    // After the user: Settings never shows Connect in between.
+                    self.emit.send(Event::LastfmWaiting(false));
+                }
                 if connected {
                     // What waited for it, kept from before a refused token.
                     self.scrobbling(|s| async move { s.flush().await });
@@ -320,10 +337,19 @@ impl Backend {
             });
         }
         for service in out.refused {
-            let user = &self.settings.integrations.listenbrainz_user;
-            if service == Service::ListenBrainz && user.is_some() {
+            let integrations = &self.settings.integrations;
+            let (user, why) = match service {
+                Service::LastFm => (
+                    &integrations.lastfm_user,
+                    tr("Last.fm needs to be connected again in Settings."),
+                ),
+                Service::ListenBrainz => (
+                    &integrations.listenbrainz_user,
+                    tr("ListenBrainz refused the token. Connect again in Settings."),
+                ),
+            };
+            if user.is_some() {
                 self.set_user(service, None).await;
-                let why = tr("ListenBrainz refused the token. Connect again in Settings.");
                 self.emit.send(Event::Error(why.into_owned()));
             }
         }
@@ -333,27 +359,58 @@ impl Backend {
     async fn set_user(&mut self, service: Service, user: Option<String>) {
         let mut settings = self.settings.clone();
         match service {
+            Service::LastFm => settings.integrations.lastfm_user = user,
             Service::ListenBrainz => settings.integrations.listenbrainz_user = user,
-            Service::LastFm => {}
         }
         self.set_settings(settings).await;
     }
 
     /// Connects or disconnects a scrobbling service off the loop: `Msg::Connected` with the
-    /// user it ends with, or the error.
+    /// user it ends with, or the error (which ends a Last.fm connect's wait).
     fn connect(
         &self,
         service: Service,
         call: impl Future<Output = Result<Option<String>, String>> + Send + 'static,
-    ) {
+    ) -> JoinHandle<()> {
         let (msgs, emit) = (self.msgs.clone(), self.emit.clone());
         tokio::spawn(async move {
             match call.await {
                 Ok(user) => {
                     let _ = msgs.send(Msg::Connected(service, user));
                 }
-                Err(e) => emit.send(Event::Error(e)),
+                Err(e) => {
+                    emit.send(Event::Error(e));
+                    if service == Service::LastFm {
+                        emit.send(Event::LastfmWaiting(false));
+                    }
+                }
             }
+        })
+    }
+
+    /// Last.fm's desktop auth, off the loop: `open` gets the page where the user allows
+    /// Tidash, and the wait ends in `Msg::Connected` or an error. A newer connect, or
+    /// Cancel, aborts it.
+    fn connect_lastfm(&mut self, open: impl FnOnce(String) + Send + 'static) {
+        self.emit.send(Event::LastfmWaiting(true));
+        let s = self.scrobbler.clone();
+        let call = async move { s.connect_lastfm(open).await.map(Some) };
+        let wait = self.connect(Service::LastFm, call);
+        if let Some(old) = self.lastfm_connect.replace(wait) {
+            old.abort();
+        }
+    }
+
+    /// Forgets `service`'s secret, its user and its queued plays, off the loop.
+    fn disconnect(&self, service: Service) {
+        let s = self.scrobbler.clone();
+        self.connect(service, async move {
+            let why = match service {
+                Service::LastFm => tr("Last.fm could not be disconnected"),
+                Service::ListenBrainz => tr("ListenBrainz could not be disconnected"),
+            };
+            let done = s.disconnect(service).await;
+            done.map(|()| None).map_err(|e| format!("{why}: {e}"))
         });
     }
 
@@ -444,13 +501,7 @@ impl Backend {
 
     async fn handle(&mut self, action: Action) {
         match action {
-            Action::BeginLogin => {
-                let url = self.begin_login();
-                // Some launchers (xdg-open) would block the backend until the browser exits.
-                if let Err(e) = open::that_detached(&url) {
-                    log::warn!("could not open the browser: {e}");
-                }
-            }
+            Action::BeginLogin => open_url(self.begin_login()),
             Action::FinishLogin(Redirect(redirect)) => self.finish_login(&redirect).await,
             Action::Logout => self.log_out().await,
             Action::Search(q) => {
@@ -497,8 +548,9 @@ impl Backend {
             }
             Action::SetSettings(mut settings) => {
                 // The backend's to set: the UI's copy may predate a connect or a refusal.
-                let user = &self.settings.integrations.listenbrainz_user;
-                settings.integrations.listenbrainz_user = user.clone();
+                let ours = &self.settings.integrations;
+                settings.integrations.lastfm_user = ours.lastfm_user.clone();
+                settings.integrations.listenbrainz_user = ours.listenbrainz_user.clone();
                 self.set_settings(settings).await;
             }
             Action::ConnectListenBrainz(Secret(token)) => {
@@ -506,15 +558,15 @@ impl Backend {
                 let call = async move { s.connect_listenbrainz(token).await.map(Some) };
                 self.connect(Service::ListenBrainz, call);
             }
-            Action::DisconnectListenBrainz => {
-                let s = self.scrobbler.clone();
-                let call = async move {
-                    let done = s.disconnect(Service::ListenBrainz).await;
-                    let why = tr("ListenBrainz could not be disconnected");
-                    done.map(|()| None).map_err(|e| format!("{why}: {e}"))
-                };
-                self.connect(Service::ListenBrainz, call);
+            Action::DisconnectListenBrainz => self.disconnect(Service::ListenBrainz),
+            Action::ConnectLastfm => self.connect_lastfm(open_url),
+            Action::CancelLastfm => {
+                if let Some(wait) = self.lastfm_connect.take() {
+                    wait.abort();
+                }
+                self.emit.send(Event::LastfmWaiting(false));
             }
+            Action::DisconnectLastfm => self.disconnect(Service::LastFm),
             Action::ListDevices => {
                 let emit = self.emit.clone();
                 tokio::task::spawn_blocking(move || {

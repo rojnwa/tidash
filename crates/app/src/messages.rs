@@ -84,6 +84,14 @@ pub enum Action {
     ConnectListenBrainz(Secret),
     /// Forgets the token, the user, and the listens still queued for ListenBrainz.
     DisconnectListenBrainz,
+    /// Opens the Last.fm page where the user allows Tidash and waits for them
+    /// (`Event::LastfmWaiting`); then keeps the session key and sets the user in the settings.
+    /// A failure is an `Error`.
+    ConnectLastfm,
+    /// Stops waiting for the user to allow Tidash on Last.fm.
+    CancelLastfm,
+    /// Forgets the session key, the user, and the scrobbles still queued for Last.fm.
+    DisconnectLastfm,
 }
 
 /// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
@@ -216,6 +224,8 @@ pub enum Event {
     PlaylistChanged(String),
     /// This playlist is gone: so is its page, which, if shown, goes back.
     PlaylistDeleted(String),
+    /// A Last.fm connect waits for the user to allow Tidash, or no longer.
+    LastfmWaiting(bool),
     Error(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),

@@ -20,14 +20,19 @@ pub struct Settings {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Integrations {
+    pub lastfm_user: Option<String>,
     pub listenbrainz_user: Option<String>,
 }
 
 impl Integrations {
     /// The services with a user: the only ones scrobbled to.
     pub fn connected(&self) -> Vec<Service> {
-        let lb = self.listenbrainz_user.is_some();
-        lb.then_some(Service::ListenBrainz).into_iter().collect()
+        let users = [
+            (Service::LastFm, &self.lastfm_user),
+            (Service::ListenBrainz, &self.listenbrainz_user),
+        ];
+        let with_user = users.into_iter().filter(|(_, user)| user.is_some());
+        with_user.map(|(service, _)| service).collect()
     }
 }
 
@@ -253,6 +258,7 @@ mod tests {
                 redirect_uri: Some("https://example.test/cb".into()),
             },
             integrations: Integrations {
+                lastfm_user: Some("ann".into()),
                 listenbrainz_user: Some("rob".into()),
             },
         };
