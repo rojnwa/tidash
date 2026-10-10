@@ -477,10 +477,12 @@ fn main() -> eframe::Result {
             // whenever anything in the graph turns on its `wgpu` feature.
             let options = eframe::NativeOptions {
                 renderer: eframe::Renderer::Glow,
+                // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
+                viewport: eframe::egui::ViewportBuilder::default().with_app_id("tidash"),
                 ..Default::default()
             };
             eframe::run_native(
-                "tidash",
+                "Tidash",
                 options,
                 Box::new(move |cc| {
                     log_renderer(cc);
