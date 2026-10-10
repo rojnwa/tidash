@@ -245,11 +245,16 @@ impl Playback {
         p
     }
 
-    /// A new output (device or exclusive mode) takes over at once; the quality and the
-    /// normalization apply from the next stream request: the current track plays on.
+    /// A new output (device or exclusive mode) takes over at once, and its refusal is news;
+    /// the quality and the normalization apply from the next stream request: the current track
+    /// plays on, the next one is requested again.
     pub fn set_audio(&mut self, audio: settings::Audio) {
         if audio.output() != self.audio.output() {
             self.player.send(PlayerCmd::SetOutput(audio.output()));
+            self.fallback_shown = false;
+        }
+        if (audio.hi_res, audio.normalization) != (self.audio.hi_res, self.audio.normalization) {
+            self.drop_stale_preload(true);
         }
         self.audio = audio;
     }
@@ -336,7 +341,7 @@ impl Playback {
             Action::RemoveFromQueue(i) => {
                 let active = self.loading || self.state != PlayState::Stopped;
                 let was_current = self.queue.remove(i);
-                self.drop_stale_preload();
+                self.drop_stale_preload(false);
                 self.publish_queue();
                 self.publish();
                 if was_current && active {
@@ -653,10 +658,14 @@ impl Playback {
         next
     }
 
-    /// After a queue change, a preload no longer next is dropped, and taken back if sent.
-    fn drop_stale_preload(&mut self) {
+    /// After a queue change, a preload no longer next is dropped, and taken back if sent;
+    /// after a settings change (`all`), any preload.
+    fn drop_stale_preload(&mut self, all: bool) {
         let next = self.queue.peek_advance().map(|t| t.id);
-        let Some(pre) = self.preload.take_if(|pre| Some(pre.track_id) != next) else {
+        let Some(pre) = self
+            .preload
+            .take_if(|pre| all || Some(pre.track_id) != next)
+        else {
             return;
         };
         if pre.sent {
@@ -764,7 +773,7 @@ impl Playback {
     /// Changes the queue and shows it; an empty queue's added track shows as current.
     fn edit_queue(&mut self, edit: impl FnOnce(&mut Queue)) {
         edit(&mut self.queue);
-        self.drop_stale_preload();
+        self.drop_stale_preload(false);
         self.publish_queue();
         self.publish();
     }

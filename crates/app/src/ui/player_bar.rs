@@ -109,11 +109,10 @@ pub fn show(
 
             ui.label(tr("Volume"));
             ui.spacing_mut().slider_width = 90.0;
-            let exclusive = pb.output.as_ref().is_some_and(|o| o.exclusive);
             let mut volume = pb.volume;
             let slider = Slider::new(&mut volume, 0.0..=1.0).show_value(false);
             if ui
-                .add_enabled(!exclusive, slider)
+                .add_enabled(!volume_fixed(model), slider)
                 .on_disabled_hover_text(tr("Volume is fixed in exclusive mode"))
                 .changed()
             {
@@ -159,16 +158,26 @@ pub fn badge(o: &OutputInfo) -> String {
     format!("{bits}/{rate} {} · {mode}", o.codec)
 }
 
+/// Exclusive output plays at full scale; until the output is known, exclusive is assumed when
+/// set.
+fn volume_fixed(model: &Model) -> bool {
+    let exclusive = model.settings.audio.exclusive;
+    model
+        .playback
+        .output
+        .as_ref()
+        .map_or(exclusive, |o| o.exclusive)
+}
+
 fn badge_hover(o: &OutputInfo) -> String {
     if o.exclusive {
-        return tr("Exclusive: bit-perfect, volume fixed").into_owned();
+        tr("Exclusive: bit-perfect, volume fixed").into_owned()
+    } else if o.device_rate != o.format.rate {
+        tr("Shared: mixed with other apps, resampled to {rate} kHz")
+            .replace("{rate}", &khz(o.device_rate))
+    } else {
+        tr("Shared: mixed with other apps").into_owned()
     }
-    let mut hover = tr("Shared: mixed with other apps").into_owned();
-    if o.device_rate != o.format.rate {
-        hover += " · ";
-        hover += &tr("resampled to {rate} kHz").replace("{rate}", &khz(o.device_rate));
-    }
-    hover
 }
 
 #[cfg(test)]
@@ -202,5 +211,32 @@ mod tests {
             badge(176_400, 24, true, 176_400),
             "24/176.4 FLAC · Exclusive"
         );
+    }
+
+    #[test]
+    fn badge_hover_is_whole_sentences() {
+        let resampled = "Shared: mixed with other apps, resampled to {rate} kHz";
+        let pot = include_str!("../../po/tidash.pot");
+        assert!(pot.contains(&format!("msgid \"{resampled}\"")), "one msgid");
+        assert_eq!(
+            badge_hover(&output(192_000, 24, false, 48_000)),
+            resampled.replace("{rate}", "48")
+        );
+        assert_eq!(
+            badge_hover(&output(44_100, 16, false, 44_100)),
+            "Shared: mixed with other apps"
+        );
+    }
+
+    #[test]
+    fn volume_is_disabled_until_the_output_is_known_in_exclusive_mode() {
+        let mut m = Model::default();
+        assert!(!volume_fixed(&m), "shared, no output yet");
+        m.settings.audio.exclusive = true;
+        assert!(volume_fixed(&m), "exclusive, no output yet");
+        m.playback.output = Some(output(96_000, 24, false, 48_000));
+        assert!(!volume_fixed(&m), "fell back to shared");
+        m.playback.output = Some(output(96_000, 24, true, 96_000));
+        assert!(volume_fixed(&m), "exclusive");
     }
 }

@@ -739,3 +739,54 @@ fn fallback_notice_once_per_streak() {
         "exclusive worked in between: a new streak"
     );
 }
+
+#[test]
+fn fallback_notice_shows_again_after_exclusive_or_device_changes() {
+    let (mut p, rx) = playback();
+    let refused = || Msg::Player(PlayerEvent::Fallback("no 96 kHz".into()));
+    let exclusive = settings::Audio {
+        exclusive: true,
+        ..Default::default()
+    };
+    p.set_audio(exclusive.clone());
+    p.on_msg(None, refused());
+    let lossless = settings::Audio {
+        hi_res: false,
+        ..exclusive.clone()
+    };
+    p.set_audio(lossless);
+    p.on_msg(None, refused());
+    assert_eq!(errors(&rx).len(), 1, "the output did not change");
+    p.set_audio(Default::default());
+    p.set_audio(exclusive.clone());
+    p.on_msg(None, refused());
+    assert_eq!(errors(&rx).len(), 1, "exclusive off and on");
+    let dac = settings::Audio {
+        device: Some("DAC".into()),
+        ..exclusive
+    };
+    p.set_audio(dac);
+    p.on_msg(None, refused());
+    assert_eq!(errors(&rx).len(), 1, "another device");
+}
+
+#[test]
+fn set_audio_drops_a_preload_of_other_quality() {
+    let rt = idle_runtime();
+    let _rt = rt.enter();
+    let c = client();
+    let (mut p, _rx) = playing(&c);
+    let x = sent_preload(&mut p, &c); // Hi-Res, the default
+    p.set_audio(Default::default());
+    assert!(p.preload.is_some(), "the same settings keep it");
+    p.set_audio(settings::Audio {
+        hi_res: false,
+        ..Default::default()
+    });
+    assert!(p.preload.is_none());
+    assert_eq!(p.cancelled, Some(x), "taken back from the player");
+    p.maybe_preload(&c, S * 186);
+    let pre = p.preload.as_ref().expect("requested again");
+    assert_eq!((pre.track_id, pre.sent), (1, false));
+    assert_ne!(pre.id, x);
+}

@@ -6,8 +6,6 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
 
 - Previous on the first track while its stream loads fetches the stream again.
 - Windows shows Buffering as Paused; the overlay shows the old position briefly on a track change.
-- `ClientConfig::default()` built separately in `now_playing.rs` and `backend.rs`.
-- `open::that_detached` runs inside an async handler (move to `spawn_blocking`).
 - `TogglePlay` cannot resume while a stream resolves; adding to a queue that has ended replays the
   finished track.
 - Favorites: a failed write reverts to `!on`, not to the ids loaded meanwhile; an ids load that
@@ -27,16 +25,7 @@ Parked by task reviews and the final reviews. Pick each up in the milestone that
   cursor repeats the shelves up to 5 times).
 - The login paste box keeps its undo history across logout (the pasted code is single-use and
   PKCE-bound); clear its `TextEditState` like the search box's.
-- Changing Hi-Res or normalization keeps a preload made under the old settings, so the next track
-  plays at the old quality and gain; drop the preload record in `set_audio` (`playback.rs`).
-- A refusal after Exclusive off/on, or on another refusing device, shows no second notice; reset
-  `fallback_shown` in `set_audio` when exclusive or the device changes.
-- The volume slider is enabled while no output is known (briefly on exclusive loads); a fast double
-  click on a settings checkbox can be lost (the UI toggles from the model's last value).
-- Settings `save` renames without `sync_all` (its comment claims crash safety); `LoggedOut` and
-  `SessionExpired` repeat the list of kept fields (`model.rs`).
-- The badge hover joins the msgid fragment "resampled to {rate} kHz" in code (whole sentences for
-  translators).
+- `LoggedOut` and `SessionExpired` repeat the list of kept fields (`model.rs`).
 - Untested: the `Error` of a cancelled preload and its stop-when-nothing-follows branch, the stale
   drop in `RemoveFromQueue`, a normal load not counting play time while Buffering (the `playing()`
   helper sets Playing early), `start_current` clearing the output and gapless keeping it.
@@ -114,7 +103,6 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 
 ## M4 / M5
 
-- Client ID override setting (README promises it as planned).
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
 - macOS RAM with the fonts pin (M5 performance-budget pass).
