@@ -297,7 +297,7 @@ async fn playlist_items_keep_positions_past_videos() {
     assert_eq!(items.etag, None, "TIDAL sent none");
 }
 
-/// The first page's ETag: from a 200, then the saved copy's on a 304 and when cache-only.
+/// The pages' ETag: from a 200, then the saved copy's on a 304 and when cache-only.
 #[tokio::test]
 async fn playlist_items_return_the_listing_etag() {
     let server = MockServer::start().await;
@@ -319,10 +319,10 @@ async fn playlist_items_return_the_listing_etag() {
         .insert_header("etag", "\"L0\"")
         .set_body_json(first);
     once(items(0), first, &server).await;
-    // A later page has its own ETag (the playlist changed while paging): the first one stays.
+    // Every page carries the playlist's one ETag (S5).
     let rest = json!({"limit": 100, "offset": 100, "totalNumberOfItems": 101, "items": []});
     let rest = ResponseTemplate::new(200)
-        .insert_header("etag", "\"L1\"")
+        .insert_header("etag", "\"L0\"")
         .set_body_json(rest);
     items(100).respond_with(rest).expect(2).mount(&server).await;
     let dir = std::env::temp_dir()

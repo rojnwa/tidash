@@ -74,8 +74,8 @@ pub struct PlaylistItems {
     /// Each track's 0-based position in the whole list, as item writes address them (S5);
     /// videos and broken tracks are skipped but counted.
     pub positions: Vec<u32>,
-    /// The listing's ETag (its first page's), the guard for edits by position; `None` if
-    /// TIDAL sent none.
+    /// The listing's ETag, the guard for edits by position; `None` if TIDAL sent none or its
+    /// pages' differ.
     pub etag: Option<String>,
 }
 
@@ -141,7 +141,8 @@ impl Client {
         let offsets = (start..total.min(VIEW_ALL_CAP)).step_by(PAGE_LIMIT);
         items.extend(
             self.pages_at::<Value>(&path, &[], PAGE_LIMIT, offsets)
-                .await?,
+                .await?
+                .0,
         );
         items.truncate(VIEW_ALL_CAP);
         Ok(())
@@ -258,8 +259,9 @@ impl Client {
         Ok(self.paged_all_tagged(path, query, limit).await?.0)
     }
 
-    /// [`Client::paged_all`] and the first page's ETag. That page is fetched before the
-    /// others, so its ETag is the oldest: a change while paging only makes it stale.
+    /// [`Client::paged_all`] and the list's ETag: the first page's, if every page carries it.
+    /// Each page carries the list's one ETag (S5), so pages that differ come from different
+    /// snapshots (a change while paging, or a saved page whose refresh failed): `None` then.
     pub(crate) async fn paged_all_tagged<T: DeserializeOwned + Send + 'static>(
         &self,
         path: &str,
@@ -270,32 +272,36 @@ impl Client {
             self.get_tagged(path, &page_query(query, limit, 0)).await?;
         let mut items = first.items;
         let rest = (limit..first.total).step_by(limit);
-        items.extend(self.pages_at(path, query, limit, rest).await?);
+        let (more, etags) = self.pages_at(path, query, limit, rest).await?;
+        items.extend(more);
+        let etag = etag.filter(|e| etags.iter().all(|t| t.as_ref() == Some(e)));
         Ok((items, etag))
     }
 
     /// The pages of `path` at `offsets`, concurrently on clones of the client; items in
-    /// offset order.
+    /// offset order, and each page's ETag.
     async fn pages_at<T: DeserializeOwned + Send + 'static>(
         &self,
         path: &str,
         query: &[(&'static str, String)],
         limit: usize,
         offsets: impl Iterator<Item = usize>,
-    ) -> Result<Vec<T>> {
+    ) -> Result<(Vec<T>, Vec<Option<String>>)> {
         let mut set = JoinSet::new();
         for (i, offset) in offsets.enumerate() {
             let (client, path) = (self.clone(), path.to_owned());
             let query = page_query(query, limit, offset);
-            set.spawn(async move { (i, client.get::<Paged<T>>(&path, &query).await) });
+            set.spawn(async move { (i, client.get_tagged::<Paged<T>>(&path, &query).await) });
         }
         let mut pages = set.join_all().await;
         pages.sort_by_key(|(i, _)| *i);
-        let mut items = Vec::new();
+        let (mut items, mut etags) = (Vec::new(), Vec::new());
         for (_, page) in pages {
-            items.extend(page?.items);
+            let (page, etag) = page?;
+            items.extend(page.items);
+            etags.push(etag);
         }
-        Ok(items)
+        Ok((items, etags))
     }
 }
 

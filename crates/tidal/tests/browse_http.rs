@@ -344,6 +344,25 @@ async fn paged_all_steps_by_limit_through_short_pages() {
     assert_eq!(server.received_requests().await.unwrap().len(), 3);
 }
 
+/// Every `/items` page carries the playlist's one ETag (S5): pages that differ come from
+/// different snapshots, so their positions are guarded by no ETag.
+#[tokio::test]
+async fn a_mixed_snapshot_listing_has_no_etag() {
+    let server = MockServer::start().await;
+    for (offset, ids, etag) in [(0, 0..100, "\"L0\""), (100, 100..101, "\"L1\"")] {
+        Mock::given(method("GET"))
+            .and(path("/v1/playlists/p/items"))
+            .and(query_param("offset", offset.to_string()))
+            .respond_with(value(playlist_page(ids, 101)).insert_header("etag", etag))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let items = setup(&server).playlist_items("p").await.unwrap();
+    assert_eq!(items.tracks.len(), 101);
+    assert_eq!(items.etag, None);
+}
+
 #[tokio::test]
 async fn playlist_and_all_tracks() {
     let server = MockServer::start().await;
