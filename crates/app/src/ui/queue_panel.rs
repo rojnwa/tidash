@@ -1,15 +1,17 @@
 //! Queue panel: the play queue, its current track highlighted. Rows are dragged with egui's
 //! bare `DragAndDrop` payload: its drop zones give no insertion index and need every row
-//! built, and these rows are virtual.
+//! built, and these rows are virtual. A playlist's rows drag the same way (`dragging`).
 
-use super::{rows, tracks};
+use super::rows;
+use super::tracks::{self, ROW_H};
 use crate::i18n::tr;
 use crate::model::{Action, Model};
 use egui::style::ScrollAnimation;
 use egui::{DragAndDrop, PointerButton, ScrollArea, Sense, Stroke, vec2};
+use std::any::Any;
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
-const ROW_H: f32 = 26.0;
 /// While dragging within `EDGE` of the list's top or bottom, it scrolls at `SCROLL` pt/s.
 const EDGE: f32 = 48.0;
 const SCROLL: f32 = 900.0;
@@ -64,18 +66,25 @@ pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
                     }
                 });
             });
-            if let Some((from, to)) = dragging(ui, &q.tracks, top) {
+            if let Some((drag, slot)) = dragging::<QueueDrag>(ui, q.tracks.len(), top)
+                && let Some((from, to)) = drop_move(&q.tracks, &drag, slot)
+            {
                 send(Action::MoveInQueue { from, to });
             }
         });
 }
 
-/// While a row is dragged over the list (scrolled so its top is at `top`): a line where it
-/// would land, and scrolling near an edge, or past it. On release over the visible list: the
-/// move to make, if any. Released elsewhere (over the heading or the player bar, say), egui
-/// drops the payload and nothing moves.
-fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, usize)> {
-    DragAndDrop::payload::<QueueDrag>(ui.ctx())?;
+/// While a row's payload `T` is dragged over the list of `len` rows `ROW_H` tall (scrolled so
+/// its top is at `top`): a line where it would land, and scrolling near an edge, or past it.
+/// On release over the visible list: the payload and the slot (`0..=len`) it lands in.
+/// Released elsewhere (over the heading or the player bar, say), egui drops the payload and
+/// nothing moves.
+pub fn dragging<T: Any + Send + Sync>(
+    ui: &egui::Ui,
+    len: usize,
+    top: f32,
+) -> Option<(Arc<T>, usize)> {
+    DragAndDrop::payload::<T>(ui.ctx())?;
     let p = ui.input(|i| i.pointer.interact_pos())?;
     let view = ui.clip_rect();
     if !view.x_range().contains(p.x) {
@@ -97,7 +106,7 @@ fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, 
     if !view.y_range().contains(p.y) {
         return None; // the slot under it is out of view
     }
-    let slot = drop_slot(p.y, top, ROW_H, tracks.len());
+    let slot = drop_slot(p.y, top, ROW_H, len);
     // The accent's stroke, which shows on the current row's highlight too.
     let line = Stroke::new(2.0, ui.visuals().selection.stroke.color);
     ui.painter()
@@ -105,8 +114,7 @@ fn dragging(ui: &egui::Ui, tracks: &[tidal::Track], top: f32) -> Option<(usize, 
     if !ui.input(|i| i.pointer.any_released()) {
         return None;
     }
-    let drag = DragAndDrop::take_payload::<QueueDrag>(ui.ctx())?;
-    drop_move(tracks, &drag, slot)
+    Some((DragAndDrop::take_payload::<T>(ui.ctx())?, slot))
 }
 
 /// The slot (`0..=len`) a row dropped at `pointer_y` goes to: the row boundary nearest it.

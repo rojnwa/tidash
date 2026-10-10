@@ -1,13 +1,16 @@
-//! Playlist page: header with Play, then its tracks.
+//! Playlist page: header with Play, then its tracks. The user's own also has Edit and Delete,
+//! and its rows can be removed and dragged to reorder it.
 
-use super::{Ctx, header, tracks};
+use super::{Ctx, header, library, tracks};
+use crate::i18n::tr;
 use crate::model::{PageData, Route};
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
     let Some(PageData::Playlist {
         playlist: p,
         tracks: list,
-        ..
+        positions,
+        etag,
     }) = super::page_data(ui, ctx, route)
     else {
         return;
@@ -20,6 +23,17 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
         // Ruling R19: no heart on the user's own, whose folder remove could drop it.
         let own = p.creator_id.is_some() && p.creator_id == ctx.model.user_id;
         let fav = (!own).then(|| tidal::Favorite::Playlist(p.uuid.clone()));
+        let edit = |ui: &mut egui::Ui, _: &mut Ctx| {
+            if !own {
+                return;
+            }
+            if ui.button(tr("Edit")).clicked() {
+                library::open(ui.ctx(), library::edit_playlist(p));
+            }
+            if ui.button(tr("Delete")).clicked() {
+                library::open(ui.ctx(), library::delete_playlist(p));
+            }
+        };
         header::header(
             ui,
             ctx,
@@ -28,17 +42,31 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             details,
             Some(list),
             fav,
-            |_, _| {},
+            edit,
         );
-        tracks::show(ui, ctx, "playlist-tracks", list, false);
+        // Ruling R11: rows are edited by position only with the ETag of their listing.
+        let rows = etag
+            .as_deref()
+            .filter(|_| own)
+            .map(|etag| tracks::PlaylistRows {
+                uuid: &p.uuid,
+                etag,
+                positions,
+            });
+        tracks::show(ui, ctx, "playlist-tracks", list, false, rows.as_ref());
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{Action, Event, PageData, Route};
-    use crate::ui::testing::{at, every_state, key, pass, playlist, tracks};
-    use egui::Key;
+    use crate::model::{Action, Event, Model, PageData, Route};
+    use crate::ui::library;
+    use crate::ui::testing::{
+        at, click, clicks, every_state, key, middle, pass, pass_with, playlist, right, shown,
+        tracks,
+    };
+    use egui::{Key, PointerButton, Pos2, vec2};
+    use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
     /// The first track is unavailable: Enter on its row plays nothing, so only Play can.
     fn data() -> PageData {
@@ -110,5 +138,156 @@ mod tests {
             _ => None, // the artwork
         });
         assert_eq!(played, Some((3, 0)));
+    }
+
+    /// The page drawn pass after pass, with the library's dialog, as the app draws them.
+    struct Page {
+        egui: egui::Context,
+        tx: UnboundedSender<Action>,
+        rx: UnboundedReceiver<Action>,
+        model: Model,
+    }
+
+    impl Page {
+        /// Playlist `p-1` of user `creator` (the user is 1): three tracks at positions 0, 2 and
+        /// 3 of a listing tagged `etag`.
+        fn new(creator: u64, etag: Option<&str>) -> Self {
+            let route = Route::Playlist("p-1".into());
+            let mut model = at(route.clone());
+            let data = PageData::Playlist {
+                playlist: tidal::Playlist {
+                    creator_id: Some(creator),
+                    ..playlist()
+                },
+                tracks: tracks(3),
+                positions: vec![0, 2, 3],
+                etag: etag.map(str::to_owned),
+            };
+            model.apply(Event::Page { route, data });
+            let egui = egui::Context::default();
+            egui.enable_accesskit();
+            let (tx, rx) = unbounded_channel();
+            Self {
+                egui,
+                tx,
+                rx,
+                model,
+            }
+        }
+
+        fn pass(&mut self, input: Vec<egui::Event>) -> egui::FullOutput {
+            let model = &self.model;
+            let (_, out) = pass_with(&self.egui, &self.tx, model, input, |ui, c| {
+                super::show(ui, c, model.route());
+                library::dialog(ui.ctx(), c);
+            });
+            out
+        }
+
+        /// A few passes without input, for menus and dialogs to lay themselves out.
+        fn settle(&mut self) -> egui::FullOutput {
+            self.pass(vec![]);
+            self.pass(vec![])
+        }
+
+        /// Right-clicks the node labelled `label`: the output with its menu open.
+        fn menu(&mut self, label: &str) -> egui::FullOutput {
+            let at = middle(&self.settle(), label);
+            self.pass(vec![egui::Event::PointerMoved(at), right(at, true)]);
+            self.pass(vec![right(at, false)]);
+            self.settle()
+        }
+
+        /// Drags the row labelled `from` to just inside the top edge of the row labelled `to`.
+        fn drag(&mut self, from: &str, to: &str) {
+            let out = self.settle();
+            let top = |label| middle(&out, label) - vec2(0.0, 12.0);
+            let (from, to) = (top(from), top(to));
+            let button = |pos, pressed| egui::Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            let moved = |pos: Pos2| egui::Event::PointerMoved(pos);
+            self.pass(vec![moved(from), button(from, true)]);
+            self.pass(vec![moved(from + vec2(0.0, 10.0))]);
+            self.pass(vec![moved(to)]);
+            self.pass(vec![button(to, false)]);
+        }
+
+        /// The playlist edits sent since last asked.
+        fn sent(&mut self) -> Vec<String> {
+            std::iter::from_fn(|| self.rx.try_recv().ok())
+                .filter(|a| matches!(a, Action::EditPlaylist(_))) // not the artwork
+                .map(|a| format!("{a:?}"))
+                .collect()
+        }
+    }
+
+    fn row(n: usize) -> String {
+        format!("{n}. Track {n}, Artist 1, 3:20")
+    }
+
+    /// The user's own playlist has Edit (its title and description, as they are) and Delete
+    /// (asked first); TIDAL's and other users' have neither.
+    #[test]
+    fn own_playlist_has_edit_and_delete_others_not() {
+        for creator in [0, 2] {
+            let shown = shown(&Page::new(creator, Some("e1")).settle());
+            let offered = ["Edit", "Delete"].map(|s| shown.contains(&s.into()));
+            assert_eq!(offered, [false, false], "creator {creator}");
+        }
+        let mut page = Page::new(1, Some("e1"));
+        let out = page.settle();
+        page.pass(vec![click(&out, "Edit")]);
+        let out = page.settle();
+        assert!(shown(&out).contains(&"Edit playlist".into()));
+        page.pass(vec![key(Key::Enter)]);
+        let edit = r#"EditPlaylist(Edit { uuid: "p-1", title: "Playlist", description: "" })"#;
+        assert_eq!(page.sent(), [edit]);
+        let out = page.settle();
+        page.pass(vec![click(&out, "Delete")]);
+        let out = page.settle();
+        assert!(page.sent().is_empty(), "asked first");
+        let ask = "Delete the playlist Playlist? This cannot be undone.";
+        assert!(shown(&out).contains(&ask.into()));
+        // The header's Delete, under the dialog, only asks again.
+        page.pass(clicks(&out, "Delete").collect());
+        assert_eq!(page.sent(), [r#"EditPlaylist(Delete { uuid: "p-1" })"#]);
+    }
+
+    /// A row's "Remove from this playlist" removes its position in the playlist, guarded by
+    /// the listing's ETag. Without that ETag (R11), or on another user's playlist, it is not
+    /// offered.
+    #[test]
+    fn remove_sends_the_playlist_position() {
+        for (creator, etag) in [(1, None), (2, Some("e1"))] {
+            let out = Page::new(creator, etag).menu(&row(2));
+            let shown = shown(&out);
+            assert!(shown.contains(&"Play next".into()), "the menu is open");
+            let remove = shown.contains(&"Remove from this playlist".into());
+            assert!(!remove, "creator {creator}, {etag:?}");
+        }
+        let mut page = Page::new(1, Some("e1"));
+        let out = page.menu(&row(2));
+        page.pass(vec![click(&out, "Remove from this playlist")]);
+        let remove = r#"EditPlaylist(Remove { uuid: "p-1", etag: "e1", positions: [2] })"#;
+        assert_eq!(page.sent(), [remove]);
+    }
+
+    /// Row 1 dropped on row 3's top edge goes before position 3; dropped on its own bottom
+    /// edge it stays. Without the listing's ETag (R11) rows do not move.
+    #[test]
+    fn dragging_a_row_sends_move() {
+        let mut page = Page::new(1, Some("e1"));
+        page.drag(&row(1), &row(3));
+        let to = r#"EditPlaylist(Move { uuid: "p-1", etag: "e1", from: 0, to: 3 })"#;
+        assert_eq!(page.sent(), [to]);
+        page.drag(&row(1), &row(2));
+        assert_eq!(page.sent(), Vec::<String>::new(), "its own edge");
+        let mut page = Page::new(1, None);
+        page.drag(&row(1), &row(3));
+        assert_eq!(page.sent(), Vec::<String>::new(), "no ETag");
     }
 }

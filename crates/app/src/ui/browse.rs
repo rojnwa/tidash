@@ -35,7 +35,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             // ponytail: up to 500 tracks cloned per frame (~135 µs measured); keep them as
             // tracks on arrival if this ever shows in a profile.
             let list: Vec<_> = shelf::tracks_of(&s.items).cloned().collect();
-            tracks::show(ui, ctx, "all-tracks", &list, false);
+            tracks::show(ui, ctx, "all-tracks", &list, false, None);
         } else {
             shelf::grid(ui, &s.items, ctx);
         }

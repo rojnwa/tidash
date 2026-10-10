@@ -32,7 +32,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
                 ui.label(tracks::summary(list));
             });
             ui.add_space(8.0);
-            tracks::show(ui, ctx, "collection-tracks", list, false);
+            tracks::show(ui, ctx, "collection-tracks", list, false, None);
         }
         PageData::Items(items) => shelf::grid(ui, items, ctx),
         _ => {} // the loader fills a collection tab with nothing else

@@ -1,16 +1,45 @@
 //! Track list, virtualized inside the caller's page scroll; shared by every view with tracks.
 
-use super::{Ctx, rows};
+use super::{Ctx, library, queue_panel, rows};
 use crate::i18n::{tr, tr_n};
-use crate::model::{Action, Route};
-use egui::{Align2, FontId, PointerButton, Sense, WidgetInfo, WidgetType, vec2};
+use crate::model::{Action, PlaylistEdit, Route};
+use egui::{Align2, DragAndDrop, FontId, PointerButton, Sense, WidgetInfo, WidgetType, vec2};
 
-const ROW_H: f32 = 26.0;
+pub const ROW_H: f32 = 26.0;
 
 #[derive(Clone, Copy)]
 enum Row {
     Disc(u32),
     Track(usize),
+}
+
+/// The user's own playlist `uuid`, whose rows can be removed and dragged to reorder: each
+/// row's position in it, and the `etag` of the listing those came from (ruling R11).
+pub struct PlaylistRows<'a> {
+    pub uuid: &'a str,
+    pub etag: &'a str,
+    pub positions: &'a [u32],
+}
+
+/// The playlist row being dragged, and the ETag of the listing it is a row of: one reloaded
+/// mid-drag has other rows.
+struct PlaylistDrag {
+    from: usize,
+    etag: String,
+}
+
+/// The `(from, to)` playlist positions a drop of row `from_row` at `slot` (`0..=len`) moves:
+/// `to` is the position of the row dropped before, or past the last. None onto the row's own
+/// edges.
+fn move_for(positions: &[u32], from_row: usize, slot: usize) -> Option<(u32, u32)> {
+    if slot == from_row || slot == from_row + 1 {
+        return None;
+    }
+    let to = match positions.get(slot) {
+        Some(&to) => to,
+        None => positions.last()? + 1,
+    };
+    Some((*positions.get(from_row)?, to))
 }
 
 /// `m:ss`, or `h:mm:ss` from an hour.
@@ -47,8 +76,16 @@ pub fn artists(t: &tidal::Track) -> String {
 /// Double-clicking an available row, or activating it from the keyboard or a screen reader,
 /// sends `PlayTracks` for the whole list; right-clicking opens its menu. With `discs`,
 /// multi-disc lists get a header row per disc; otherwise the album title is a column. `id`
-/// tells apart two lists on one page.
-pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, id: &str, tracks: &[tidal::Track], discs: bool) {
+/// tells apart two lists on one page. With `edit` (and no `discs`), rows can be removed from
+/// the playlist and dragged to reorder it.
+pub fn show(
+    ui: &mut egui::Ui,
+    ctx: &mut Ctx,
+    id: &str,
+    tracks: &[tidal::Track],
+    discs: bool,
+    edit: Option<&PlaylistRows>,
+) {
     let multi = discs && tracks.iter().any(|t| t.volume_number > 1);
     // Only a multi-disc album (short) needs a row list, for its disc headers; in any other
     // list row i is track i, and nothing is built per frame.
@@ -65,10 +102,12 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, id: &str, tracks: &[tidal::Track],
     }
     let n = if multi { rows.len() } else { tracks.len() };
     ui.push_id(id, |ui| {
+        let top = ui.cursor().top();
         rows::virtual_rows(ui, n, ROW_H, |ui, r| {
             let row = if multi { rows[r] } else { Row::Track(r) };
             let sense = match row {
                 Row::Disc(_) => Sense::hover(),
+                Row::Track(_) if edit.is_some() => Sense::click_and_drag(),
                 Row::Track(_) => Sense::click(),
             };
             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
@@ -98,10 +137,28 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, id: &str, tracks: &[tidal::Track],
                             start: i,
                         });
                     }
-                    menu(&resp, ctx, t);
+                    if let Some(e) = edit
+                        && resp.drag_started_by(PointerButton::Primary)
+                    {
+                        let etag = e.etag.to_owned();
+                        DragAndDrop::set_payload(ui.ctx(), PlaylistDrag { from: i, etag });
+                    }
+                    menu(&resp, ctx, t, edit.map(|e| (e, i)));
                 }
             }
         });
+        if let Some(e) = edit
+            && let Some((drag, slot)) = queue_panel::dragging::<PlaylistDrag>(ui, n, top)
+            && drag.etag == e.etag
+            && let Some((from, to)) = move_for(e.positions, drag.from, slot)
+        {
+            ctx.send(Action::EditPlaylist(PlaylistEdit::Move {
+                uuid: e.uuid.to_owned(),
+                etag: e.etag.to_owned(),
+                from,
+                to,
+            }));
+        }
     });
 }
 
@@ -175,9 +232,15 @@ pub fn paint_row(
     cell(w - 56.0, w, duration(t.duration), Align2::RIGHT_CENTER);
 }
 
-/// A track row's context menu. `ui.close()` also closes it when an entry is picked from the
+/// A track row's context menu; with `edit`, the playlist's rows and this one's index in them,
+/// it can remove the row. `ui.close()` also closes it when an entry is picked from the
 /// keyboard or a screen reader, which no pointer click does.
-fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
+fn menu(
+    row: &egui::Response,
+    ctx: &mut Ctx,
+    t: &tidal::Track,
+    edit: Option<(&PlaylistRows, usize)>,
+) {
     row.context_menu(|ui| {
         if ui.button(tr("Play next")).clicked() {
             ctx.send(Action::PlayNext(vec![t.clone()]));
@@ -187,6 +250,7 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
             ctx.send(Action::AddToQueue(vec![t.clone()]));
             ui.close();
         }
+        library::add_to_playlist(ui, ctx, std::slice::from_ref(t));
         if ui.button(tr("Go to album")).clicked() {
             ctx.go(Route::Album(t.album.id));
             ui.close();
@@ -214,16 +278,28 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
                 .copy_text(format!("https://tidal.com/browse/track/{}", t.id));
             ui.close();
         }
+        if let Some((e, i)) = edit
+            && let Some(&position) = e.positions.get(i)
+        {
+            ui.separator();
+            if ui.button(tr("Remove from this playlist")).clicked() {
+                ctx.send(Action::EditPlaylist(PlaylistEdit::Remove {
+                    uuid: e.uuid.to_owned(),
+                    etag: e.etag.to_owned(),
+                    positions: vec![position],
+                }));
+                ui.close();
+            }
+        }
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::images::TextureCache;
     use crate::model::{Action, Event, Model, Route};
-    use crate::ui::testing::click;
-    use crate::ui::{Ctx, page};
-    use egui::{Key, PointerButton, Pos2, Rect, vec2};
+    use crate::ui::testing::{self, click, middle};
+    use crate::ui::{library, page};
+    use egui::{Key, Pos2};
     use tokio::sync::mpsc::UnboundedSender;
 
     fn track() -> tidal::Track {
@@ -244,34 +320,21 @@ mod tests {
         }
     }
 
-    /// One pass of a page holding `list`, fed `input`: the events it gave, and its output.
+    /// One pass of a page holding `list`, with the library's dialog, fed `input`: the events it
+    /// gave, and its output.
     fn pass(
         ctx: &egui::Context,
         tx: &UnboundedSender<Action>,
+        model: &Model,
         list: &[tidal::Track],
         input: Vec<egui::Event>,
     ) -> (Vec<Event>, egui::FullOutput) {
-        let model = Model::default();
-        let mut images = TextureCache::new(1 << 20);
-        let mut events = Vec::new();
-        let input = egui::RawInput {
-            events: input,
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
-            ..Default::default()
-        };
-        let mut out = ctx.run_ui(input, |ui| {
-            let mut c = Ctx {
-                model: &model,
-                tx,
-                images: &mut images,
-                events: &mut events,
-            };
+        testing::pass_with(ctx, tx, model, input, |ui, c| {
             page(ui, &Route::Search, |ui| {
-                super::show(ui, &mut c, "t", list, false)
+                super::show(ui, c, "t", list, false, None)
             });
-        });
-        out.textures_delta.clear(); // nothing renders them
-        (events, out)
+            library::dialog(ui.ctx(), c);
+        })
     }
 
     /// Tab to the first row and press Enter: it plays, as a double click would.
@@ -288,7 +351,7 @@ mod tests {
             modifiers: Default::default(),
         };
         for input in [vec![], vec![key(Key::Tab)], vec![key(Key::Enter)]] {
-            pass(&ctx, &tx, &list, input);
+            pass(&ctx, &tx, &Model::default(), &list, input);
         }
         assert!(matches!(
             rx.try_recv(),
@@ -300,25 +363,27 @@ mod tests {
     fn open_menu(
         ctx: &egui::Context,
         tx: &UnboundedSender<Action>,
+        model: &Model,
         list: &[tidal::Track],
     ) -> egui::FullOutput {
         let at = Pos2::new(100.0, 13.0); // the first row
-        let right = |pressed| egui::Event::PointerButton {
-            pos: at,
-            button: PointerButton::Secondary,
-            pressed,
-            modifiers: Default::default(),
-        };
-        pass(ctx, tx, list, vec![]);
-        pass(
-            ctx,
-            tx,
-            list,
-            vec![egui::Event::PointerMoved(at), right(true)],
-        );
-        pass(ctx, tx, list, vec![right(false)]);
-        pass(ctx, tx, list, vec![]); // the menu lays itself out
-        pass(ctx, tx, list, vec![]).1
+        let right = |pressed| testing::right(at, pressed);
+        pass(ctx, tx, model, list, vec![]);
+        let press = vec![egui::Event::PointerMoved(at), right(true)];
+        pass(ctx, tx, model, list, press);
+        pass(ctx, tx, model, list, vec![right(false)]);
+        settle(ctx, tx, model, list) // the menu lays itself out
+    }
+
+    /// A few passes without input, for menus and dialogs to lay themselves out: the last output.
+    fn settle(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        list: &[tidal::Track],
+    ) -> egui::FullOutput {
+        pass(ctx, tx, model, list, vec![]);
+        pass(ctx, tx, model, list, vec![]).1
     }
 
     /// Right-click a row, then pick "Go to album" (as a screen reader would): its album opens.
@@ -327,10 +392,11 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let list = vec![track()];
-        let out = open_menu(&ctx, &tx, &list);
+        let (model, list) = (Model::default(), vec![track()]);
+        let out = open_menu(&ctx, &tx, &model, &list);
         click(&out, "Add to favorites"); // panics unless the menu offers it too
-        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Go to album")]);
+        let go = vec![click(&out, "Go to album")];
+        let (events, _) = pass(&ctx, &tx, &model, &list, go);
         assert!(
             matches!(events[..], [Event::Navigate(Route::Album(2))]),
             "{events:?}"
@@ -343,10 +409,10 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let list = vec![track()];
+        let (model, list) = (Model::default(), vec![track()]);
         let mut pick = |entry| {
-            let out = open_menu(&ctx, &tx, &list);
-            pass(&ctx, &tx, &list, vec![click(&out, entry)]);
+            let out = open_menu(&ctx, &tx, &model, &list);
+            pass(&ctx, &tx, &model, &list, vec![click(&out, entry)]);
             rx.try_recv().expect("an action")
         };
         let ids = |t: &[tidal::Track]| t.iter().map(|t| t.id).collect::<Vec<_>>();
@@ -362,9 +428,10 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut t = track();
         t.mixes.track = Some("m".into());
-        let list = vec![t];
-        let out = open_menu(&ctx, &tx, &list);
-        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Track radio")]);
+        let (model, list) = (Model::default(), vec![t]);
+        let out = open_menu(&ctx, &tx, &model, &list);
+        let radio = vec![click(&out, "Track radio")];
+        let (events, _) = pass(&ctx, &tx, &model, &list, radio);
         assert!(
             matches!(&events[..], [Event::Navigate(Route::Mix(id))] if id == "m"),
             "{events:?}"
@@ -377,14 +444,96 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let list = vec![track()];
-        let out = open_menu(&ctx, &tx, &list);
+        let (model, list) = (Model::default(), vec![track()]);
+        let out = open_menu(&ctx, &tx, &model, &list);
         let tree = out.platform_output.accesskit_update.as_ref();
         let nodes = &tree.expect("AccessKit is on").nodes;
         let radio = nodes.iter().find(|(_, n)| n.label() == Some("Track radio"));
         assert!(radio.expect("Track radio shown").1.is_disabled());
-        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Track radio")]);
+        let radio = vec![click(&out, "Track radio")];
+        let (events, _) = pass(&ctx, &tx, &model, &list, radio);
         assert!(events.is_empty(), "{events:?}");
+    }
+
+    /// Logged in, with two own playlists, newest updated first (as the backend sorts them).
+    fn with_playlists() -> Model {
+        let mut model = testing::at(Route::Search);
+        let p = |uuid: &str, title: &str| tidal::Playlist {
+            uuid: uuid.into(),
+            title: title.into(),
+            ..testing::playlist()
+        };
+        let own = vec![p("p-new", "Newer"), p("p-old", "Older")];
+        model.apply(Event::OwnPlaylists(own));
+        model
+    }
+
+    /// Opens the first row's menu and its "Add to playlist" submenu: the output showing it.
+    fn add_menu(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        list: &[tidal::Track],
+    ) -> egui::FullOutput {
+        let out = open_menu(ctx, tx, model, list);
+        pass(ctx, tx, model, list, vec![click(&out, "Add to playlist")]);
+        settle(ctx, tx, model, list)
+    }
+
+    /// "Add to playlist" lists "New playlist…" and then the own playlists, newest updated
+    /// first; picking one adds the track to it.
+    #[test]
+    fn add_to_playlist_lists_own_playlists_and_sends_add() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (model, list) = (with_playlists(), vec![track()]);
+        let out = add_menu(&ctx, &tx, &model, &list);
+        let y = |label| middle(&out, label).y;
+        assert!(y("New playlist…") < y("Newer") && y("Newer") < y("Older"));
+        pass(&ctx, &tx, &model, &list, vec![click(&out, "Older")]);
+        let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
+            .map(|a| format!("{a:?}"))
+            .collect();
+        let add = r#"EditPlaylist(Add { uuid: "p-old", tracks: [1] })"#;
+        assert_eq!(sent, [add]);
+        let out = settle(&ctx, &tx, &model, &list);
+        assert!(!testing::shown(&out).contains(&"Newer".into()), "closed");
+    }
+
+    /// "New playlist…" asks for a title; the playlist made starts with the track.
+    #[test]
+    fn new_playlist_from_a_track_sends_create_with_it() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (model, list) = (with_playlists(), vec![track()]);
+        let out = add_menu(&ctx, &tx, &model, &list);
+        pass(&ctx, &tx, &model, &list, vec![click(&out, "New playlist…")]);
+        settle(&ctx, &tx, &model, &list); // the dialog opens, its title focused
+        assert!(rx.try_recv().is_err(), "asked first");
+        let text = egui::Event::Text("Road trip".into());
+        pass(&ctx, &tx, &model, &list, vec![text]);
+        pass(&ctx, &tx, &model, &list, vec![testing::key(Key::Enter)]);
+        let create = concat!(
+            r#"EditPlaylist(Create { title: "Road trip", description: "", "#,
+            "folder: None, tracks: [1] })"
+        );
+        assert_eq!(format!("{:?}", rx.try_recv().expect("sent")), create);
+    }
+
+    /// A drop on a row's own edges moves nothing; elsewhere, the dragged row's position goes
+    /// before the position of the row the drop lands on, or after the last.
+    #[test]
+    fn drag_reorder_sends_positions() {
+        let positions = [0, 2, 3];
+        let at = |from, slot| super::move_for(&positions, from, slot);
+        assert_eq!(at(1, 1), None, "its top edge");
+        assert_eq!(at(1, 2), None, "its bottom edge");
+        assert_eq!(at(0, 2), Some((0, 3)));
+        assert_eq!(at(2, 0), Some((3, 0)));
+        assert_eq!(at(1, 0), Some((2, 0)));
+        assert_eq!(at(0, 3), Some((0, 4)), "past the last");
     }
 
     #[test]

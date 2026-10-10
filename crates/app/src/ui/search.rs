@@ -45,7 +45,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         if !results.tracks.is_empty() {
             ui.add_space(16.0);
             ui.heading(tr("Tracks"));
-            tracks::show(ui, ctx, "search-tracks", &results.tracks, false);
+            tracks::show(ui, ctx, "search-tracks", &results.tracks, false, None);
         }
     });
 }

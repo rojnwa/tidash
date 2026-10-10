@@ -459,6 +459,7 @@ msgid "Rename"
 msgstr ""
 
 #: src/ui/library.rs
+#: src/ui/playlist.rs
 msgid "Delete"
 msgstr ""
 
@@ -523,3 +524,23 @@ msgid "Added {n} track to {playlist}"
 msgid_plural "Added {n} tracks to {playlist}"
 msgstr[0] ""
 msgstr[1] ""
+
+#: src/ui/library.rs
+msgid "Add to playlist"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "New playlist…"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Edit playlist"
+msgstr ""
+
+#: src/ui/playlist.rs
+msgid "Edit"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Remove from this playlist"
+msgstr ""

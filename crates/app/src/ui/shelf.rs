@@ -48,7 +48,7 @@ fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
         }
         Layout::Tracks => {
             let list: Vec<_> = tracks_of(&s.items).take(SHELF_TRACKS).cloned().collect();
-            tracks::show(ui, ctx, "tracks", &list, false);
+            tracks::show(ui, ctx, "tracks", &list, false, None);
         }
         Layout::Links => {
             ui.horizontal_wrapped(|ui| {

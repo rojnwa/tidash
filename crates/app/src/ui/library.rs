@@ -8,13 +8,34 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use tidal::FolderItem;
 
-/// The dialog open, with what was typed in it so far.
-enum Dialog {
-    NewPlaylist { title: String, description: String },
+/// A dialog, with what was typed in it so far. It lives in egui's memory, so any view can open
+/// one (`open`); the sidebar draws it (`dialog`).
+#[derive(Clone)]
+pub enum Dialog {
+    /// The new playlist starts with `tracks`.
+    NewPlaylist {
+        title: String,
+        description: String,
+        tracks: Vec<u64>,
+    },
+    EditPlaylist {
+        uuid: String,
+        title: String,
+        description: String,
+    },
     NewFolder(String),
-    RenameFolder { id: String, name: String },
-    DeleteFolder { id: String, name: String },
-    DeletePlaylist { uuid: String, title: String },
+    RenameFolder {
+        id: String,
+        name: String,
+    },
+    DeleteFolder {
+        id: String,
+        name: String,
+    },
+    DeletePlaylist {
+        uuid: String,
+        title: String,
+    },
 }
 
 /// What the tree keeps between passes, for one session.
@@ -22,7 +43,6 @@ enum Dialog {
 pub struct State {
     /// The folders asked for: each is listed once.
     asked: HashSet<String>,
-    dialog: Option<Dialog>,
 }
 
 /// The "Playlists" heading with its New buttons, then the tree, which scrolls if long. New
@@ -31,11 +51,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     ui.strong(tr("Playlists"));
     ui.horizontal_wrapped(|ui| {
         if ui.button(tr("New playlist")).clicked() {
-            let (title, description) = (String::new(), String::new());
-            state.dialog = Some(Dialog::NewPlaylist { title, description });
+            open(ui.ctx(), new_playlist(Vec::new()));
         }
         if ui.button(tr("New folder")).clicked() {
-            state.dialog = Some(Dialog::NewFolder(String::new()));
+            open(ui.ctx(), Dialog::NewFolder(String::new()));
         }
     });
     egui::ScrollArea::vertical()
@@ -44,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
             folder(ui, ctx, state, "root");
         });
-    dialog(ui.ctx(), ctx, state);
+    dialog(ui.ctx(), ctx);
 }
 
 /// Folder `id`'s items, once listed. The first time it shows unlisted it is asked for; the
@@ -71,7 +90,7 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                 shown.header_response.context_menu(|ui| {
                     if ui.button(tr("Rename")).clicked() {
                         let (id, name) = (sub.clone(), name.clone());
-                        state.dialog = Some(Dialog::RenameFolder { id, name });
+                        open(ui.ctx(), Dialog::RenameFolder { id, name });
                         ui.close();
                     }
                     // ponytail: what TIDAL does to the playlists in a deleted folder is unknown
@@ -82,25 +101,19 @@ fn folder(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State, id: &str) {
                         .on_disabled_hover_text(tr("Move its playlists out first."));
                     if delete.clicked() {
                         let (id, name) = (sub.clone(), name.clone());
-                        state.dialog = Some(Dialog::DeleteFolder { id, name });
+                        open(ui.ctx(), Dialog::DeleteFolder { id, name });
                         ui.close();
                     }
                 });
             }
-            FolderItem::Playlist(p) => playlist(ui, ctx, state, p, id),
+            FolderItem::Playlist(p) => playlist(ui, ctx, p, id),
         }
     }
 }
 
 /// Playlist `p`, in folder `parent`: it opens its page, and its menu moves it or, if it is the
 /// user's own, deletes it.
-fn playlist(
-    ui: &mut egui::Ui,
-    ctx: &mut Ctx,
-    state: &mut State,
-    p: &tidal::Playlist,
-    parent: &str,
-) {
+fn playlist(ui: &mut egui::Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str) {
     let route = Route::Playlist(p.uuid.clone());
     let row = ui.selectable_label(*ctx.model.route() == route, &p.title);
     if row.clicked() {
@@ -125,8 +138,7 @@ fn playlist(
         });
         let own = p.creator_id.is_some() && p.creator_id == ctx.model.user_id;
         if own && ui.button(tr("Delete")).clicked() {
-            let (uuid, title) = (p.uuid.clone(), p.title.clone());
-            state.dialog = Some(Dialog::DeletePlaylist { uuid, title });
+            open(ui.ctx(), delete_playlist(p));
             ui.close();
         }
     });
@@ -153,21 +165,105 @@ fn destinations(model: &Model) -> Vec<(Option<&str>, Cow<'_, str>)> {
         .collect()
 }
 
-/// The open dialog. Answered, it closes; confirmed, its edit is sent.
-fn dialog(egui: &egui::Context, ctx: &mut Ctx, state: &mut State) {
-    let Some(open) = &mut state.dialog else {
+/// The "Add to playlist" menu (a submenu inside a menu): "New playlist…", then the user's own
+/// playlists, newest updated first. `tracks` go into the one picked.
+pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]) {
+    let ids = || tracks.iter().map(|t| t.id).collect();
+    let label = tr("Add to playlist");
+    let menu = ui.menu_button(label.as_ref(), |ui| {
+        if ui.button(tr("New playlist…")).clicked() {
+            open(ui.ctx(), new_playlist(ids()));
+            ui.close();
+        }
+        for p in &ctx.model.own_playlists {
+            if ui.button(&p.title).clicked() {
+                let (uuid, tracks) = (p.uuid.clone(), ids());
+                ctx.send(Action::EditPlaylist(PlaylistEdit::Add { uuid, tracks }));
+                ui.close();
+            }
+        }
+    });
+    // Inside a menu, egui's label for a screen reader ends in the submenu's arrow.
+    let resp = menu.response;
+    resp.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, resp.enabled(), &label)
+    });
+}
+
+/// A new playlist's dialog, empty; the playlist starts with `tracks`.
+pub fn new_playlist(tracks: Vec<u64>) -> Dialog {
+    let (title, description) = (String::new(), String::new());
+    Dialog::NewPlaylist {
+        title,
+        description,
+        tracks,
+    }
+}
+
+/// Playlist `p`'s dialog, holding its title and description as they are.
+pub fn edit_playlist(p: &tidal::Playlist) -> Dialog {
+    Dialog::EditPlaylist {
+        uuid: p.uuid.clone(),
+        title: p.title.clone(),
+        description: p.description.clone().unwrap_or_default(),
+    }
+}
+
+/// The confirm before deleting playlist `p`.
+pub fn delete_playlist(p: &tidal::Playlist) -> Dialog {
+    let (uuid, title) = (p.uuid.clone(), p.title.clone());
+    Dialog::DeletePlaylist { uuid, title }
+}
+
+fn dialog_id() -> egui::Id {
+    egui::Id::new("library-dialog")
+}
+
+/// Opens `dialog`, in place of any open one.
+pub fn open(egui: &egui::Context, dialog: Dialog) {
+    egui.data_mut(|d| d.insert_temp(dialog_id(), Some(dialog)));
+    egui.request_repaint(); // opened after the sidebar drew, it shows next pass
+}
+
+/// Closes the open dialog, unanswered.
+pub fn close(egui: &egui::Context) {
+    egui.data_mut(|d| d.remove::<Option<Dialog>>(dialog_id()));
+}
+
+/// The open dialog, drawn every pass. Answered, it closes; confirmed, its edit is sent.
+pub fn dialog(egui: &egui::Context, ctx: &mut Ctx) {
+    let taken = egui.data_mut(|d| d.remove_temp::<Option<Dialog>>(dialog_id()));
+    let Some(mut open) = taken.flatten() else {
         return;
     };
     // `Some` once answered: the edit if confirmed.
-    let answer = match open {
-        Dialog::NewPlaylist { title, description } => {
+    let answer = match &mut open {
+        Dialog::NewPlaylist {
+            title,
+            description,
+            tracks,
+        } => {
             let ok = playlist_dialog(egui, &tr("New playlist"), title, description);
             ok.map(|ok| {
                 ok.then(|| PlaylistEdit::Create {
                     title: title.trim().to_owned(),
                     description: description.trim().to_owned(),
                     folder: None,
-                    tracks: Vec::new(),
+                    tracks: std::mem::take(tracks),
+                })
+            })
+        }
+        Dialog::EditPlaylist {
+            uuid,
+            title,
+            description,
+        } => {
+            let ok = playlist_dialog(egui, &tr("Edit playlist"), title, description);
+            ok.map(|ok| {
+                ok.then(|| PlaylistEdit::Edit {
+                    uuid: uuid.clone(),
+                    title: title.trim().to_owned(),
+                    description: description.trim().to_owned(),
                 })
             })
         }
@@ -198,11 +294,12 @@ fn dialog(egui: &egui::Context, ctx: &mut Ctx, state: &mut State) {
             confirm(egui, &ask).map(|ok| ok.then_some(PlaylistEdit::Delete { uuid }))
         }
     };
-    if let Some(edit) = answer {
-        state.dialog = None;
-        if let Some(edit) = edit {
-            ctx.send(Action::EditPlaylist(edit));
+    match answer {
+        None => {
+            egui.data_mut(|d| d.insert_temp(dialog_id(), Some(open)));
         }
+        Some(Some(edit)) => ctx.send(Action::EditPlaylist(edit)),
+        Some(None) => {}
     }
 }
 
@@ -244,7 +341,7 @@ fn modal(
     ok: &str,
     body: impl FnOnce(&mut egui::Ui, bool) -> (bool, bool),
 ) -> Option<bool> {
-    let modal = egui::Modal::new(egui::Id::new("library-dialog"));
+    let modal = egui::Modal::new(dialog_id());
     let first = !egui.memory(|m| m.areas().visible_last_frame(&modal.area.layer()));
     let shown = modal.show(egui, |ui| {
         ui.heading(heading);

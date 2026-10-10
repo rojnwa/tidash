@@ -61,7 +61,6 @@ pub enum PageData {
         tracks: Vec<tidal::Track>,
     },
     Artist(tidal::ArtistPage),
-    #[expect(dead_code, reason = "the playlist page does not edit by them yet")]
     Playlist {
         playlist: tidal::Playlist,
         tracks: Vec<tidal::Track>,

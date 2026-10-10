@@ -74,10 +74,6 @@ pub enum Action {
 /// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
 /// for the top level.
 #[derive(Clone, Debug, PartialEq)]
-#[expect(
-    dead_code,
-    reason = "the playlist page's edits (Edit, Add, Remove, Move) are not sent yet"
-)]
 pub enum PlaylistEdit {
     /// The tracks go in once it exists.
     Create {

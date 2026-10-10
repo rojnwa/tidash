@@ -1,7 +1,7 @@
-//! Album page: header (artists link to their pages) with Play, then the track list with disc
-//! headers.
+//! Album page: header (artists link to their pages) with Play and "Add to playlist", then the
+//! track list with disc headers.
 
-use super::{Ctx, header, tracks};
+use super::{Ctx, header, library, tracks};
 use crate::model::{PageData, Route};
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
@@ -38,9 +38,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             details,
             Some(list),
             Some(tidal::Favorite::Album(album.id)),
-            |_, _| {},
+            |ui, ctx| library::add_to_playlist(ui, ctx, list),
         );
-        tracks::show(ui, ctx, "album-tracks", list, true);
+        tracks::show(ui, ctx, "album-tracks", list, true, None);
     });
 }
 
@@ -108,6 +108,7 @@ mod tests {
             "2020",
             "2 tracks · 6:40",
             "Play",
+            "Add to playlist",
             "Disc 2",
         ];
         every_state(super::show, Route::Album(1), data, &texts);
