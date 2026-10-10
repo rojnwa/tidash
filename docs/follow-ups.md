@@ -121,7 +121,7 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Ship Inter's licence (`Inter-LICENSE.txt`, in fastframe-fonts' `fonts/` folder) and the icons'
   Lucide (ISC) and Spotifast (MIT) notices (`crates/app/assets/icons/LICENSE.txt`) in every package
   (M5).
-- With Exclusive on, a window at the 960×600 minimum leaves the player's title column ~31 px: the
+- With Exclusive on, a window at the 960×540 minimum leaves the player's title column ~31 px: the
   right column is sized from its measured controls and the widest short pill ("24/176.4 FLAC ·
   Exclusive") so Play never moves (Rulings 25, 28; this replaced M4's estimated 420 pt); a longer
   "Exclusive" translation could make the left column's floor bind and cut the pill
@@ -148,9 +148,6 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Headers: the exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`); a debug build
   logs egui's PERF WARNING when a header's height changes three frames running; the cover to action
   row gap is 40 against TIDAL's ~48 (check in the acceptance session).
-- The 960×600 minimum window (Ruling 16, `main.rs`) does not fit a 1366×768 display at 125 % scaling
-  (~1093×614 logical, ~576 tall above the taskbar): the player bar sits below the screen's edge. Keep
-  it, or lower the height floor (960×540 keeps the width reasoning); decision pending with the human.
 - `dominant()`'s heaviest bucket and `TextureCache::get`'s nearest size break ties in `HashMap` order,
   so a tie can differ between runs: break them by key, the larger size for `get` (`theme.rs`,
   `images.rs`).
@@ -180,8 +177,7 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
   folder open state across the sidebar switch; ‹ on shelves and the grid geometry; the widget kit at
   idle (`repaint_delay == MAX`); `dominant()` on partly transparent images. `testing::bounds` matches
   only `label()` (`Role::Label` nodes keep their text in `value`); the settings test pairs "Nord.json"
-  with `presets::themes().nth(2)` instead of finding it by filename. The 960×600 minimum is a literal
-  in `main.rs` and the tests (a `theme` constant).
+  with `presets::themes().nth(2)` instead of finding it by filename.
 
 ## Player
 

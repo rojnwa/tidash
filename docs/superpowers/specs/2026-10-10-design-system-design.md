@@ -179,7 +179,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Covers | page header 240, player 52, sidebar 36, queue 40 |
 | Buttons | icon 32 (16 glyph); transport 40 hit box with a bare glyph, Play/Pause 24, Previous/Next 22; heart disc 40; card play/overlay controls 36; pill 40 tall |
 | Radii | artwork 2, row 5, field and stock widget 8, nav row / menu / card hover 12, dialog 20, pills (the badge too) and discs full |
-| Window minimum | 960 × 600 (the sidebar, the side panel and the player bar's columns need it) |
+| Window minimum | 960 × 540, `theme::MIN_WINDOW` (the sidebar, the side panel and the player bar's columns need the width; 540 tall fits a 1366×768 display at 125 %) |
 
 ### 4.5 Motion
 

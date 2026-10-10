@@ -321,7 +321,7 @@ the player bar with bare transport glyphs, a format pill and toggles; the side p
 Themes: Follow system, Dark, Light, fastframe's 8 presets (installed into `<config>/themes/` on the first run) and
 any palette file dropped there, switched live with the band reveal; a broken or vanished file keeps its cached
 colours and Settings says why. "Colour from album art" (on by default) tints the player bar and the top of
-coverless pages from the playing cover. The window's minimum is 960×600. Also a `TIDASH_SCREENSHOT` switch for
+coverless pages from the playing cover. The window's minimum is 960×540. Also a `TIDASH_SCREENSHOT` switch for
 looking at the UI and `TIDASH_THEME` for one run's theme (spec §6.2). `cargo test -p tidash`: 266 passed at the
 docs commit; clippy clean at each task. Budgets (main spec §10): first frame 140–158 ms, 106.6–108.4 MB working
 set on Home (M2: 93 MB; budget 150 MB), 0 idle passes, a 22.5 MB binary (+1.0 MB at Task 4 for the SVG loader,
@@ -336,8 +336,8 @@ spec's text now carries those that change what it says):
   disc, hover scaling it (R8, R26, R27); the artist page a hero with no type line or placeholder slab (R9, R23);
   the album, playlist and mix action row under the cover-and-title block (R22); the format badge a pill with a 1 px
   tier stroke (R10).
-- Layout: everything below the sidebar's collapse button scrolls as one (R17); the window's minimum is 960×600
-  (R16); Settings rows read left to right, a 180 px label column then the controls, stacking when narrow, no
+- Layout: everything below the sidebar's collapse button scrolls as one (R17); the window's minimum is 960×540
+  (R16; first 960×600, lowered by the human to fit a 1366×768 display at 125 %); Settings rows read left to right, a 180 px label column then the controls, stacking when narrow, no
   `egui::Sides` (R30); the top bar is drawn before the page on a sublayer above it, so it is first in Tab order
   while backdrops and the hero paint up behind it (R31).
 - Player bar: the format pill shows the short format, the full text in its hover and AccessKit value (R25); the
@@ -375,10 +375,10 @@ Still owed: the human acceptance session (Step 5), as this checklist, release bu
 - [ ] Play tracks with different covers: the player bar's tint follows, easing; coverless pages (Home, Search) get
   the tint at the top. Turn "Colour from album art" off: both plain.
 - [ ] The player bar while playing: cover, title, artists, the format pill (tier colour), times and seek; Play does
-  not move between tracks or at start/stop. With Exclusive on at the 960×600 minimum, the title column is tight
+  not move between tracks or at start/stop. With Exclusive on at the 960×540 minimum, the title column is tight
   (~31 px, R25/R28): decide whether that is acceptable.
-- [ ] The 960×600 minimum (R16) does not fit a 1366×768 display at 125 % scaling (~576 logical px tall above the
-  taskbar): keep it, or lower the height floor to 540 (`docs/follow-ups.md`).
+- [x] The 960×600 minimum (R16) did not fit a 1366×768 display at 125 % scaling (~576 logical px tall above the
+  taskbar): the human lowered it to 960×540.
 - [ ] Collapse and expand the sidebar: it slides; collapsed, every row navigates and shows its name as a tooltip.
 - [ ] Tab through the top bar, the sidebar, a track list and the player bar: the 2 px focus ring shows on every
   control; Enter and Space activate.

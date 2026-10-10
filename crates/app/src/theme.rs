@@ -176,6 +176,9 @@ impl Tier {
 }
 
 // Sizes in points (spec §4.4).
+/// The window's minimum inner size: the sidebar, the side panel and the player bar's columns
+/// need the width (Ruling 16); 540 tall fits a 1366×768 display at 125 %.
+pub const MIN_WINDOW: [f32; 2] = [960.0, 540.0];
 pub const SIDEBAR: f32 = 240.0;
 pub const SIDEBAR_COLLAPSED: f32 = 78.0;
 /// The sidebar's side margins, and the gap above each of its sections.

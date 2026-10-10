@@ -66,7 +66,7 @@ fn contents(ui: &mut Ui, ctx: &mut Ctx, library: &mut library::State, collapsed:
         ctx.events.push(Event::Settings(new.clone()));
         ctx.send(Action::SetSettings(new));
     }
-    // ponytail: the nav rows scroll away with a long library (TIDAL keeps them); at 960×600
+    // ponytail: the nav rows scroll away with a long library (TIDAL keeps them); at 960×540
     // they leave the tree no room otherwise (Ruling 17). Pin them if the minimum size grows.
     let scroll = UiBuilder::new().id(Id::new("sidebar-scroll"));
     ui.scope_builder(scroll, |ui| {
@@ -249,7 +249,7 @@ mod tests {
         }
     }
 
-    /// The smallest window (960×600) with the player bar: expanded and collapsed, the sidebar
+    /// The smallest window (960×540) with the player bar: expanded and collapsed, the sidebar
     /// scrolls as one, so "New folder" and the last of many playlists come into view.
     #[test]
     fn everything_scrolls_into_view_in_a_small_window() {
@@ -293,7 +293,7 @@ mod tests {
                         egui::Event::PointerMoved(pos2(width / 2.0, 300.0)),
                         wheel.clone(),
                     ],
-                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(960.0, 600.0))),
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, theme::MIN_WINDOW.into())),
                     ..Default::default()
                 };
                 let mut out = egui.run_ui(input, |ui| {
