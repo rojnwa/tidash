@@ -11,6 +11,8 @@ pub struct ClientConfig {
     pub scopes: String,
     pub api_base: Url,
     pub api_v2_base: Url,
+    /// JSON:API, for creating and editing playlists (S5).
+    pub openapi_base: Url,
     /// `x-tidal-client-version` on v2: required there (400 without it), value unchecked.
     pub client_version: String,
     /// Standard query params, as the official desktop client sends them (S4).
@@ -36,6 +38,7 @@ impl Default for ClientConfig {
             scopes: "r_usr+w_usr+w_sub".into(),
             api_base: url("https://api.tidal.com/v1/"),
             api_v2_base: url("https://api.tidal.com/v2/"),
+            openapi_base: url("https://openapi.tidal.com/v2/"),
             client_version: "2026.9.30".into(),
             locale: "en_US".into(),
             device_type: "DESKTOP".into(),

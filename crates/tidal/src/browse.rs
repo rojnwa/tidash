@@ -189,16 +189,26 @@ impl Client {
         self.get(&format!("playlists/{uuid}"), &[]).await
     }
 
-    /// Its tracks in playlist order; videos are skipped.
-    pub async fn playlist_tracks(&self, uuid: &str) -> Result<Vec<Track>> {
+    /// Its tracks in playlist order, and the 0-based position of each in the whole list, as
+    /// the item writes address them (S5). Videos and broken tracks are skipped but counted.
+    // ponytail: positions count the items received; if TIDAL drops unavailable ones from a
+    // page, as it does in favorites (S4), later positions shift. Anchor each page at its offset then.
+    pub async fn playlist_items(&self, uuid: &str) -> Result<(Vec<Track>, Vec<u32>)> {
         let query = [
             ("order", "INDEX".to_owned()),
             ("orderDirection", "ASC".to_owned()),
         ];
-        let items = self
+        let items: Vec<Value> = self
             .paged_all(&format!("playlists/{uuid}/items"), &query, 100)
             .await?;
-        Ok(tracks(items))
+        Ok(items
+            .into_iter()
+            .zip(0..)
+            .filter_map(|(e, i)| match typed(e) {
+                Some(Item::Track(t)) => Some((t, i)),
+                _ => None,
+            })
+            .unzip())
     }
 
     /// The mix and all its tracks, from one request: `pages/mix` embeds them all (S4).

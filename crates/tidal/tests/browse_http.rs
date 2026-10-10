@@ -337,7 +337,7 @@ async fn paged_all_steps_by_limit_through_short_pages() {
             .mount(&server)
             .await;
     }
-    let tracks = setup(&server).playlist_tracks("p").await.unwrap();
+    let (tracks, _) = setup(&server).playlist_items("p").await.unwrap();
     assert_eq!(tracks.len(), 240);
     let ids: Vec<u64> = tracks.iter().map(|t| t.id).collect();
     assert!(ids.is_sorted(), "offset order");
@@ -379,7 +379,7 @@ async fn playlist_and_all_tracks() {
             kind: ImageKind::Playlist
         })
     );
-    let tracks = client.playlist_tracks(uuid).await.unwrap();
+    let (tracks, _) = client.playlist_items(uuid).await.unwrap();
     let ids: Vec<u64> = tracks.iter().map(|t| t.id).collect();
     assert_eq!(ids, [10582679, 558208631, 555115]);
 }

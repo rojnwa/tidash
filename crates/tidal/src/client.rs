@@ -1,16 +1,20 @@
 //! Authenticated HTTP client: v1/v2 requests with the standard params, bearer auth,
 //! single-flight refresh, concurrency cap, retries, and GETs through the disk cache.
 
-use crate::{ClientConfig, DiskCache, Entry, Error, Result, Session, TokenStore, refresh};
-use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
+use crate::{
+    ClientConfig, DiskCache, Entry, Error, Result, Session, TokenStore, new_session_id, refresh,
+};
+use reqwest::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use reqwest::{Method, StatusCode, Url};
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 
 const MAX_IN_FLIGHT: usize = 6;
 const MAX_RATE_RETRIES: u32 = 2;
+const JSON_API: &str = "application/vnd.api+json";
 
 /// Clones share the session, store and cache.
 #[derive(Clone)]
@@ -123,11 +127,15 @@ impl Client {
 
     /// Writes succeed on any 2xx (TIDAL answers 200 with a body or 204); the body is ignored.
     pub async fn post_form(&self, path: &str, form: &[(&str, String)]) -> Result<()> {
-        self.write(Method::POST, path, &[], Some(form), false).await
+        self.write(Method::POST, path, &[], Some(form), false, None)
+            .await
+            .map(drop)
     }
 
     pub async fn delete(&self, path: &str) -> Result<()> {
-        self.write(Method::DELETE, path, &[], None, false).await
+        self.write(Method::DELETE, path, &[], None, false, None)
+            .await
+            .map(drop)
     }
 
     pub async fn put_v2(
@@ -136,7 +144,51 @@ impl Client {
         query: &[(&str, String)],
         form: Option<&[(&str, String)]>,
     ) -> Result<()> {
-        self.write(Method::PUT, path, query, form, true).await
+        self.write(Method::PUT, path, query, form, true, None)
+            .await
+            .map(drop)
+    }
+
+    /// The `ETag` of an uncached v1 GET of `path`, a playlist's write guard (S5). `*` would
+    /// skip TIDAL's check and `""` always fails it, so neither counts.
+    pub(crate) async fn etag(&self, path: &str) -> Result<String> {
+        let url = self.url(path, &[], false)?;
+        let resp = self.request(Method::GET, &url, None, false, None).await?;
+        resp.headers()
+            .get(ETAG)
+            .and_then(|v| v.to_str().ok())
+            .filter(|e| !matches!(*e, "" | "*" | "\"\""))
+            .map(str::to_owned)
+            .ok_or_else(|| Error::Status {
+                status: resp.status().as_u16(),
+                sub_status: None,
+                message: "no playlist ETag".into(),
+            })
+    }
+
+    /// An openapi JSON:API request with `countryCode` only and one `Idempotency-Key` for all
+    /// its tries. An empty answer (204) is `Value::Null`.
+    pub(crate) async fn json_api(&self, method: Method, path: &str, body: Value) -> Result<Value> {
+        let mut url = on_base(&self.config().openapi_base, path)?;
+        url.query_pairs_mut()
+            .append_pair("countryCode", &self.session().country_code);
+        let (key, body) = (new_session_id(), body.to_string());
+        let resp = self
+            .send(|_| {
+                Ok(self
+                    .http()
+                    .request(method.clone(), url.clone())
+                    .header(ACCEPT, JSON_API)
+                    .header(CONTENT_TYPE, JSON_API)
+                    .header("Idempotency-Key", &key)
+                    .body(body.clone()))
+            })
+            .await?;
+        let bytes = resp.bytes().await?;
+        if bytes.is_empty() {
+            return Ok(Value::Null);
+        }
+        Ok(serde_json::from_slice(&bytes)?)
     }
 
     /// A GET through the cache (if `use_cache`), keyed by user and full URL (never the token).
@@ -194,28 +246,26 @@ impl Client {
         Ok(value)
     }
 
-    async fn write(
+    /// A v1 or v2 write; `etag` goes out as `If-None-Match` (a playlist item write's guard).
+    /// The response, for the few writes whose body counts.
+    pub(crate) async fn write(
         &self,
         method: Method,
         path: &str,
         query: &[(&str, String)],
         form: Option<&[(&str, String)]>,
         v2: bool,
-    ) -> Result<()> {
+        etag: Option<&str>,
+    ) -> Result<reqwest::Response> {
         let url = self.url(path, query, v2)?;
-        self.request(method, &url, form, v2, None).await.map(drop)
+        self.request(method, &url, form, v2, etag).await
     }
 
-    /// `path` (its own query kept) joined onto the v1 or v2 base, refused off the base's
-    /// origin, then `query` and the standard params.
+    /// `path` joined onto the v1 or v2 base, then `query` and the standard params.
     fn url(&self, path: &str, query: &[(&str, String)], v2: bool) -> Result<Url> {
         let cfg = self.config();
         let base = if v2 { &cfg.api_v2_base } else { &cfg.api_base };
-        let mut url = base
-            .join(path)
-            .ok()
-            .filter(|u| u.origin() == base.origin())
-            .ok_or_else(invalid_path)?;
+        let mut url = on_base(base, path)?;
         {
             let mut q = url.query_pairs_mut();
             q.extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())))
@@ -346,12 +396,16 @@ impl Client {
     }
 }
 
-fn invalid_path() -> Error {
-    Error::Status {
-        status: 0,
-        sub_status: None,
-        message: "invalid API path".into(),
-    }
+/// `path` (its own query kept) joined onto `base`, refused off the base's origin.
+fn on_base(base: &Url, path: &str) -> Result<Url> {
+    base.join(path)
+        .ok()
+        .filter(|u| u.origin() == base.origin())
+        .ok_or_else(|| Error::Status {
+            status: 0,
+            sub_status: None,
+            message: "invalid API path".into(),
+        })
 }
 
 /// `subStatus` may arrive as an integer or a whole float (4005.0).

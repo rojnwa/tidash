@@ -1,5 +1,5 @@
-//! TIDAL service client: auth, catalog, browse pages, collection, lyrics and credits, and
-//! playback manifests.
+//! TIDAL service client: auth, catalog, browse pages, collection, playlist and folder editing,
+//! lyrics and credits, and playback manifests.
 
 mod auth;
 mod browse;
@@ -8,6 +8,7 @@ mod catalog;
 mod client;
 mod collection;
 mod config;
+mod edit;
 mod error;
 mod events;
 mod image;
@@ -22,6 +23,7 @@ pub use catalog::{Album, AlbumRef, Artist, Mix, Mixes, Playlist, SearchResults, 
 pub use client::Client;
 pub use collection::{Favorite, FavoriteIds};
 pub use config::ClientConfig;
+pub use edit::FolderItem;
 pub use error::{Error, Result};
 pub use events::{PlaybackReport, new_session_id};
 pub use image::{Image, ImageKind};
