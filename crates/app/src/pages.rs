@@ -24,11 +24,12 @@ pub async fn fetch(c: &Client, route: &Route) -> tidal::Result<PageData> {
         }
         Route::Artist(id) => PageData::Artist(c.artist_page(*id).await?),
         Route::Playlist(uuid) => {
-            // Task 7 keeps the positions and the ETag for editing.
             let (playlist, items) = tokio::try_join!(c.playlist(uuid), c.playlist_items(uuid))?;
             PageData::Playlist {
                 playlist,
                 tracks: items.tracks,
+                positions: items.positions,
+                etag: items.etag,
             }
         }
         Route::Mix(id) => {
@@ -105,7 +106,7 @@ pub async fn set_favorite(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::model::Model;
     use std::sync::mpsc::channel;
@@ -121,18 +122,19 @@ mod tests {
     }
 
     /// An empty API cache of its own.
-    fn cache(name: &str) -> Arc<DiskCache> {
+    pub(crate) fn cache(name: &str) -> Arc<DiskCache> {
         let dir = std::env::temp_dir().join("tidash-pages").join(name);
         let _ = std::fs::remove_dir_all(&dir);
         Arc::new(DiskCache::open(dir, 1 << 20, "json").expect("a cache"))
     }
 
-    /// A client of the server at `base`, on `cache`.
-    fn client(base: &str, cache: &Arc<DiskCache>) -> Arc<Client> {
+    /// A client of user 1 on the server at `base`, on `cache`.
+    pub(crate) fn client(base: &str, cache: &Arc<DiskCache>) -> Arc<Client> {
         let url = |p: &str| format!("{base}/{p}").parse().expect("a URL");
         let cfg = ClientConfig {
             api_base: url("v1/"),
             api_v2_base: url("v2/"),
+            openapi_base: url("openapi/v2/"),
             auth_base: url("v1/"),
             ..ClientConfig::default()
         };
@@ -167,7 +169,7 @@ mod tests {
     }
 
     /// The events `task` sends, and whether it found the session dead.
-    async fn events_of<F: Future<Output = ()>>(
+    pub(crate) async fn events_of<F: Future<Output = ()>>(
         task: impl FnOnce(Arc<Emitter>, UnboundedSender<Msg>) -> F,
     ) -> (Vec<Event>, bool) {
         let (tx, events) = channel();

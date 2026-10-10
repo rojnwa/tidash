@@ -177,6 +177,7 @@ msgstr ""
 
 #: src/ui/search.rs
 #: src/ui/collection.rs
+#: src/ui/library.rs
 msgid "Playlists"
 msgstr ""
 
@@ -444,3 +445,81 @@ msgstr ""
 #: src/ui/artist.rs
 msgid "Artist radio"
 msgstr ""
+
+#: src/ui/library.rs
+msgid "New playlist"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "New folder"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Rename"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Delete"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Move its playlists out first"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Move to folder"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Top level"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Rename folder"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Delete the folder {name}?"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Delete the playlist {title}? This cannot be undone."
+msgstr ""
+
+#: src/ui/library.rs
+msgid "OK"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Cancel"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Title"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Description"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Name"
+msgstr ""
+
+#: src/library.rs
+msgid "This playlist was changed elsewhere and has been reloaded. Try again."
+msgstr ""
+
+#: src/library.rs
+msgid "Could not update your playlists"
+msgstr ""
+
+#: src/library.rs
+msgid "Already in this playlist"
+msgstr ""
+
+#: src/library.rs
+msgid "Added {n} track to {playlist}"
+msgid_plural "Added {n} tracks to {playlist}"
+msgstr[0] ""
+msgstr[1] ""

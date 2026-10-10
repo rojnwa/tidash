@@ -63,6 +63,26 @@ pub fn at(route: Route) -> Model {
     m
 }
 
+/// The middle of the node labelled `label` in `out`, where a pointer would click it.
+pub fn middle(out: &egui::FullOutput, label: &str) -> Pos2 {
+    let tree = out.platform_output.accesskit_update.as_ref();
+    let nodes = &tree.expect("AccessKit is on").nodes;
+    let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
+    let bounds = node.and_then(|(_, n)| n.bounds());
+    let b = bounds.unwrap_or_else(|| panic!("no {label:?} placed"));
+    Pos2::new((b.x0 + b.x1) as f32 / 2.0, (b.y0 + b.y1) as f32 / 2.0)
+}
+
+/// A secondary (right) button press at `at` if `pressed`, else its release.
+pub fn right(at: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Secondary,
+        pressed,
+        modifiers: Default::default(),
+    }
+}
+
 /// One pass of `view` drawing `model`'s route, fed `input`: the events it gave, and its
 /// output.
 pub fn pass(
@@ -71,6 +91,17 @@ pub fn pass(
     model: &Model,
     view: View,
     input: Vec<egui::Event>,
+) -> (Vec<Event>, egui::FullOutput) {
+    pass_with(egui, tx, model, input, |ui, c| view(ui, c, model.route()))
+}
+
+/// One pass of `draw`, fed `input`: the events it gave, and its output.
+pub fn pass_with(
+    egui: &egui::Context,
+    tx: &UnboundedSender<Action>,
+    model: &Model,
+    input: Vec<egui::Event>,
+    mut draw: impl FnMut(&mut egui::Ui, &mut Ctx<'_>),
 ) -> (Vec<Event>, egui::FullOutput) {
     let mut images = TextureCache::new(1 << 20);
     let mut events = Vec::new();
@@ -86,7 +117,7 @@ pub fn pass(
             images: &mut images,
             events: &mut events,
         };
-        view(ui, &mut c, model.route());
+        draw(ui, &mut c);
     });
     out.textures_delta.clear(); // nothing renders them
     (events, out)

@@ -7,6 +7,7 @@ mod card;
 mod collection;
 mod credits;
 mod header;
+mod library;
 mod login;
 mod lyrics;
 mod mix;
@@ -46,6 +47,7 @@ pub struct UiState {
     /// The right-hand panel's view, if it shows; the player bar picks it.
     pub side: Option<Side>,
     settings: settings::State,
+    library: library::State,
 }
 
 impl Default for UiState {
@@ -59,16 +61,19 @@ impl Default for UiState {
             scrolling: Default::default(),
             side: None,
             settings: Default::default(),
+            library: Default::default(),
         }
     }
 }
 
 impl UiState {
     /// What the UI keeps of a session ends with it (`LoggedOut`, `SessionExpired`): the next
-    /// account finds the search box empty, with no undo history to bring the query back.
+    /// account finds the search box empty, with no undo history to bring the query back, and
+    /// the library tree unasked.
     pub fn apply(&mut self, ctx: &egui::Context, ev: &Event) {
         if matches!(ev, Event::LoggedOut | Event::SessionExpired) {
             self.search = Default::default();
+            self.library = Default::default();
             let id = search::query_id();
             ctx.data_mut(|d| d.remove::<egui::text_edit::TextEditState>(id));
         }
@@ -372,7 +377,13 @@ pub fn draw(
             &mut state.images,
             &mut state.side,
         );
-        sidebar::show(ui, model, &mut events);
+        let mut ctx = Ctx {
+            model,
+            tx,
+            images: &mut state.images,
+            events: &mut events,
+        };
+        sidebar::show(ui, &mut ctx, &mut state.library);
         if let Some(side) = state.side {
             let at = state.player.as_ref();
             let at = at.map_or(Duration::ZERO, player::Player::position);
@@ -418,7 +429,7 @@ pub fn draw(
 }
 
 #[cfg(test)]
-mod testing;
+pub(crate) mod testing;
 
 #[cfg(test)]
 mod tests {

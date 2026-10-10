@@ -7,6 +7,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
     let Some(PageData::Playlist {
         playlist: p,
         tracks: list,
+        ..
     }) = super::page_data(ui, ctx, route)
     else {
         return;
@@ -46,6 +47,8 @@ mod tests {
         PageData::Playlist {
             playlist: playlist(),
             tracks: list,
+            positions: vec![0, 1, 2],
+            etag: None,
         }
     }
 
@@ -72,6 +75,8 @@ mod tests {
                     ..playlist()
                 },
                 tracks: tracks(1),
+                positions: vec![0],
+                etag: None,
             };
             model.apply(Event::Page { route, data });
             let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);

@@ -1,9 +1,11 @@
-//! Left navigation: back and forward, then the top-level pages.
+//! Left navigation: back and forward, the top-level pages, then the playlists.
 
+use super::{Ctx, library};
 use crate::i18n::tr;
-use crate::model::{CollectionTab, Event, Model, Route};
+use crate::model::{CollectionTab, Event, Route};
 
-pub fn show(ui: &mut egui::Ui, model: &Model, events: &mut Vec<Event>) {
+pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, library: &mut library::State) {
+    let model = ctx.model;
     egui::Panel::left("sidebar")
         .resizable(false)
         .show(ui, |ui| {
@@ -13,14 +15,14 @@ pub fn show(ui: &mut egui::Ui, model: &Model, events: &mut Vec<Event>) {
                     .add_enabled(model.at > 0, egui::Button::new(tr("Back")))
                     .clicked()
                 {
-                    events.push(Event::Back);
+                    ctx.events.push(Event::Back);
                 }
                 let ahead = model.at + 1 < model.history.len();
                 if ui
                     .add_enabled(ahead, egui::Button::new(tr("Forward")))
                     .clicked()
                 {
-                    events.push(Event::Forward);
+                    ctx.events.push(Event::Forward);
                 }
             });
             ui.add_space(8.0);
@@ -38,8 +40,10 @@ pub fn show(ui: &mut egui::Ui, model: &Model, events: &mut Vec<Event>) {
                 (Route::Settings, *route == Route::Settings, tr("Settings")),
             ] {
                 if ui.selectable_label(selected, label).clicked() {
-                    events.push(Event::Navigate(to));
+                    ctx.go(to);
                 }
             }
+            ui.add_space(16.0);
+            library::show(ui, ctx, library);
         });
 }

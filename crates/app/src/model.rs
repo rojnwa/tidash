@@ -2,7 +2,7 @@
 //! re-exported here.
 
 use crate::i18n::tr;
-pub use crate::messages::{Action, Event, Redirect};
+pub use crate::messages::{Action, Event, PlaylistEdit, Redirect};
 use crate::queue::Repeat;
 use crate::settings::Settings;
 use std::collections::{HashMap, HashSet};
@@ -61,9 +61,14 @@ pub enum PageData {
         tracks: Vec<tidal::Track>,
     },
     Artist(tidal::ArtistPage),
+    #[expect(dead_code, reason = "the playlist page does not edit by them yet")]
     Playlist {
         playlist: tidal::Playlist,
         tracks: Vec<tidal::Track>,
+        /// Each track's position in the playlist, as edits address it.
+        positions: Vec<u32>,
+        /// The guard of edits by position; without it they are not offered.
+        etag: Option<String>,
     },
     Mix {
         mix: tidal::Mix,
@@ -151,6 +156,10 @@ pub struct Model {
     pub settings: Settings,
     /// The output devices' names, as last listed (`Action::ListDevices`).
     pub devices: Vec<String>,
+    /// The library tree: each listed folder's items, by folder id (`"root"`: the top level).
+    pub folders: HashMap<String, Vec<tidal::FolderItem>>,
+    /// The playlists the user made, last updated first.
+    pub own_playlists: Vec<tidal::Playlist>,
 }
 
 impl Default for Model {
@@ -177,6 +186,8 @@ impl Default for Model {
             error_id: 0,
             settings: Settings::default(),
             devices: Vec::new(),
+            folders: HashMap::new(),
+            own_playlists: Vec::new(),
         }
     }
 }
@@ -197,6 +208,10 @@ impl Model {
                 | Event::SearchResults { .. }
                 | Event::Lyrics(..)
                 | Event::Credits(..)
+                | Event::Folder { .. }
+                | Event::OwnPlaylists(_)
+                | Event::PlaylistChanged(_)
+                | Event::PlaylistDeleted(_)
         );
         if reply && !self.logged_in {
             return;
@@ -290,6 +305,29 @@ impl Model {
             }
             Event::Lyrics(id, load) => fill(&mut self.lyrics, id, load),
             Event::Credits(id, load) => fill(&mut self.credits, id, load),
+            Event::Folder { id, items } => {
+                self.folders.insert(id, items);
+            }
+            Event::OwnPlaylists(p) => self.own_playlists = p,
+            Event::PlaylistChanged(uuid) => {
+                let r = Route::Playlist(uuid);
+                if let Some(slot) = self.pages.get_mut(&r) {
+                    slot.fetched = None;
+                }
+                self.arrived |= *self.route() == r;
+            }
+            Event::PlaylistDeleted(uuid) => {
+                let r = Route::Playlist(uuid);
+                if *self.route() == r {
+                    if self.back() {
+                        self.history.remove(self.at + 1); // no Forward to it
+                    } else {
+                        self.history[self.at] = Route::Home;
+                        self.touch();
+                    }
+                }
+                self.pages.remove(&r);
+            }
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -792,5 +830,91 @@ mod tests {
         m.apply(Event::DismissError(a));
         m.apply(Event::DismissError(a)); // gone already: nothing else goes
         assert_eq!(errors(&m), ["b", "c"]);
+    }
+
+    fn folder(id: &str) -> tidal::FolderItem {
+        tidal::FolderItem::Folder {
+            id: id.into(),
+            name: format!("Folder {id}"),
+            count: 0,
+        }
+    }
+
+    /// The tree's listings and the own playlists land in the model; logout empties them, and
+    /// no late reply refills them.
+    #[test]
+    fn folder_and_own_playlist_events_fill_the_model() {
+        let fill = |m: &mut Model| {
+            let items = vec![folder("f")];
+            m.apply(Event::Folder {
+                id: "root".into(),
+                items,
+            });
+            let items = vec![tidal::FolderItem::Playlist(crate::ui::testing::playlist())];
+            m.apply(Event::Folder {
+                id: "f".into(),
+                items,
+            });
+            m.apply(Event::OwnPlaylists(vec![crate::ui::testing::playlist()]));
+        };
+        let mut m = logged_in();
+        fill(&mut m);
+        assert_eq!(m.folders["root"], [folder("f")]);
+        assert_eq!(m.folders["f"].len(), 1);
+        assert_eq!(m.own_playlists[0].uuid, "p-1");
+        for out in [Event::LoggedOut, Event::SessionExpired] {
+            let mut m = logged_in();
+            fill(&mut m);
+            m.apply(out);
+            assert!(m.folders.is_empty() && m.own_playlists.is_empty());
+            fill(&mut m);
+            assert!(
+                m.folders.is_empty() && m.own_playlists.is_empty(),
+                "after logout"
+            );
+        }
+    }
+
+    /// A changed playlist's page is stale; the one shown is asked for again at once.
+    #[test]
+    fn playlist_changed_reloads_the_current_page() {
+        let now = Instant::now();
+        let (shown, other) = (Route::Playlist("a".into()), Route::Playlist("b".into()));
+        let mut m = logged_in();
+        loaded(&mut m, other.clone());
+        m.navigate(shown.clone());
+        loaded(&mut m, shown.clone());
+        assert_eq!(m.open_current(now), None, "loaded");
+        m.apply(Event::PlaylistChanged("b".into()));
+        assert_eq!(m.open_current(now), None, "not shown");
+        assert!(m.needs_load(&other, now), "but stale");
+        m.apply(Event::PlaylistChanged("a".into()));
+        assert_eq!(m.open_current(now), Some(shown));
+    }
+
+    /// A deleted playlist's page goes. Shown, the view goes back, and Forward does not lead to
+    /// it again; with nothing to go back to, Home takes its place.
+    #[test]
+    fn deleting_the_current_playlist_goes_back() {
+        let p = Route::Playlist("p".into());
+        let mut m = logged_in();
+        m.navigate(Route::Album(1));
+        loaded(&mut m, Route::Playlist("q".into()));
+        m.apply(Event::PlaylistDeleted("q".into()));
+        assert_eq!(m.route(), &Route::Album(1), "not shown: the view stays");
+        assert!(!m.pages.contains_key(&Route::Playlist("q".into())));
+        m.navigate(p.clone());
+        loaded(&mut m, p.clone());
+        m.apply(Event::PlaylistDeleted("p".into()));
+        assert_eq!(m.route(), &Route::Album(1));
+        assert!(!m.pages.contains_key(&p));
+        assert!(!m.forward(), "the deleted page is out of the history");
+        m.history = vec![p.clone()];
+        m.at = 0;
+        loaded(&mut m, p.clone());
+        m.apply(Event::PlaylistDeleted("p".into()));
+        assert_eq!((m.history.as_slice(), m.at), ([Route::Home].as_slice(), 0));
+        assert!(!m.pages.contains_key(&p));
+        assert_eq!(m.open_current(Instant::now()), Some(Route::Home));
     }
 }

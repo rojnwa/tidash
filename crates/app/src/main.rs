@@ -11,6 +11,7 @@
 mod backend;
 mod i18n;
 mod images;
+mod library;
 mod messages;
 mod model;
 mod now_playing;

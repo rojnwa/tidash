@@ -65,6 +65,68 @@ pub enum Action {
     LoadLyrics(u64),
     /// Fetches this track's credits (`Event::Credits`), for the side panel.
     LoadCredits(u64),
+    /// Makes the edit, then reloads the library tree and the own playlists.
+    EditPlaylist(PlaylistEdit),
+    /// Lists this folder for the library tree (`Event::Folder`).
+    LoadFolder(String),
+}
+
+/// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
+/// for the top level.
+#[derive(Clone, Debug, PartialEq)]
+#[expect(
+    dead_code,
+    reason = "the playlist page's edits (Edit, Add, Remove, Move) are not sent yet"
+)]
+pub enum PlaylistEdit {
+    /// The tracks go in once it exists.
+    Create {
+        title: String,
+        description: String,
+        folder: Option<String>,
+        tracks: Vec<u64>,
+    },
+    Edit {
+        uuid: String,
+        title: String,
+        description: String,
+    },
+    Delete {
+        uuid: String,
+    },
+    /// Tracks already in are skipped.
+    Add {
+        uuid: String,
+        tracks: Vec<u64>,
+    },
+    /// `positions` and `etag` come from one listing (`PageData::Playlist`).
+    Remove {
+        uuid: String,
+        etag: String,
+        positions: Vec<u32>,
+    },
+    /// `to` is a slot, `0..=len`, counted before the move; `etag` as for `Remove`.
+    Move {
+        uuid: String,
+        etag: String,
+        from: u32,
+        to: u32,
+    },
+    CreateFolder {
+        name: String,
+        parent: Option<String>,
+    },
+    RenameFolder {
+        id: String,
+        name: String,
+    },
+    DeleteFolder {
+        id: String,
+    },
+    MoveToFolder {
+        uuid: String,
+        folder: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -132,6 +194,17 @@ pub enum Event {
     Lyrics(u64, Load<Option<tidal::Lyrics>>),
     /// This track's credits, as `Lyrics`.
     Credits(u64, Load<Vec<tidal::Credit>>),
+    /// Folder `id`'s items (`"root"`: the top level), for the library tree.
+    Folder {
+        id: String,
+        items: Vec<tidal::FolderItem>,
+    },
+    /// The playlists the user made, last updated first.
+    OwnPlaylists(Vec<tidal::Playlist>),
+    /// This playlist changed: its page is fetched again (now, if shown).
+    PlaylistChanged(String),
+    /// This playlist is gone: so is its page, which, if shown, goes back.
+    PlaylistDeleted(String),
     Error(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),

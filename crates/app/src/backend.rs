@@ -5,6 +5,7 @@ use crate::images::Artwork;
 use crate::model::{Action, Event, Load, Redirect};
 use crate::playback::{Msg, Playback};
 use crate::settings::Settings;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, OnceLock};
@@ -160,6 +161,10 @@ struct Backend {
     // ponytail: a cache write already inside its `spawn_blocking` still lands (sub-ms window);
     // have `DiskCache::clear` take the write lock and refuse later writes if that ever matters.
     tasks: JoinSet<()>,
+    /// The folders the library tree listed this session (`Action::LoadFolder`): an edit
+    /// reloads them all, as the folder a playlist left or a renamed folder's parent is any of
+    /// them.
+    folders: HashSet<String>,
     /// The saved API bodies; `None` without a cache dir.
     api_cache: Option<Arc<DiskCache>>,
     artwork: Artwork,
@@ -196,6 +201,7 @@ impl Backend {
             search_task: None,
             client: None,
             tasks: JoinSet::new(),
+            folders: HashSet::new(),
             api_cache,
             artwork: Artwork::new(None),
             playback: None,
@@ -213,6 +219,7 @@ impl Backend {
         let mut tick = tokio::time::interval(Duration::from_secs(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         self.load_favorites(); // the stored session's
+        self.load_library();
         loop {
             let playing = self.playback.as_ref().is_some_and(Playback::is_playing);
             tokio::select! {
@@ -259,6 +266,7 @@ impl Backend {
         match Client::new(self.cfg.clone(), session, self.store.clone(), cache) {
             Ok(c) => {
                 self.client = Some(Arc::new(c));
+                self.folders.clear();
                 self.emit.send(Event::LoggedIn(user));
             }
             Err(e) => self
@@ -293,6 +301,13 @@ impl Backend {
                 Err(e) => log::warn!("favorite ids: {e}"),
             }
         });
+    }
+
+    /// The library tree's top level and the own playlists.
+    fn load_library(&mut self) {
+        let Some(c) = self.client.clone() else { return };
+        let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+        self.spawn(crate::library::reload(c, Vec::new(), emit, msgs));
     }
 
     /// `dead`'s session is gone (see `session_expired`): back to the login screen, playback
@@ -355,6 +370,20 @@ impl Backend {
                 if let Some(c) = self.client.clone() {
                     let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
                     self.spawn(crate::pages::set_favorite(c, item, on, emit, msgs));
+                }
+            }
+            Action::EditPlaylist(edit) => {
+                if let Some(c) = self.client.clone() {
+                    let folders = self.folders.iter().cloned().collect();
+                    let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+                    self.spawn(crate::library::edit(c, edit, folders, emit, msgs));
+                }
+            }
+            Action::LoadFolder(id) => {
+                if let Some(c) = self.client.clone() {
+                    self.folders.insert(id.clone());
+                    let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+                    self.spawn(crate::library::load_folder(c, id, emit, msgs));
                 }
             }
             Action::SetSettings(settings) => self.set_settings(settings).await,
@@ -528,6 +557,7 @@ impl Backend {
                 self.pkce = None;
                 self.log_in(session);
                 self.load_favorites();
+                self.load_library();
             }
             Err(e) if e.client_refused() => self.emit.send(client_refused()),
             Err(e) => self
