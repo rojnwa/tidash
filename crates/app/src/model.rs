@@ -92,6 +92,14 @@ pub struct QueueSnapshot {
     pub repeat: Repeat,
 }
 
+/// A fetch for the side panel: the current track's lyrics or credits.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Load<T> {
+    Loading,
+    Ready(T),
+    Failed,
+}
+
 /// What is heard and how: the stream's codec ("FLAC"), the track's format, and the output.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutputInfo {
@@ -132,6 +140,9 @@ pub struct Model {
     pub latest_query: Option<String>,
     pub queue: QueueSnapshot,
     pub playback: PlaybackSnapshot,
+    /// The lyrics and the credits of the track they were last asked for, the current one.
+    pub lyrics: Option<(u64, Load<Option<tidal::Lyrics>>)>,
+    pub credits: Option<(u64, Load<Vec<tidal::Credit>>)>,
     /// Shown until dismissed by id, so dismissals in one frame each find theirs.
     pub errors: Vec<(u64, String)>,
     /// The last id given to an error; kept across logout, as the errors are.
@@ -160,6 +171,8 @@ impl Default for Model {
             latest_query: None,
             queue: QueueSnapshot::default(),
             playback: PlaybackSnapshot::default(),
+            lyrics: None,
+            credits: None,
             errors: Vec::new(),
             error_id: 0,
             settings: Settings::default(),
@@ -182,6 +195,8 @@ impl Model {
                 | Event::Offline(_)
                 | Event::SearchStarted(_)
                 | Event::SearchResults { .. }
+                | Event::Lyrics(..)
+                | Event::Credits(..)
         );
         if reply && !self.logged_in {
             return;
@@ -273,6 +288,8 @@ impl Model {
                 self.favorites.set(&item, !on);
                 self.pending_favorites.remove(&item);
             }
+            Event::Lyrics(id, load) => fill(&mut self.lyrics, id, load),
+            Event::Credits(id, load) => fill(&mut self.credits, id, load),
             Event::Queue(q) => self.queue = q,
             Event::Playback(p) => self.playback = p,
             Event::Image { .. } | Event::ImageFailed { .. } => {} // the UI's texture cache
@@ -382,6 +399,13 @@ impl Model {
             let Some(r) = oldest else { break };
             self.pages.remove(&r);
         }
+    }
+}
+
+/// Track `id`'s `load` into `slot`: a `Loading` takes it; a reply lands only on its own track's.
+fn fill<T>(slot: &mut Option<(u64, Load<T>)>, id: u64, load: Load<T>) {
+    if matches!(load, Load::Loading) || slot.as_ref().is_some_and(|(at, _)| *at == id) {
+        *slot = Some((id, load));
     }
 }
 
@@ -709,6 +733,43 @@ mod tests {
         assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
         m.apply(res("a"));
         assert_eq!(m.search.as_ref().map(|s| s.0.as_str()), Some("b"));
+    }
+
+    /// A `Loading` takes the slot; a reply lands only on its own track's. Logout empties the
+    /// slots, and no reply refills them after.
+    #[test]
+    fn stale_lyrics_reply_is_dropped() {
+        let mut m = logged_in();
+        let none = |id| Event::Lyrics(id, Load::Ready(None));
+        m.apply(Event::Lyrics(1, Load::Loading));
+        m.apply(Event::Lyrics(2, Load::Loading));
+        m.apply(none(1));
+        assert_eq!(
+            m.lyrics,
+            Some((2, Load::Loading)),
+            "track 1's reply is stale"
+        );
+        m.apply(none(2));
+        assert_eq!(m.lyrics, Some((2, Load::Ready(None))));
+        m.apply(Event::Credits(2, Load::Loading));
+        m.apply(Event::Credits(1, Load::Failed));
+        assert_eq!(m.credits, Some((2, Load::Loading)));
+        for out in [Event::LoggedOut, Event::SessionExpired] {
+            let mut m = logged_in();
+            m.apply(Event::Lyrics(2, Load::Loading));
+            m.apply(Event::Credits(2, Load::Loading));
+            m.apply(out);
+            assert_eq!((&m.lyrics, &m.credits), (&None, &None));
+            for ev in [
+                Event::Lyrics(2, Load::Loading),
+                none(2),
+                Event::Credits(2, Load::Loading),
+                Event::Credits(2, Load::Failed),
+            ] {
+                m.apply(ev);
+            }
+            assert_eq!((&m.lyrics, &m.credits), (&None, &None), "after logout");
+        }
     }
 
     #[test]

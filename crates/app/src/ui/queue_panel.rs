@@ -20,58 +20,53 @@ pub struct QueueDrag {
     pub track_id: u64,
 }
 
+/// Draws into `ui`, the side panel's.
 pub fn show(ui: &mut egui::Ui, model: &Model, tx: &UnboundedSender<Action>) {
     let q = &model.queue;
     let send = |a: Action| {
         let _ = tx.send(a);
     };
-    egui::Panel::right("queue")
-        .resizable(true)
-        .default_size(320.0)
-        .size_range(260.0..=560.0)
+    ui.horizontal(|ui| {
+        ui.heading(tr("Queue"));
+        if !q.tracks.is_empty() {
+            ui.weak(tracks::summary(&q.tracks));
+        }
+    });
+    if q.tracks.is_empty() {
+        ui.label(tr("The queue is empty"));
+        return;
+    }
+    ScrollArea::vertical()
+        .id_salt("queue")
+        .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading(tr("Queue"));
-                if !q.tracks.is_empty() {
-                    ui.weak(tracks::summary(&q.tracks));
+            let top = ui.cursor().top();
+            rows::virtual_rows(ui, q.tracks.len(), ROW_H, |ui, i| {
+                let t = &q.tracks[i];
+                let size = vec2(ui.available_width(), ROW_H);
+                let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                let num = (i + 1).to_string();
+                tracks::paint_row(ui, &row, num, t, false, q.current == Some(i));
+                if row.drag_started_by(PointerButton::Primary) {
+                    let drag = QueueDrag {
+                        from: i,
+                        track_id: t.id,
+                    };
+                    DragAndDrop::set_payload(ui.ctx(), drag);
                 }
-            });
-            if q.tracks.is_empty() {
-                ui.label(tr("The queue is empty"));
-                return;
-            }
-            ScrollArea::vertical()
-                .id_salt("queue")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let top = ui.cursor().top();
-                    rows::virtual_rows(ui, q.tracks.len(), ROW_H, |ui, i| {
-                        let t = &q.tracks[i];
-                        let size = vec2(ui.available_width(), ROW_H);
-                        let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
-                        let num = (i + 1).to_string();
-                        tracks::paint_row(ui, &row, num, t, false, q.current == Some(i));
-                        if row.drag_started_by(PointerButton::Primary) {
-                            let drag = QueueDrag {
-                                from: i,
-                                track_id: t.id,
-                            };
-                            DragAndDrop::set_payload(ui.ctx(), drag);
-                        }
-                        if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
-                            send(Action::PlayQueueIndex(i));
-                        }
-                        row.context_menu(|ui| {
-                            if ui.button(tr("Remove")).clicked() {
-                                send(Action::RemoveFromQueue(i));
-                                ui.close();
-                            }
-                        });
-                    });
-                    if let Some((from, to)) = dragging(ui, &q.tracks, top) {
-                        send(Action::MoveInQueue { from, to });
+                if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
+                    send(Action::PlayQueueIndex(i));
+                }
+                row.context_menu(|ui| {
+                    if ui.button(tr("Remove")).clicked() {
+                        send(Action::RemoveFromQueue(i));
+                        ui.close();
                     }
                 });
+            });
+            if let Some((from, to)) = dragging(ui, &q.tracks, top) {
+                send(Action::MoveInQueue { from, to });
+            }
         });
 }
 
@@ -135,7 +130,7 @@ fn drop_move(tracks: &[tidal::Track], drag: &QueueDrag, slot: usize) -> Option<(
 mod tests {
     use super::*;
     use crate::model::Route;
-    use crate::ui::{UiState, draw, testing};
+    use crate::ui::{Side, UiState, draw, testing};
     use egui::{PointerButton, Pos2, pos2};
 
     #[test]
@@ -181,7 +176,7 @@ mod tests {
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState {
-            queue_open: true,
+            side: Some(Side::Queue),
             ..Default::default()
         };
         let mut model = testing::at(Route::Home);

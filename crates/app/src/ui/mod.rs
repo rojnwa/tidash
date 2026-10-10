@@ -5,8 +5,10 @@ mod artist;
 mod browse;
 mod card;
 mod collection;
+mod credits;
 mod header;
 mod login;
+mod lyrics;
 mod mix;
 mod player_bar;
 mod playlist;
@@ -20,9 +22,18 @@ mod tracks;
 
 use crate::i18n::tr;
 use crate::images::TextureCache;
-use crate::model::{Action, Event, Model, PageData, Route};
+use crate::model::{Action, Event, Load, Model, PageData, Route};
 use std::borrow::Cow;
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
+
+/// What the right-hand panel shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Queue,
+    Lyrics,
+    Credits,
+}
 
 pub struct UiState {
     login: login::State,
@@ -32,8 +43,8 @@ pub struct UiState {
     /// Read only for the position; `None` until the output opened, or without a device.
     pub player: Option<player::Player>,
     scrolling: fastframe_scroll::Scrolling,
-    /// The queue panel shows; the player bar toggles it.
-    pub queue_open: bool,
+    /// The right-hand panel's view, if it shows; the player bar picks it.
+    pub side: Option<Side>,
     settings: settings::State,
 }
 
@@ -46,7 +57,7 @@ impl Default for UiState {
             images: TextureCache::new(64 << 20),
             player: None,
             scrolling: Default::default(),
-            queue_open: false,
+            side: None,
             settings: Default::default(),
         }
     }
@@ -166,6 +177,45 @@ fn page_data<'m>(ui: &mut egui::Ui, ctx: &mut Ctx<'m>, route: &Route) -> Option<
         }
     }
     slot.data.as_ref()
+}
+
+/// The current track's data in `slot` (lyrics or credits), once ready. A slot of another
+/// track, or none, is asked for: `ask` gives the `Loading` event and the action. Until ready, a
+/// spinner, or `failed` and Retry; nothing without a current track.
+fn track_data<'m, T>(
+    ui: &mut egui::Ui,
+    ctx: &mut Ctx<'m>,
+    slot: &'m Option<(u64, Load<T>)>,
+    failed: &str,
+    ask: fn(u64) -> (Event, Action),
+) -> Option<&'m T> {
+    let id = ctx.model.playback.track.as_ref()?.id;
+    let asks = |ctx: &mut Ctx| {
+        let (ev, action) = ask(id);
+        ctx.events.push(ev);
+        ctx.send(action);
+    };
+    match slot
+        .as_ref()
+        .filter(|(at, _)| *at == id)
+        .map(|(_, load)| load)
+    {
+        Some(Load::Ready(data)) => return Some(data),
+        Some(Load::Failed) => {
+            ui.label(failed);
+            if ui.button(tr("Retry")).clicked() {
+                asks(ctx);
+            }
+        }
+        Some(Load::Loading) => {
+            ui.spinner();
+        }
+        None => {
+            asks(ctx);
+            ui.spinner();
+        }
+    }
+    None
 }
 
 /// Paints `image` over `rect` with corners of `radius`, requested as many pixels wide as it
@@ -316,11 +366,27 @@ pub fn draw(
             state.player.as_ref(),
             &mut state.bar,
             &mut state.images,
-            &mut state.queue_open,
+            &mut state.side,
         );
         sidebar::show(ui, model, &mut events);
-        if state.queue_open {
-            queue_panel::show(ui, model, tx);
+        if let Some(side) = state.side {
+            let at = state.player.as_ref();
+            let at = at.map_or(Duration::ZERO, player::Player::position);
+            let mut ctx = Ctx {
+                model,
+                tx,
+                images: &mut state.images,
+                events: &mut events,
+            };
+            egui::Panel::right("side")
+                .resizable(true)
+                .default_size(320.0)
+                .size_range(260.0..=560.0)
+                .show(ui, |ui| match side {
+                    Side::Queue => queue_panel::show(ui, model, tx),
+                    Side::Lyrics => lyrics::show(ui, &mut ctx, at),
+                    Side::Credits => credits::show(ui, &mut ctx),
+                });
         }
     }
 
@@ -397,6 +463,14 @@ mod testing {
         })
     }
 
+    /// The text of every node in `out`, as a screen reader finds it.
+    pub fn shown(out: &egui::FullOutput) -> Vec<String> {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        nodes.iter().filter_map(|(_, n)| text(n)).collect()
+    }
+
     /// Logged in as user 1, at `route`.
     pub fn at(route: Route) -> Model {
         let mut m = Model::default();
@@ -440,15 +514,7 @@ mod testing {
         let egui = egui::Context::default();
         egui.enable_accesskit();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let shown = |model: &Model| -> Vec<String> {
-            let (_, out) = pass(&egui, &tx, model, view, vec![]);
-            let tree = out
-                .platform_output
-                .accesskit_update
-                .expect("AccessKit is on");
-            let text = |n: &egui::accesskit::Node| n.label().or(n.value()).map(str::to_owned);
-            tree.nodes.iter().filter_map(|(_, n)| text(n)).collect()
-        };
+        let shown = |model: &Model| shown(&pass(&egui, &tx, model, view, vec![]).1);
         let mut model = at(route.clone());
         model.apply(Event::Loading(route.clone()));
         assert!(
@@ -611,9 +677,9 @@ mod tests {
     }
 
     /// As a screen reader finds them: Space and Play send `TogglePlay` (the backend decides),
-    /// repeat cycles Off → All → One, Queue opens the panel.
+    /// repeat cycles Off → All → One, Queue and then Lyrics take the side panel.
     #[test]
-    fn player_bar_toggles_play_cycles_repeat_and_opens_the_queue() {
+    fn player_bar_toggles_play_cycles_repeat_and_picks_the_side_panel() {
         use crate::queue::Repeat;
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -621,6 +687,7 @@ mod tests {
         let mut state = UiState::default();
         let mut model = testing::at(Route::Home);
         model.playback.track = Some(testing::track(1));
+        // The output, and the side panel after it.
         let mut pass = |model: &Model, events: Vec<egui::Event>| {
             let input = egui::RawInput {
                 events,
@@ -634,14 +701,14 @@ mod tests {
                 draw(ui, model, &tx, &mut state);
             });
             out.textures_delta.clear(); // nothing renders them
-            out
+            (out, state.side)
         };
         let mut sent = || -> Vec<String> {
             std::iter::from_fn(|| rx.try_recv().ok())
                 .map(|a| format!("{a:?}"))
                 .collect()
         };
-        let out = pass(&model, vec![testing::key(egui::Key::Space)]);
+        let (out, _) = pass(&model, vec![testing::key(egui::Key::Space)]);
         pass(&model, vec![testing::click(&out, "Play")]);
         assert_eq!(sent(), ["TogglePlay", "TogglePlay"]);
         for (repeat, label, then) in [
@@ -650,15 +717,18 @@ mod tests {
             (Repeat::One, "Repeat one", "SetRepeat(Off)"),
         ] {
             model.queue.repeat = repeat;
-            let out = pass(&model, vec![]);
+            let (out, _) = pass(&model, vec![]);
             pass(&model, vec![testing::click(&out, label)]);
             assert_eq!(sent(), [then]);
         }
-        let out = pass(&model, vec![]);
+        let (out, _) = pass(&model, vec![]);
         pass(&model, vec![testing::click(&out, "Shuffle")]);
         assert_eq!(sent(), ["SetShuffle(true)"]);
-        pass(&model, vec![testing::click(&out, "Queue")]);
-        assert!(state.queue_open);
+        let (_, side) = pass(&model, vec![testing::click(&out, "Queue")]);
+        assert_eq!(side, Some(Side::Queue));
+        let (out, _) = pass(&model, vec![]);
+        let (_, side) = pass(&model, vec![testing::click(&out, "Lyrics")]);
+        assert_eq!(side, Some(Side::Lyrics));
     }
 
     /// Both errors' Dismiss clicked in one frame: both go, not one and then nothing.

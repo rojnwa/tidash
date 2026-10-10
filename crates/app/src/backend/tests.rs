@@ -288,6 +288,46 @@ fn a_stream_load_in_flight_at_logout_stops_before_the_cache_clear() {
     });
 }
 
+/// No lyrics is a 404: ready, with none. Another failure is `Failed`, which the panel shows:
+/// no `Error` event.
+#[test]
+fn lyrics_fetch_404_is_ready_none() {
+    use crate::model::Load;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    rt.block_on(async {
+        let server = MockServer::start().await;
+        for (at, status) in [("/v1/tracks/7/lyrics", 404), ("/v1/tracks/7/credits", 403)] {
+            let mock = Mock::given(method("GET")).and(path(at));
+            let reply = ResponseTemplate::new(status);
+            mock.respond_with(reply).expect(1).mount(&server).await;
+        }
+        let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+        b.cfg = ClientConfig {
+            api_base: format!("{}/v1/", server.uri()).parse().expect("a URL"),
+            ..ClientConfig::default()
+        };
+        b.log_in(session("a"));
+        for action in [Action::LoadLyrics(7), Action::LoadCredits(7)] {
+            b.handle(action).await;
+            while b.tasks.join_next().await.is_some() {} // one at a time: the events' order
+        }
+        let events: Vec<_> = events.try_iter().skip(1).collect(); // past `LoggedIn`
+        assert!(
+            matches!(
+                &events[..],
+                [
+                    Event::Lyrics(7, Load::Ready(None)),
+                    Event::Credits(7, Load::Failed)
+                ]
+            ),
+            "{events:?}"
+        );
+    });
+}
+
 #[test]
 fn logout_clears_the_store_off_the_runtime() {
     let events = run(Arc::new(OwnRuntime), Ok(None), vec![Action::Logout]);

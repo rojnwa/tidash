@@ -237,6 +237,36 @@ msgstr ""
 msgid "Queue"
 msgstr ""
 
+#: src/ui/player_bar.rs
+#: src/ui/lyrics.rs
+msgid "Lyrics"
+msgstr ""
+
+#: src/ui/player_bar.rs
+#: src/ui/credits.rs
+msgid "Credits"
+msgstr ""
+
+#: src/ui/lyrics.rs
+msgid "Couldn't load lyrics"
+msgstr ""
+
+#: src/ui/lyrics.rs
+msgid "No lyrics for this track"
+msgstr ""
+
+#: src/ui/lyrics.rs
+msgid "Lyrics provided by {provider}"
+msgstr ""
+
+#: src/ui/credits.rs
+msgid "Couldn't load credits"
+msgstr ""
+
+#: src/ui/credits.rs
+msgid "No credits for this track"
+msgstr ""
+
 #: src/ui/tracks.rs
 msgid "Play next"
 msgstr ""

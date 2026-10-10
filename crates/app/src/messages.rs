@@ -1,6 +1,6 @@
 //! The messages that move between UI and backend.
 
-use crate::model::{PageData, PlaybackSnapshot, QueueSnapshot, Route};
+use crate::model::{Load, PageData, PlaybackSnapshot, QueueSnapshot, Route};
 use crate::queue::Repeat;
 use std::time::Duration;
 
@@ -61,6 +61,10 @@ pub enum Action {
     SetSettings(crate::settings::Settings),
     /// Lists the output devices (`Event::Devices`).
     ListDevices,
+    /// Fetches this track's lyrics (`Event::Lyrics`), for the side panel.
+    LoadLyrics(u64),
+    /// Fetches this track's credits (`Event::Credits`), for the side panel.
+    LoadCredits(u64),
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +127,11 @@ pub enum Event {
     Settings(crate::settings::Settings),
     /// The output devices' names; empty when they could not be listed.
     Devices(Vec<String>),
+    /// This track's lyrics: `Loading` from the UI as it asks, then the backend's reply, which
+    /// a newer ask for another track makes stale.
+    Lyrics(u64, Load<Option<tidal::Lyrics>>),
+    /// This track's credits, as `Lyrics`.
+    Credits(u64, Load<Vec<tidal::Credit>>),
     Error(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),

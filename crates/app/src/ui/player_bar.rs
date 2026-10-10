@@ -1,7 +1,7 @@
 //! Player bar: cover, title and artists, transport with shuffle and repeat, seek, volume, the
-//! format badge and the queue panel's toggle.
+//! format badge and the side panel's toggles: Queue, Lyrics, Credits.
 
-use super::{cover, tracks};
+use super::{Side, cover, tracks};
 use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::{Action, Model, OutputInfo};
@@ -28,13 +28,14 @@ pub fn show(
     player: Option<&Player>,
     state: &mut State,
     images: &mut TextureCache,
-    queue_open: &mut bool,
+    side: &mut Option<Side>,
 ) {
     let pb = &model.playback;
     let send = |a: Action| {
         let _ = tx.send(a);
     };
     // The position only moves while playing; nothing to repaint for otherwise, or when hidden.
+    // This also moves the lyrics' highlight.
     if pb.state == Some(PlayState::Playing)
         && ui.ctx().input(|i| i.viewport().visible()) != Some(false)
     {
@@ -93,7 +94,7 @@ pub fn show(
                 .min(duration);
             let mut at = state.seek.unwrap_or(pos);
             ui.label(tracks::duration(at as u32));
-            ui.spacing_mut().slider_width = (ui.available_width() - 300.0 - BADGE).max(80.0);
+            ui.spacing_mut().slider_width = (ui.available_width() - 420.0 - BADGE).max(80.0);
             let seek = ui.add_enabled(
                 has,
                 Slider::new(&mut at, 0.0..=duration.max(1.0)).show_value(false),
@@ -118,7 +119,7 @@ pub fn show(
             {
                 send(Action::SetVolume(volume));
             }
-            // A fixed slot, so the Queue toggle stays put as the badge comes and goes.
+            // A fixed slot, so the toggles stay put as the badge comes and goes.
             ui.allocate_ui(vec2(BADGE, ui.spacing().interact_size.y), |ui| {
                 ui.set_width(BADGE);
                 if let Some(o) = &pb.output {
@@ -126,7 +127,16 @@ pub fn show(
                         .on_hover_text(badge_hover(o));
                 }
             });
-            ui.toggle_value(queue_open, tr("Queue"));
+            for (view, label) in [
+                (Side::Queue, tr("Queue")),
+                (Side::Lyrics, tr("Lyrics")),
+                (Side::Credits, tr("Credits")),
+            ] {
+                let on = *side == Some(view);
+                if ui.selectable_label(on, label).clicked() {
+                    *side = (!on).then_some(view);
+                }
+            }
         });
     });
 }

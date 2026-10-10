@@ -2,7 +2,7 @@
 
 use crate::i18n::tr;
 use crate::images::Artwork;
-use crate::model::{Action, Event, Redirect};
+use crate::model::{Action, Event, Load, Redirect};
 use crate::playback::{Msg, Playback};
 use crate::settings::Settings;
 use std::path::PathBuf;
@@ -367,6 +367,14 @@ impl Backend {
                     emit.send(Event::Devices(names));
                 });
             }
+            Action::LoadLyrics(id) => {
+                let fetch = move |c: Arc<Client>| async move { c.lyrics(id).await };
+                self.load_for_panel(id, Event::Lyrics, fetch);
+            }
+            Action::LoadCredits(id) => {
+                let fetch = move |c: Arc<Client>| async move { c.track_credits(id).await };
+                self.load_for_panel(id, Event::Credits, fetch);
+            }
             Action::LoadImage { image, px } => {
                 let (base, emit) = (&self.cfg.image_base, self.emit.clone());
                 self.artwork.load(&self.http, base, &image, px, emit);
@@ -401,6 +409,32 @@ impl Backend {
                 None => {}
             },
         }
+    }
+
+    /// Track `id`'s lyrics or credits for the side panel, from TIDAL (a missing answer is not
+    /// cached, so a saved copy cannot tell "none" from "never fetched"), sent as `event`. A
+    /// failure is `Failed`, shown by the panel only.
+    fn load_for_panel<T: Send + 'static, F>(
+        &mut self,
+        id: u64,
+        event: fn(u64, Load<T>) -> Event,
+        fetch: impl FnOnce(Arc<Client>) -> F + Send + 'static,
+    ) where
+        F: Future<Output = tidal::Result<T>> + Send,
+    {
+        let Some(c) = self.client.clone() else { return };
+        let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+        self.spawn(async move {
+            let load = match fetch(Arc::clone(&c)).await {
+                Ok(data) => Load::Ready(data),
+                Err(e) if session_expired(&e, &c, &msgs) => return,
+                Err(e) => {
+                    log::warn!("track {id} for the side panel: {e}");
+                    Load::Failed
+                }
+            };
+            emit.send(event(id, load));
+        });
     }
 
     /// A new login on the current client: its authorize URL, also sent to the UI.
