@@ -274,11 +274,12 @@ neither sidebar nor top bar (as today).
 
 - Artist pages, as TIDAL's: a hero instead of the cover and backdrop. The artist's picture fills the page's full
   width and the top `BACKDROP` px (cropped, not blurred, requested at that width), fading into `window` over its
-  lower 40% with `vertical_gradient`; the name (Title), the details and the action row sit over its bottom-left.
-- Album, playlist and mix headers: the cover requested at 16 px and painted stretched behind the top 450 px of
-  the page, under a `vertical_gradient` from window at 40% to window at 100%, so it scrolls with the page like TIDAL's
+  lower 40% with `vertical_gradient`; the name (Title), the details and the action row sit over its bottom-left. No
+  type line; an artist without a picture gets no placeholder, the name sitting on `window`.
+- Album, playlist and mix headers: the cover requested at exactly 16 px and painted cropped to the page's full width
+  behind the top 450 px, under a `vertical_gradient` from window at 60% to window at 100%, so it scrolls with the page like TIDAL's
   blurred backdrop. Over it: the 240 px cover (round for artists), a Small dim type line ("ALBUM", "PLAYLIST"),
-  the Title, the detail lines in secondary, then an action row: a primary `pill_button` Play with the `play-filled`
+  the Title, the detail lines in secondary; under that block, left-aligned, the action row: a primary `pill_button` Play with the `play-filled`
   icon, a 40 px heart `circle_button` (`heart` / `heart-filled`, label "Add to favorites" / "Remove from favorites"),
   then the page's own actions as secondary pills (Add to playlist, Edit, Delete, Artist radio).
 - Shelves: Heading title; on the right "View all" (Body, secondary, text on hover) and ‹ › 32 px icon buttons that
