@@ -43,19 +43,21 @@ Parked in M4:
   measure it in the acceptance session.
 - "Added n tracks" and "Already in this playlist" go out through the error list, warn-coloured (R17);
   a styled info notice (`library.rs`).
+- The "Added n tracks to {playlist}" notice reads the title through the cached GET, so a just-renamed
+  playlist can show its old title once (`library.rs`).
 - Settings: a stale echo of edit A after B can make a third edit C build on A (B lost), and two quick
   edits can flicker once (the theme, say) until the second echo; a pending counter like
   `pending_favorites` would close both (`model.rs`).
-- A client change while logged out keeps the old PKCE and login URL, so a redirect pasted from the old
-  URL fails with a generic "Login failed": clear `pkce` on a client change (`backend.rs`).
+- A Client ID or Redirect URL typed but not applied is discarded on leaving Settings
+  (`ui/settings.rs`).
+- A client change while logged out leaves the old login URL on the login page (its redirect now asks
+  to start again) (`model.rs`).
 - A refused refresh shows both "session expired" and the refused-client message; a redirect-only
   change says "the client ID changed"; `Msg::SessionExpired(Arc<Client>, bool)` wants named fields
   (`backend.rs`, `model.rs`).
 - Shortcut list: the key names "Space" and "Alt" skip `tr`; Ctrl+, does nothing on the login page
   though the list names it (`ui/settings.rs`, `ui/mod.rs`); Ctrl+Shift+Q also quits (`consume_key`
   ignores an extra Shift, as for the other shortcuts).
-- Start minimized needs Close to tray, which the UI does not show: disable the checkbox or reword the
-  hint (`ui/settings.rs`).
 - Library tree: a failed root or folder load at login (5xx) is only logged and not retried (the tree
   stays empty until the next edit or login); deleted folders stay in the backend's `folders` set and
   later edits GET them (drop them when `DeleteFolder` succeeds); concurrent edits' reloads can land out
@@ -83,6 +85,8 @@ Parked in M4:
   `end_play` could check `scrobble_due` (`playback.rs`).
 - Last.fm's `verdict` checks HTTP 5xx before the codes (a 5xx with 9/10/26 is Retry, not Reconnect):
   reorder, or fix the comment (`scrobble/lastfm.rs`).
+- After a "reconnect" verdict the service leaves the connected set, so plays until the user connects
+  again are not queued (offline, they are): decide whether to queue them (`scrobble.rs`).
 - Discord: timestamps can carry over to another track that starts within 2 s (add
   `&& new.url == old.url`; only a < 2 s gapless track reaches it); the thread wakes every 30 s with
   nothing to do (block on `recv` while nothing is dirty); no reconnect right after a write error (it
@@ -93,7 +97,7 @@ Parked in M4:
   session).
 - The current track's own in-flight load keeps the old quality when the settings change (documented,
   `playback.rs`).
-- `backend/tests.rs` is 813 lines (over ~800): move the scrobbling tests to
+- `backend/tests.rs` is 896 lines (over ~800): move the scrobbling tests to
   `backend/tests/scrobble.rs`; `ui/testing.rs`' `every_state` shadows `shown` (closure, module fn,
   local); the `too_many_arguments` reason in `ui/header.rs` ("each part named at the call") reads
   oddly.
@@ -162,8 +166,9 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 
 - Return `Status { 401 }`, not `Auth`, when the retry after a successful refresh still gets a 401, so
   only a failed refresh logs the user out.
-- `Error::Status { status: 0 }` sentinel for client-side errors → own variant; `read_timeout` is an
-  idle timeout, not a total deadline; truncate the raw body in `Status.message`.
+- `Error::Status { status: 0 }` sentinel for client-side errors (a playlist GET without an `ETag`
+  header is one, "no playlist ETag", `edit.rs`) → own variant; `read_timeout` is an idle timeout, not
+  a total deadline; truncate the raw body in `Status.message`.
 - A revoked refresh token makes each waiter retry the token call in turn.
 - A corrupt `session` chunk count orphans chunks on clear/save.
 - Persistent play-report retry queue, if reports go missing in practice.
@@ -207,7 +212,6 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   argument then pings instead of showing the window (R21, `instance.rs`).
 - Linux Flatpak: `discord-rich-presence`'s Unix transport commits to the first socket path that
   exists, so a stale Flatpak socket refuses every connect (SONE replaced the transport; `discord.rs`).
-
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
 - macOS RAM with the fonts pin (M5 performance-budget pass).
