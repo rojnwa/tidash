@@ -206,12 +206,17 @@ pub const PLAYER_COVER: f32 = 52.0;
 pub const SIDEBAR_COVER: f32 = 36.0;
 pub const QUEUE_COVER: f32 = 40.0;
 pub const ICON_BUTTON: f32 = 32.0;
+/// An icon button's glyph, a pill's, a notice's.
+pub const GLYPH: f32 = 16.0;
 /// Previous, Next and Play/Pause's hit box.
 pub const TRANSPORT: f32 = 40.0;
 pub const CARD_CONTROL: f32 = 36.0;
 /// A pill's height.
 pub const PILL: f32 = 40.0;
 pub const SEARCH_W: f32 = 280.0;
+/// The search pill at its narrowest: its icon and a word. With less room it reaches over the
+/// history pill, never the gear.
+pub const SEARCH_MIN: f32 = 120.0;
 
 // Corner radii; pills and discs are fully round.
 pub const R_ART: f32 = 2.0;

@@ -1,4 +1,5 @@
-//! Drawing: dismissible errors on top, then the current route.
+//! Drawing: the player bar, the sidebar and the side panel; then the top bar, dismissible
+//! errors under it, and the current route.
 
 mod album;
 mod artist;
@@ -19,6 +20,7 @@ mod search;
 pub mod settings;
 mod shelf;
 mod sidebar;
+mod top_bar;
 mod tracks;
 #[cfg_attr(
     not(test),
@@ -123,10 +125,6 @@ pub struct Ctx<'a> {
     pub images: &'a mut TextureCache,
     pub events: &'a mut Vec<Event>,
     /// The colours shown.
-    #[expect(
-        dead_code,
-        reason = "the later design-system tasks restyle the views with it"
-    )]
     pub palette: Palette,
 }
 
@@ -184,7 +182,7 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
                 ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
                 ui.ctx().request_repaint();
             }
-            ui.push_id(route, f).inner
+            padded(ui, |ui| ui.push_id(route, f).inner)
         });
     if let (Some(v), Some(step)) = (speed, step) {
         // This step lands next pass; turn round now if it reaches an end (give or take float
@@ -196,6 +194,13 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
         }
     }
     out.inner
+}
+
+/// `f` inset `PAGE_PAD` from both sides, as `page` insets a page: the central panel has no
+/// margin of its own.
+fn padded<R>(ui: &mut egui::Ui, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let margin = egui::Margin::symmetric(theme::PAGE_PAD as i8, 0);
+    egui::Frame::NONE.inner_margin(margin).show(ui, f).inner
 }
 
 fn autoscroll_id() -> egui::Id {
@@ -214,14 +219,16 @@ fn page_data<'m>(ui: &mut egui::Ui, ctx: &mut Ctx<'m>, route: &Route) -> Option<
     let model = ctx.model;
     let slot = model.pages.get(route)?;
     if slot.data.is_none() {
-        if slot.failed {
-            ui.label(tr("Couldn't load this page"));
-            if ui.button(tr("Retry")).clicked() {
-                ctx.go(route.clone()); // asks for it again
+        padded(ui, |ui| {
+            if slot.failed {
+                ui.label(tr("Couldn't load this page"));
+                if ui.button(tr("Retry")).clicked() {
+                    ctx.go(route.clone()); // asks for it again
+                }
+            } else if slot.loading {
+                ui.spinner();
             }
-        } else if slot.loading {
-            ui.spinner();
-        }
+        });
     }
     slot.data.as_ref()
 }
@@ -398,20 +405,17 @@ pub fn draw(
     if *model.route() != Route::Settings {
         state.settings.listed = false; // the next visit starts afresh
     }
-    if !model.errors.is_empty() || model.offline {
+    // Logged in, they sit under the top bar.
+    if !model.logged_in && (!model.errors.is_empty() || model.offline) {
         egui::Panel::top("top").show(ui, |ui| {
-            if model.offline {
-                let warn = ui.visuals().warn_fg_color;
-                ui.colored_label(warn, tr("Offline — showing saved pages"));
-            }
-            for (id, e) in &model.errors {
-                ui.horizontal(|ui| {
-                    ui.colored_label(ui.visuals().warn_fg_color, e);
-                    if ui.small_button(tr("Dismiss")).clicked() {
-                        events.push(Event::DismissError(*id));
-                    }
-                });
-            }
+            let mut ctx = Ctx {
+                model,
+                tx,
+                images: &mut state.images,
+                events: &mut events,
+                palette,
+            };
+            top_bar::notices(ui, &mut ctx);
         });
     }
     // Logged out (Settings, from the login page) nothing leads to the session's pages.
@@ -456,7 +460,9 @@ pub fn draw(
         }
     }
 
-    egui::CentralPanel::default().show(ui, |ui| {
+    // No margin: pages inset themselves (`page`, `padded`), their scroll bars at the edge.
+    let frame = egui::Frame::central_panel(ui.style()).inner_margin(0);
+    egui::CentralPanel::default().frame(frame).show(ui, |ui| {
         let mut ctx = Ctx {
             model,
             tx,
@@ -464,10 +470,15 @@ pub fn draw(
             events: &mut events,
             palette,
         };
+        if model.logged_in {
+            top_bar::show(ui, &mut ctx, &mut state.search);
+        } else {
+            ui.add_space(theme::PAGE_PAD);
+        }
         let route = model.route();
         match route {
             Route::Login => login::show(ui, &mut ctx, &mut state.login),
-            Route::Search => search::show(ui, &mut ctx, &mut state.search),
+            Route::Search => search::show(ui, &mut ctx),
             Route::Home | Route::Page(_) | Route::ViewAll(_) => browse::show(ui, &mut ctx, route),
             Route::Album(_) => album::show(ui, &mut ctx, route),
             Route::Artist(_) => artist::show(ui, &mut ctx, route),

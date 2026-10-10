@@ -1,15 +1,16 @@
-//! Search view: the query box, then one page scroll of shelves (artists, albums, playlists)
-//! and every track found.
+//! Search view: one page scroll of shelves (artists, albums, playlists) and every track
+//! found. The query box is the top bar's.
 
 use super::{Ctx, shelf, tracks};
 use crate::i18n::tr;
-use crate::model::{Action, Route};
+use crate::model::Route;
 use std::borrow::Cow;
 use tidal::{Item, Layout, Shelf};
 
+/// The query, kept from page to page; the top bar draws it and sends it.
 #[derive(Default)]
 pub struct State {
-    query: String,
+    pub query: String,
 }
 
 /// The query box's id, fixed so that Ctrl+F can focus it from anywhere.
@@ -17,17 +18,7 @@ pub fn query_id() -> egui::Id {
     egui::Id::new("search-query")
 }
 
-pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
-    let edit = ui.add(
-        egui::TextEdit::singleline(&mut state.query)
-            .id(query_id())
-            .hint_text(tr("Search TIDAL"))
-            .desired_width(f32::INFINITY),
-    );
-    let q = state.query.trim();
-    if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !q.is_empty() {
-        ctx.send(Action::Search(q.to_string()));
-    }
+pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
     let model = ctx.model;
     let Some((_, results)) = &model.search else {
         return;

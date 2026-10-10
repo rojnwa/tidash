@@ -7,19 +7,21 @@ use crate::model::{CollectionTab, PageData, Route};
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
     let Route::Collection(at) = route else { return };
-    ui.heading(tr("Collection"));
-    ui.horizontal(|ui| {
-        for (tab, label) in [
-            (CollectionTab::Tracks, tr("Tracks")),
-            (CollectionTab::Albums, tr("Albums")),
-            (CollectionTab::Artists, tr("Artists")),
-            (CollectionTab::Playlists, tr("Playlists")),
-            (CollectionTab::Mixes, tr("Mixes")),
-        ] {
-            if ui.selectable_label(*at == tab, label).clicked() {
-                ctx.go(Route::Collection(tab));
+    super::padded(ui, |ui| {
+        ui.heading(tr("Collection"));
+        ui.horizontal(|ui| {
+            for (tab, label) in [
+                (CollectionTab::Tracks, tr("Tracks")),
+                (CollectionTab::Albums, tr("Albums")),
+                (CollectionTab::Artists, tr("Artists")),
+                (CollectionTab::Playlists, tr("Playlists")),
+                (CollectionTab::Mixes, tr("Mixes")),
+            ] {
+                if ui.selectable_label(*at == tab, label).clicked() {
+                    ctx.go(Route::Collection(tab));
+                }
             }
-        }
+        });
     });
     ui.add_space(8.0);
     let Some(data) = super::page_data(ui, ctx, route) else {

@@ -82,14 +82,22 @@ pub fn at(route: Route) -> Model {
     m
 }
 
-/// The middle of the node labelled `label` in `out`, where a pointer would click it.
-pub fn middle(out: &egui::FullOutput, label: &str) -> Pos2 {
+/// Where the node labelled `label` in `out` is drawn.
+pub fn bounds(out: &egui::FullOutput, label: &str) -> Rect {
     let tree = out.platform_output.accesskit_update.as_ref();
     let nodes = &tree.expect("AccessKit is on").nodes;
     let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
     let bounds = node.and_then(|(_, n)| n.bounds());
     let b = bounds.unwrap_or_else(|| panic!("no {label:?} placed"));
-    Pos2::new((b.x0 + b.x1) as f32 / 2.0, (b.y0 + b.y1) as f32 / 2.0)
+    Rect::from_min_max(
+        Pos2::new(b.x0 as f32, b.y0 as f32),
+        Pos2::new(b.x1 as f32, b.y1 as f32),
+    )
+}
+
+/// The middle of the node labelled `label` in `out`, where a pointer would click it.
+pub fn middle(out: &egui::FullOutput, label: &str) -> Pos2 {
+    bounds(out, label).center()
 }
 
 /// A secondary (right) button press at `at` if `pressed`, else its release.

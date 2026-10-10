@@ -11,6 +11,10 @@ pub struct State {
 }
 
 pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
+    super::padded(ui, |ui| form(ui, ctx, state));
+}
+
+fn form(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     ui.add_space(24.0);
     ui.vertical_centered(|ui| {
         ui.set_max_width(560.0);

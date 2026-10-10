@@ -2,7 +2,7 @@
 //! from the palette, names itself to AccessKit, shows that name as a tooltip where it shows no
 //! text, and draws the focus ring.
 
-use crate::theme::{self, Icon, Palette};
+use crate::theme::{self, GLYPH, Icon, Palette};
 use egui::text::{LayoutJob, TextWrapping};
 use egui::{
     Align, Color32, FontId, Galley, Layout, Mesh, Pos2, Rect, Response, RichText, Sense, Stroke,
@@ -13,8 +13,6 @@ use std::sync::Arc;
 /// A nav row's inset around its icon and text.
 const NAV_PAD: f32 = 8.0;
 const NAV_ICON: f32 = 24.0;
-/// An icon button's glyph, and a pill's.
-const GLYPH: f32 = 16.0;
 
 /// `icon` at `size` points square, centred on `center`, tinted `tint`.
 fn paint_icon(ui: &Ui, icon: Icon, center: Pos2, size: f32, tint: Color32) {

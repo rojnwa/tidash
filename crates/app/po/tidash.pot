@@ -25,7 +25,7 @@ msgstr ""
 msgid "Continue"
 msgstr ""
 
-#: src/ui/mod.rs
+#: src/ui/top_bar.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -53,17 +53,16 @@ msgstr ""
 msgid "Login will not be remembered: no system credential store available"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 #: src/ui/settings.rs
 msgid "Back"
 msgstr ""
 
-#: src/ui/sidebar.rs
 #: src/ui/settings.rs
 msgid "Search"
 msgstr ""
 
-#: src/ui/search.rs
+#: src/ui/top_bar.rs
 msgid "Search TIDAL"
 msgstr ""
 
@@ -155,7 +154,7 @@ msgstr ""
 msgid "Your TIDAL session has expired; please log in again"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 #: src/ui/settings.rs
 msgid "Forward"
 msgstr ""
@@ -174,7 +173,7 @@ msgstr ""
 msgid "Collection"
 msgstr ""
 
-#: src/ui/mod.rs
+#: src/ui/top_bar.rs
 msgid "Offline — showing saved pages"
 msgstr ""
 
@@ -296,7 +295,7 @@ msgstr ""
 msgid "Remove"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 #: src/ui/settings.rs
 #: src/ui/login.rs
 msgid "Settings"
