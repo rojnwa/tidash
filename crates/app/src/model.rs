@@ -162,6 +162,10 @@ pub struct Model {
     /// A Last.fm connect waits for the user to allow Tidash; kept across logout, as the
     /// settings are.
     pub lastfm_waiting: bool,
+    /// The palette files the theme picker lists, and what to say under it (`Event::Themes`);
+    /// kept across logout, as the settings are.
+    pub themes: Vec<String>,
+    pub theme_status: Option<fastframe_theme::Status>,
 }
 
 impl Default for Model {
@@ -191,6 +195,8 @@ impl Default for Model {
             folders: HashMap::new(),
             own_playlists: Vec::new(),
             lastfm_waiting: false,
+            themes: Vec::new(),
+            theme_status: None,
         }
     }
 }
@@ -236,6 +242,8 @@ impl Model {
                     settings: std::mem::take(&mut self.settings),
                     devices: std::mem::take(&mut self.devices),
                     lastfm_waiting: self.lastfm_waiting,
+                    themes: std::mem::take(&mut self.themes),
+                    theme_status: self.theme_status,
                     ..Self::default()
                 };
             }
@@ -248,6 +256,8 @@ impl Model {
                     settings: std::mem::take(&mut self.settings),
                     devices: std::mem::take(&mut self.devices),
                     lastfm_waiting: self.lastfm_waiting,
+                    themes: std::mem::take(&mut self.themes),
+                    theme_status: self.theme_status,
                     ..Self::default()
                 };
                 self.error(tr("Your TIDAL session has expired; please log in again").into_owned());
@@ -341,6 +351,8 @@ impl Model {
             Event::Settings(s) => self.settings = s,
             Event::Devices(d) => self.devices = d,
             Event::LastfmWaiting(w) => self.lastfm_waiting = w,
+            Event::Themes { names, status } => (self.themes, self.theme_status) = (names, status),
+            Event::RescanThemes => {} // the app's (main.rs)
             Event::Error(e) => self.error(e),
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {

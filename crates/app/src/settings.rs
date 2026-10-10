@@ -99,6 +99,17 @@ pub enum Theme {
     Light,
 }
 
+/// egui's theme follows the setting: `pick` reads it back.
+impl From<Theme> for egui::ThemePreference {
+    fn from(theme: Theme) -> Self {
+        match theme {
+            Theme::System => Self::System,
+            Theme::Dark => Self::Dark,
+            Theme::Light => Self::Light,
+        }
+    }
+}
+
 /// The TIDAL client to log in with; `None` or blank is the built-in one.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -150,7 +161,6 @@ pub fn path() -> Option<PathBuf> {
 }
 
 /// The palette files' folder, `themes` beside `path`.
-#[expect(dead_code, reason = "Task 3's theme catalog scans it")]
 pub fn themes_dir() -> Option<PathBuf> {
     path().map(|p| p.with_file_name("themes"))
 }

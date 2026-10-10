@@ -8,6 +8,15 @@ use tokio::sync::mpsc::UnboundedSender;
 
 pub type View = fn(&mut egui::Ui, &mut Ctx<'_>, &Route);
 
+/// A context with the app's fonts: a palette's text styles (`theme::apply`) name weights a
+/// bare context lacks.
+pub fn context() -> egui::Context {
+    let ctx = egui::Context::default();
+    let fonts = fastframe_fonts::FontSetup::default().system_fallbacks(false);
+    fonts.install(&ctx);
+    ctx
+}
+
 pub fn key(key: egui::Key) -> egui::Event {
     egui::Event::Key {
         key,
@@ -126,6 +135,7 @@ pub fn pass_with(
             tx,
             images: &mut images,
             events: &mut events,
+            palette: crate::theme::Palette::dark(),
         };
         draw(ui, &mut c);
     });

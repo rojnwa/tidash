@@ -34,7 +34,10 @@ mod playback;
 mod queue;
 mod scrobble;
 mod settings;
-#[expect(dead_code, reason = "the design system's later tasks draw with it")]
+#[expect(
+    dead_code,
+    reason = "the sizes, type, tiers and tint are the later design-system tasks'"
+)]
 mod theme;
 mod tray;
 mod ui;
@@ -46,6 +49,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
+use theme::Palette;
 use tokio::sync::mpsc::UnboundedSender;
 use tray::TrayAction;
 
@@ -109,6 +113,10 @@ struct App {
     /// With `TIDASH_SCREENSHOT`, when `main` began, until the screenshot is asked for.
     shot_since: Option<Instant>,
     switches: Switches,
+    /// The palette files in the themes folder and the presets (`resolve_theme`).
+    catalog: fastframe_theme::Catalog<Palette>,
+    /// Wakes the app when a scan of the themes folder finishes.
+    theme_waker: fastframe_theme::Waker,
 }
 
 /// Which OpenGL renderer eframe's glow painter runs on.
@@ -152,7 +160,14 @@ impl App {
         let tray = fastframe_tray::Tray::spawn(tray::config(), wake(waker));
         let mut model = Model::default();
         model.apply(Event::Settings(settings));
-        Self {
+        let mut catalog = fastframe_theme::Catalog::default();
+        catalog.enable_desktop_themes(fastframe_theme::DesktopThemes {
+            slug: "tidash",
+            omarchy_template: fastframe_theme::omarchy::BASE_TEMPLATE,
+            omarchy_previous_templates: &[],
+            presets: true,
+        });
+        let mut app = Self {
             model,
             actions,
             events,
@@ -170,13 +185,56 @@ impl App {
             started: Some(started),
             shot_since: switches.screenshot.as_ref().map(|_| started),
             switches,
+            catalog,
+            theme_waker: fastframe_theme::Waker::new(wake(waker)),
+        };
+        app.scan_themes();
+        app
+    }
+
+    /// Lists the themes folder in the background, the selected file first; nothing without a
+    /// config dir.
+    fn scan_themes(&mut self) {
+        if let Some(dir) = settings::themes_dir() {
+            let selected = self.model.settings.custom_theme.clone();
+            self.catalog.start(dir, selected, &self.theme_waker);
+        }
+    }
+
+    /// The catalog's news, each pass (spec §3.4): a scan to start when a watched file changed
+    /// (Linux) or one that finished; the selected file's palette into the settings' cache,
+    /// saved like any change; the picker's list and status line into the model.
+    fn resolve_theme(&mut self, ctx: &egui::Context) {
+        if self.catalog.needs_reload() {
+            self.scan_themes();
+        }
+        self.catalog.poll();
+        let settings = &self.model.settings;
+        if let Some(file) = &settings.custom_theme
+            && let Some(found) = self.catalog.find(file)
+            && settings.custom_theme_cache.as_ref() != Some(found)
+        {
+            let mut new = settings.clone();
+            new.custom_theme_cache = Some(found.clone());
+            self.apply(ctx, Event::Settings(new.clone()));
+            let _ = self.actions.send(Action::SetSettings(new));
+        }
+        let status = self
+            .catalog
+            .status(self.model.settings.custom_theme.as_deref());
+        let listed = self.catalog.picker_themes().map(|t| &t.filename);
+        if status != self.model.theme_status || !listed.eq(&self.model.themes) {
+            let names = self.catalog.picker_themes();
+            let names = names.map(|t| t.filename.clone()).collect();
+            self.model.apply(Event::Themes { names, status });
         }
     }
 
     /// Readies a new window: its look and UI state; on macOS the tray item comes with the
     /// first.
     fn attach(&mut self, ctx: &egui::Context) {
-        setup_look(ctx, self.model.settings.theme);
+        setup_look(ctx);
+        ctx.set_theme(self.model.settings.theme);
         if let Some(speed) = self.switches.autoscroll {
             ui::autoscroll(ctx, speed);
         }
@@ -205,16 +263,22 @@ impl App {
         tray::hides_to_tray(self.tray_shown(), close_to_tray)
     }
 
-    /// Applies `ev` to the model; a new theme restyles the window, and Quit quits.
+    /// Applies `ev` to the model; a new theme restyles the window (`draw`), Quit quits, and
+    /// Settings opening lists the themes folder again.
     fn apply(&mut self, ctx: &egui::Context, ev: Event) {
-        if let Event::Quit = ev {
-            return self.quit(ctx);
+        match ev {
+            Event::Quit => return self.quit(ctx),
+            Event::RescanThemes => return self.scan_themes(),
+            _ => {}
         }
-        if let Event::Settings(s) = &ev
-            && s.theme != self.model.settings.theme
-        {
-            ctx.set_theme(egui_theme(s.theme));
-            ctx.request_repaint(); // a change from the UI's pass shows in the next
+        if let Event::Settings(s) = &ev {
+            let old = &self.model.settings;
+            if s.theme != old.theme {
+                ctx.set_theme(s.theme);
+            }
+            if (s.theme, &s.custom_theme) != (old.theme, &old.custom_theme) {
+                ctx.request_repaint(); // a change from the UI's pass shows in the next
+            }
         }
         let settings = matches!(ev, Event::Settings(_));
         self.model.apply(ev);
@@ -274,6 +338,7 @@ impl App {
                 }
             }
         }
+        self.resolve_theme(ctx);
         let launches =
             std::mem::take(&mut *self.inbox.lock().unwrap_or_else(PoisonError::into_inner));
         for asked in launches {
@@ -331,6 +396,23 @@ impl App {
             let (pass, causes) = (ctx.cumulative_pass_nr(), ctx.repaint_causes());
             log::info!("pass {pass}: repaint causes {causes:?}");
         }
+        let ctx = ui.ctx();
+        let switch = self.switches.theme.as_deref();
+        // `TIDASH_THEME=system` follows the desktop whatever the setting; egui's theme
+        // follows the setting.
+        let system = if switch == Some("system") {
+            ctx.system_theme()
+        } else {
+            None
+        };
+        let dark = system.unwrap_or_else(|| ctx.theme()) == egui::Theme::Dark;
+        let catalog = &self.catalog;
+        let find = |file: &str| Some(catalog.find(file)?.palette);
+        let wanted = pick(&self.model.settings, dark, switch, find);
+        self.ui.set_palette(ctx, wanted);
+        // The root took egui's style as this pass began: a palette applied just now draws in
+        // this pass too, not only the next (which nothing may ask for).
+        ui.set_style(ui.ctx().global_style());
         for ev in ui::draw(ui, &self.model, &self.actions, &mut self.ui) {
             self.apply(ui.ctx(), ev);
         }
@@ -494,28 +576,41 @@ impl eframe::App for Window {
     }
 }
 
-fn egui_theme(theme: settings::Theme) -> egui::ThemePreference {
-    match theme {
-        settings::Theme::System => egui::ThemePreference::System,
-        settings::Theme::Dark => egui::ThemePreference::Dark,
-        settings::Theme::Light => egui::ThemePreference::Light,
-    }
+/// The palette to show (spec §3.4, ruling 4): `TIDASH_THEME` (`switch`) when it names a
+/// built-in or a file `find` knows; else the selected file, as the catalog has it or else as
+/// last cached; else Dark or Light as egui's theme is (`ctx_dark`).
+fn pick(
+    settings: &settings::Settings,
+    ctx_dark: bool,
+    switch: Option<&str>,
+    find: impl Fn(&str) -> Option<Palette>,
+) -> Palette {
+    let by_ctx = if ctx_dark {
+        Palette::dark()
+    } else {
+        Palette::light()
+    };
+    let switched = switch.and_then(|s| match s {
+        "dark" => Some(Palette::dark()),
+        "light" => Some(Palette::light()),
+        "system" => Some(by_ctx),
+        file => find(file),
+    });
+    let custom = || {
+        let file = settings.custom_theme.as_deref()?;
+        find(file).or_else(|| Some(settings.custom_theme_cache.as_ref()?.palette))
+    };
+    switched.or_else(custom).unwrap_or(by_ctx)
 }
 
-/// Fonts, text rendering and `theme`, as fastframe's getting-started guide shows; scroll bars
-/// that keep their place beside the content. Ctrl+Q is the app's (`ui::draw`): egui's own
-/// closes the window bare, which hides it to the tray.
-fn setup_look(ctx: &egui::Context, theme: settings::Theme) {
+/// Fonts and text rendering, as fastframe's getting-started guide shows (`theme::apply` gives
+/// the colours, sizes and scroll bars). Ctrl+Q is the app's (`ui::draw`): egui's own closes the
+/// window bare, which hides it to the tray.
+fn setup_look(ctx: &egui::Context) {
     let mut fonts = fastframe_fonts::FontSetup::default().definitions();
-    let rendering = fastframe_text::detect();
-    rendering.apply_to(&mut fonts);
+    theme::rendering().apply_to(&mut fonts);
     ctx.set_fonts(fonts);
     ctx.options_mut(|o| o.quit_shortcuts.clear());
-    ctx.set_theme(egui_theme(theme));
-    ctx.all_styles_mut(|style| {
-        rendering.apply_to_visuals(&mut style.visuals);
-        style.spacing.scroll = egui::style::ScrollStyle::solid();
-    });
 }
 
 fn main() -> eframe::Result {
@@ -577,10 +672,77 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{Action, Event, Link, Model, Route, Switches, on_close, open_links, starts_hidden};
-    use crate::settings::Behavior;
+    use super::{
+        Action, Event, Link, Model, Route, Switches, on_close, open_links, pick, starts_hidden,
+    };
+    use crate::settings::{Behavior, Settings, Theme};
+    use crate::theme::Palette;
     use fastframe_shell::Closed;
+    use fastframe_theme::{CustomTheme, Status};
     use std::path::PathBuf;
+
+    fn nord() -> CustomTheme<Palette> {
+        let mut presets = fastframe_theme::presets::themes::<Palette>();
+        presets
+            .find(|t| t.filename == "Nord.json")
+            .expect("Nord ships")
+    }
+
+    /// The switch, then the selected file (the catalog's copy, else the cache), then Dark or
+    /// Light as egui's theme is (ruling 4).
+    #[test]
+    fn pick_order() {
+        let nord = nord();
+        let cached = Settings {
+            custom_theme: Some("Nord.json".into()),
+            custom_theme_cache: Some(nord.clone()),
+            ..Settings::default()
+        };
+        let none = |_: &str| None;
+        assert_eq!(pick(&cached, true, Some("light"), none), Palette::light());
+        assert_eq!(pick(&cached, false, None, none), nord.palette, "the cache");
+        let fresh = |f: &str| (f == "Nord.json").then_some(Palette::light());
+        assert_eq!(
+            pick(&cached, true, None, fresh),
+            Palette::light(),
+            "the file"
+        );
+        let stale = Settings {
+            custom_theme: None,
+            ..cached.clone()
+        };
+        assert_eq!(pick(&stale, true, None, none), Palette::dark(), "stale");
+        let system = Settings {
+            theme: Theme::System,
+            ..Settings::default()
+        };
+        assert_eq!(pick(&system, false, None, none), Palette::light());
+        let missing = pick(&cached, true, Some("missing.json"), none);
+        assert_eq!(missing, nord.palette, "falls through");
+        let mine = |f: &str| (f == "Mine.json").then_some(nord.palette);
+        let switched = pick(&Settings::default(), true, Some("Mine.json"), mine);
+        assert_eq!(switched, nord.palette);
+        assert_eq!(pick(&cached, false, Some("system"), none), Palette::light());
+        assert_eq!(pick(&stale, false, Some("dark"), none), Palette::dark());
+    }
+
+    /// Spec §3.5: a selected file the catalog no longer lists keeps its last colours, and
+    /// Settings says why.
+    #[test]
+    fn a_selected_theme_that_vanishes_keeps_its_colours() {
+        let palette = nord().palette;
+        let settings = Settings {
+            custom_theme: Some("Gone.json".into()),
+            custom_theme_cache: Some(CustomTheme {
+                filename: "Gone.json".into(),
+                palette,
+            }),
+            ..Settings::default()
+        };
+        assert_eq!(pick(&settings, true, None, |_| None), palette);
+        let said = crate::ui::settings::status_text(&Status::SelectedUnavailable, "Gone.json");
+        assert_eq!(said, "Gone can't be read; its last colours stay.");
+    }
 
     /// Closing the login page quits, Close to tray or not: a first-run user expects the app
     /// to end. Logged in, the setting hides; Quit and the tray's own hide win either way.

@@ -423,6 +423,38 @@ msgid "Light"
 msgstr ""
 
 #: src/ui/settings.rs
+msgid "Follow system"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Open themes folder"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Colour from album art"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Loading themes…"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "{name} can't be read; its last colours stay."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "The themes folder can't be read."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "The themes folder holds too many files; some themes aren't listed."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Themes couldn't be listed."
+msgstr ""
+
+#: src/ui/settings.rs
 msgid "Keyboard shortcuts"
 msgstr ""
 

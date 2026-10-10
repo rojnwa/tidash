@@ -16,7 +16,7 @@ mod playlist;
 mod queue_panel;
 mod rows;
 mod search;
-mod settings;
+pub mod settings;
 mod shelf;
 mod sidebar;
 mod tracks;
@@ -24,6 +24,7 @@ mod tracks;
 use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::{Action, Event, Load, Model, PageData, Route};
+use crate::theme::{self, Palette};
 use std::borrow::Cow;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -48,6 +49,11 @@ pub struct UiState {
     pub side: Option<Side>,
     settings: settings::State,
     library: library::State,
+    /// The colours shown, once `applied` (`set_palette`).
+    palette: Palette,
+    applied: bool,
+    /// Reveals a change of colours; `draw` paints it last.
+    transition: fastframe_theme::Transition,
 }
 
 impl Default for UiState {
@@ -62,11 +68,35 @@ impl Default for UiState {
             side: None,
             settings: Default::default(),
             library: Default::default(),
+            palette: Palette::dark(),
+            applied: false,
+            transition: fastframe_theme::Transition::new(fastframe_theme::Reveal::Band),
         }
     }
 }
 
 impl UiState {
+    /// Shows `wanted` (spec §3.4): at once on this window's first call; after that, a change
+    /// waits for the transition's picture of the old colours (at most 0.25 s), which `draw`
+    /// then reveals away. Call it every pass, before `draw`.
+    pub fn set_palette(&mut self, ctx: &egui::Context, wanted: Palette) {
+        if self.applied {
+            if wanted == self.palette {
+                return;
+            }
+            self.transition.begin(ctx);
+            if self.transition.holding(ctx) {
+                return;
+            }
+        }
+        theme::apply(ctx, &wanted);
+        (self.palette, self.applied) = (wanted, true);
+    }
+
+    pub fn palette(&self) -> Palette {
+        self.palette
+    }
+
     /// What the UI keeps of a session ends with it (`LoggedOut`, `SessionExpired`): the next
     /// account finds the search box empty, with no undo history to bring the query back, and
     /// the library tree unasked, its dialog closed.
@@ -87,6 +117,12 @@ pub struct Ctx<'a> {
     pub tx: &'a UnboundedSender<Action>,
     pub images: &'a mut TextureCache,
     pub events: &'a mut Vec<Event>,
+    /// The colours shown.
+    #[expect(
+        dead_code,
+        reason = "the later design-system tasks restyle the views with it"
+    )]
+    pub palette: Palette,
 }
 
 impl Ctx<'_> {
@@ -343,7 +379,7 @@ pub fn draw(
 ) -> Vec<Event> {
     // First, before any scroll area reads the input.
     state.scrolling.apply(ui.ctx());
-    let mut events = Vec::new();
+    let (mut events, palette) = (Vec::new(), state.palette());
     // Ctrl+Q (Cmd+Q) on every page, typing or not: the app's quit, never a bare window close.
     if ui
         .ctx()
@@ -390,6 +426,7 @@ pub fn draw(
             tx,
             images: &mut state.images,
             events: &mut events,
+            palette,
         };
         sidebar::show(ui, &mut ctx, &mut state.library);
         if let Some(side) = state.side {
@@ -400,6 +437,7 @@ pub fn draw(
                 tx,
                 images: &mut state.images,
                 events: &mut events,
+                palette,
             };
             egui::Panel::right("side")
                 .resizable(true)
@@ -419,6 +457,7 @@ pub fn draw(
             tx,
             images: &mut state.images,
             events: &mut events,
+            palette,
         };
         let route = model.route();
         match route {
@@ -433,6 +472,7 @@ pub fn draw(
             Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
         }
     });
+    state.transition.paint(ui.ctx()); // over everything
     events
 }
 
@@ -698,6 +738,43 @@ mod tests {
             up.windows(2).filter(|w| w[0] != w[1]).count() >= 2,
             "{ys:?}"
         );
+    }
+
+    /// Light and then Nord in the next pass, and no screenshot ever arrives (headless, some
+    /// drivers): the window ends on Nord once the transition stops waiting, never on Light.
+    #[test]
+    fn quick_changes_end_on_the_last_palette() {
+        use crate::theme::Palette;
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = Model::default();
+        let mut presets = fastframe_theme::presets::themes::<Palette>();
+        let nord = presets.find(|t| t.filename == "Nord.json");
+        let nord = nord.expect("Nord ships").palette;
+        let (dark, light) = (Palette::dark(), Palette::light());
+        let mut pass = |tenths: u8, wanted: Palette| {
+            let input = egui::RawInput {
+                time: Some(f64::from(tenths) / 10.0),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                state.set_palette(ui.ctx(), wanted);
+                draw(ui, &model, &tx, &mut state);
+            });
+            out.textures_delta.clear(); // nothing renders them
+            state.palette()
+        };
+        assert_eq!(pass(0, dark), dark, "the first applies at once");
+        assert_eq!(ctx.global_style().visuals.panel_fill, dark.window);
+        assert_eq!(pass(1, dark), dark);
+        let shown: Vec<Palette> = [(2, light), (3, nord), (4, nord), (5, nord), (6, nord)]
+            .into_iter()
+            .map(|(t, wanted)| pass(t, wanted))
+            .collect();
+        assert!(!shown.contains(&light), "{shown:?}");
+        assert_eq!(shown.last(), Some(&nord));
+        assert_eq!(ctx.global_style().visuals.panel_fill, nord.window);
     }
 
     /// A 3:2 image in a square keeps its middle two thirds; a square one is shown whole.

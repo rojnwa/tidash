@@ -94,6 +94,8 @@ pub enum Action {
     CancelLastfm,
     /// Forgets the session key, the user, and the scrobbles still queued for Last.fm.
     DisconnectLastfm,
+    /// Creates the themes folder if need be and opens it in the file manager.
+    OpenThemesFolder,
 }
 
 /// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
@@ -228,6 +230,14 @@ pub enum Event {
     PlaylistDeleted(String),
     /// A Last.fm connect waits for the user to allow Tidash, or no longer.
     LastfmWaiting(bool),
+    /// What the theme picker lists (the catalog's palette files, by filename) and what to say
+    /// under it; `main` applies it whenever either changes.
+    Themes {
+        names: Vec<String>,
+        status: Option<fastframe_theme::Status>,
+    },
+    /// List the themes folder again (Settings opened): `main`'s.
+    RescanThemes,
     Error(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),

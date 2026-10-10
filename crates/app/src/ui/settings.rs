@@ -9,7 +9,8 @@ use crate::i18n::tr;
 use crate::messages::Secret;
 use crate::model::{Action, Event, Model, Route};
 use crate::scrobble::Keys;
-use crate::settings::{Account, Audio, Normalization, Theme, nonblank};
+use crate::settings::{Account, Audio, Normalization, Settings, Theme, nonblank};
+use fastframe_theme::Status;
 use std::borrow::Cow;
 
 pub struct State {
@@ -44,6 +45,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     let model = ctx.model;
     if !std::mem::replace(&mut state.listed, true) {
         ctx.send(Action::ListDevices);
+        ctx.events.push(Event::RescanThemes); // a file just dropped in shows
         let saved = &model.settings.account;
         state.client_id = saved.client_id.clone().unwrap_or_default();
         state.redirect_uri = saved.redirect_uri.clone().unwrap_or_default();
@@ -63,11 +65,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         }
         account(ui, state, &mut new.account);
         section(ui, tr("Appearance"));
-        ui.horizontal(|ui| {
-            ui.label(tr("Theme"));
-            ui.radio_value(&mut new.theme, Theme::Dark, tr("Dark"));
-            ui.radio_value(&mut new.theme, Theme::Light, tr("Light"));
-        });
+        if appearance(ui, model, &mut new) {
+            ctx.send(Action::OpenThemesFolder);
+        }
         section(ui, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
         section(ui, tr("Behavior"));
@@ -141,6 +141,93 @@ fn section(ui: &mut egui::Ui, title: Cow<'static, str>) {
     ui.add_space(16.0);
     ui.label(egui::RichText::new(title).strong().size(16.0));
     ui.add_space(8.0);
+}
+
+/// The theme picker (spec §5.8): the built-ins, then the catalog's files; a built-in clears
+/// the file and its cache, a file leaves the cache for `main` to fill. Then the status line and
+/// the album-art tint. Whether "Open themes folder" was clicked.
+fn appearance(ui: &mut egui::Ui, model: &Model, new: &mut Settings) -> bool {
+    let builtins = [
+        (Theme::System, tr("Follow system")),
+        (Theme::Dark, tr("Dark")),
+        (Theme::Light, tr("Light")),
+    ];
+    let selected = match &new.custom_theme {
+        Some(file) => fastframe_theme::display_name(file).to_owned(),
+        None => {
+            let builtin = builtins.iter().find(|(t, _)| *t == new.theme);
+            builtin
+                .map(|(_, label)| label.to_string())
+                .unwrap_or_default()
+        }
+    };
+    let mut open = false;
+    ui.horizontal(|ui| {
+        let title = tr("Theme");
+        ui.label(title.as_ref());
+        let combo = egui::ComboBox::from_id_salt("theme").selected_text(&selected);
+        let shown = combo.show_ui(ui, |ui| {
+            // Closed by hand: egui closes it on a pointer's click only, not on Enter, Space
+            // or a screen reader's.
+            let item = |ui: &mut egui::Ui, on, label: &str| {
+                let clicked = ui.selectable_label(on, label).clicked();
+                if clicked {
+                    ui.close();
+                }
+                clicked
+            };
+            for (theme, label) in &builtins {
+                let on = new.custom_theme.is_none() && new.theme == *theme;
+                if item(ui, on, label) {
+                    new.theme = *theme;
+                    (new.custom_theme, new.custom_theme_cache) = (None, None);
+                }
+            }
+            if !model.themes.is_empty() {
+                ui.separator();
+            }
+            for file in &model.themes {
+                let on = new.custom_theme.as_ref() == Some(file);
+                if item(ui, on, fastframe_theme::display_name(file)) {
+                    new.custom_theme = Some(file.clone());
+                }
+            }
+        });
+        // Named after the label beside it, which egui would only link to it.
+        shown.response.widget_info(|| {
+            let combo = egui::WidgetType::ComboBox;
+            let mut info = egui::WidgetInfo::labeled(combo, ui.is_enabled(), title.as_ref());
+            info.current_text_value = Some(selected.clone());
+            info
+        });
+        open = ui.button(tr("Open themes folder")).clicked();
+    });
+    if let Some(status) = &model.theme_status {
+        ui.weak(status_text(
+            status,
+            new.custom_theme.as_deref().unwrap_or_default(),
+        ));
+    }
+    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"));
+    open
+}
+
+/// What the theme picker says under it (spec §3.5), `selected` being the chosen file.
+pub fn status_text(status: &Status, selected: &str) -> String {
+    use fastframe_theme::Problem;
+    let text = match status {
+        Status::Loading => tr("Loading themes…"),
+        Status::SelectedUnavailable => {
+            let name = fastframe_theme::display_name(selected);
+            return tr("{name} can't be read; its last colours stay.").replace("{name}", name);
+        }
+        Status::Problem(Problem::Unreadable) => tr("The themes folder can't be read."),
+        Status::Problem(Problem::TooManyEntries | Problem::TooManyThemes) => {
+            tr("The themes folder holds too many files; some themes aren't listed.")
+        }
+        Status::Problem(_) => tr("Themes couldn't be listed."),
+    };
+    text.into_owned()
 }
 
 /// The client fields; Apply makes what was typed the `account`.
@@ -268,8 +355,8 @@ fn audio(ui: &mut egui::Ui, devices: &[String], audio: &mut Audio) {
 #[cfg(test)]
 mod tests {
     use super::super::{UiState, draw, testing};
-    use crate::model::{Action, Model, Route};
-    use crate::settings::{Audio, Normalization, Settings};
+    use crate::model::{Action, Event, Model, Route};
+    use crate::settings::{Audio, Normalization, Settings, Theme};
 
     /// One pass of the whole UI, its events applied to `model`: the actions it sent, and its
     /// output.
@@ -501,6 +588,57 @@ mod tests {
         model.settings.behavior.close_to_tray = true;
         let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
         assert!(!testing::disabled(&out, start));
+    }
+
+    /// A file from the catalog becomes `custom_theme`; a built-in clears it and its cache.
+    #[test]
+    fn picking_a_theme_file_sets_custom_theme() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        model.themes = vec!["Nord.json".into()];
+        // Opens the combo box (its list shows the pass after, once sized), then picks
+        // `choice` from it: the settings sent.
+        let mut choose = |model: &mut Model, choice: &str| {
+            let (_, out) = pass(&ctx, &mut state, model, vec![]);
+            pass(&ctx, &mut state, model, vec![testing::click(&out, "Theme")]);
+            let (_, out) = pass(&ctx, &mut state, model, vec![]);
+            let (sent, _) = pass(&ctx, &mut state, model, vec![testing::click(&out, choice)]);
+            set_settings(sent)
+        };
+        let sent = choose(&mut model, "Nord");
+        let custom: Vec<_> = sent.iter().map(|s| s.custom_theme.as_deref()).collect();
+        assert_eq!(custom, [Some("Nord.json")]);
+        let mut presets = fastframe_theme::presets::themes();
+        model.settings.custom_theme_cache = presets.find(|t| t.filename == "Nord.json");
+        let sent = choose(&mut model, "Light");
+        assert_eq!(sent.len(), 1, "{sent:?}");
+        assert_eq!(sent[0].theme, Theme::Light);
+        assert_eq!(sent[0].custom_theme, None);
+        assert_eq!(sent[0].custom_theme_cache, None);
+    }
+
+    /// Each visit asks for a fresh list of the themes folder, once.
+    #[test]
+    fn settings_open_rescans_the_themes() {
+        let ctx = egui::Context::default();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut rescans = |model: &Model| {
+            let mut events = Vec::new();
+            // Every pass's: egui may run more than one (a new grid sizes itself first).
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                events.extend(draw(ui, model, &tx, &mut state));
+            });
+            out.textures_delta.clear(); // nothing renders them
+            let rescan = |e: &&Event| matches!(e, Event::RescanThemes);
+            events.iter().filter(rescan).count()
+        };
+        assert_eq!(rescans(&model), 0);
+        model.navigate(Route::Settings);
+        assert_eq!((rescans(&model), rescans(&model)), (1, 0));
     }
 
     #[test]

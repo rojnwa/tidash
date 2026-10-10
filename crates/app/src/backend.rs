@@ -580,6 +580,19 @@ impl Backend {
                 self.emit.send(Event::LastfmWaiting(false));
             }
             Action::DisconnectLastfm => self.disconnect(Service::LastFm),
+            Action::OpenThemesFolder => {
+                let Some(dir) = crate::settings::themes_dir() else {
+                    return;
+                };
+                // Off the async workers, as `open_url`.
+                tokio::task::spawn_blocking(move || {
+                    let opened =
+                        std::fs::create_dir_all(&dir).and_then(|()| open::that_detached(&dir));
+                    if let Err(e) = opened {
+                        log::warn!("could not open the themes folder {}: {e}", dir.display());
+                    }
+                });
+            }
             Action::ListDevices => {
                 let emit = self.emit.clone();
                 tokio::task::spawn_blocking(move || {
