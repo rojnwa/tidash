@@ -49,9 +49,9 @@ pub struct State {
     asked: HashSet<String>,
 }
 
-/// The "All playlists" header with its New buttons, then the tree, which scrolls if long.
-/// New playlists and folders go to the top level. `collapsed`, the header is a rule over the
-/// buttons, stacked, and the rows show only their covers.
+/// The "All playlists" header with its New buttons, then the tree; the sidebar's scroll holds
+/// it. New playlists and folders go to the top level. `collapsed`, the header is a rule over
+/// the buttons, stacked, and the rows show only their covers.
 pub fn show(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, collapsed: bool) {
     let (pal, title) = (ctx.palette, tr("All playlists"));
     ui.add_space(theme::SIDEBAR_PAD);
@@ -66,9 +66,7 @@ pub fn show(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, collapsed: bool) {
             new_buttons(ui, &pal);
         });
     }
-    egui::ScrollArea::vertical()
-        .id_salt("library")
-        .show(ui, |ui| folder(ui, ctx, state, "root", collapsed));
+    folder(ui, ctx, state, "root", collapsed);
     dialog(ui.ctx(), ctx);
 }
 
