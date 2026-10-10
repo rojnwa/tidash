@@ -1,12 +1,14 @@
 //! The user's settings, saved as JSON in the config dir: the audio output and the streams,
-//! the theme, the TIDAL client, and the integrations.
+//! the look, the TIDAL client, and the integrations.
 
 use crate::scrobble::Service;
+use crate::theme::Palette;
+use fastframe_theme::CustomTheme;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub audio: Audio,
@@ -14,6 +16,34 @@ pub struct Settings {
     pub account: Account,
     pub integrations: Integrations,
     pub behavior: Behavior,
+    /// A palette file in `themes_dir` by name, over `theme`.
+    pub custom_theme: Option<String>,
+    /// The last palette read for `custom_theme`, kept when the file goes; a damaged one loads
+    /// as `None`.
+    #[serde(
+        deserialize_with = "fastframe_theme::read_cached_theme",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub custom_theme_cache: Option<CustomTheme<Palette>>,
+    /// The player bar and coverless pages take a tint from the playing cover.
+    pub accent_from_art: bool,
+    pub sidebar_collapsed: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            audio: Audio::default(),
+            theme: Theme::default(),
+            account: Account::default(),
+            integrations: Integrations::default(),
+            behavior: Behavior::default(),
+            custom_theme: None,
+            custom_theme_cache: None,
+            accent_from_art: true,
+            sidebar_collapsed: false,
+        }
+    }
 }
 
 /// What closing the window and a launch do; both need a tray the desktop shows
@@ -60,8 +90,10 @@ impl Integrations {
     }
 }
 
+/// The built-in palettes; System follows the desktop's dark or light.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Theme {
+    System,
     #[default]
     Dark,
     Light,
@@ -115,6 +147,12 @@ pub enum Normalization {
 /// `settings.json` in the per-user config dir; `None` without a home directory.
 pub fn path() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "tidash").map(|p| p.config_dir().join("settings.json"))
+}
+
+/// The palette files' folder, `themes` beside `path`.
+#[expect(dead_code, reason = "Task 3's theme catalog scans it")]
+pub fn themes_dir() -> Option<PathBuf> {
+    path().map(|p| p.with_file_name("themes"))
 }
 
 impl Settings {
@@ -267,6 +305,7 @@ mod tests {
         };
         assert_eq!(defaults.audio, want);
         assert_eq!(defaults.theme, Theme::Dark);
+        assert!(defaults.accent_from_art && !defaults.sidebar_collapsed);
         assert_eq!(defaults.account, Account::default());
         assert_eq!(Settings::load(&file), defaults, "missing");
         let saved = Settings {
@@ -290,7 +329,12 @@ mod tests {
                 close_to_tray: false,
                 start_minimized: true,
             },
+            custom_theme: Some("Nord.json".into()),
+            custom_theme_cache: fastframe_theme::presets::themes().nth(2),
+            accent_from_art: false,
+            sidebar_collapsed: true,
         };
+        assert!(saved.custom_theme_cache.is_some());
         saved.save(&file).expect("saved");
         assert_eq!(Settings::load(&file), saved);
         let json = r#"{"audio":{"exclusive":true},"account":{"client_id":"id"}}"#;
@@ -307,6 +351,15 @@ mod tests {
             ..defaults.clone()
         };
         assert_eq!(Settings::load(&file), partial, "the rest default");
+        std::fs::write(&file, r#"{"theme":"Light"}"#).expect("written");
+        assert_eq!(Settings::load(&file).theme, Theme::Light);
+        let json = r#"{"custom_theme":"Nord.json","custom_theme_cache":{"filename":7}}"#;
+        std::fs::write(&file, json).expect("written");
+        let damaged = Settings {
+            custom_theme: Some("Nord.json".into()),
+            ..defaults.clone()
+        };
+        assert_eq!(Settings::load(&file), damaged, "a damaged cache is none");
         std::fs::write(&file, "not json {").expect("written");
         assert_eq!(Settings::load(&file), defaults, "garbage");
         let _ = std::fs::remove_dir_all(&dir);

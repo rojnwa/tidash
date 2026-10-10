@@ -34,6 +34,8 @@ mod playback;
 mod queue;
 mod scrobble;
 mod settings;
+#[expect(dead_code, reason = "the design system's later tasks draw with it")]
+mod theme;
 mod tray;
 mod ui;
 
@@ -488,10 +490,11 @@ impl eframe::App for Window {
     }
 }
 
-fn egui_theme(theme: settings::Theme) -> egui::Theme {
+fn egui_theme(theme: settings::Theme) -> egui::ThemePreference {
     match theme {
-        settings::Theme::Dark => egui::Theme::Dark,
-        settings::Theme::Light => egui::Theme::Light,
+        settings::Theme::System => egui::ThemePreference::System,
+        settings::Theme::Dark => egui::ThemePreference::Dark,
+        settings::Theme::Light => egui::ThemePreference::Light,
     }
 }
 

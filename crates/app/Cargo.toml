@@ -9,7 +9,8 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-egui.workspace = true
+# serde: the settings keep a palette's `Color32`s (`custom_theme_cache`).
+egui = { workspace = true, features = ["serde"] }
 eframe.workspace = true
 tidal = { path = "../tidal" }
 player = { path = "../player" }
@@ -30,6 +31,7 @@ fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" 
 fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
 directories = "6"
 md5 = "0.8"
 serde.workspace = true

@@ -13,6 +13,10 @@ const QUIT: &str = "quit";
 
 /// What the tray, the desktop's media controls, or a later launch (`instance`) ask of the app.
 #[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a click's worth, rare; Action carries the settings"
+)]
 pub enum TrayAction {
     /// Bring the window up, making one if there is none.
     Show,
