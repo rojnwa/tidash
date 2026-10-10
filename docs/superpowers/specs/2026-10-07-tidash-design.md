@@ -196,8 +196,9 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
 
 ## 7. `app` — UI
 
-- **Layout** (as built in M4): left sidebar (back/forward, Home, Explore, Search, Collection, Settings, then the
-  library tree); centre view with back/forward history (`Route` stack); bottom player bar (art, title/artist,
+- **Layout** (TIDAL's shell, as built in the design system): left sidebar (Home, Explore, the collection's tabs as
+  rows, then the library tree; it collapses to icons); a top bar over the centre view with back/forward over the
+  history (`Route` stack), the search pill and a Settings gear; bottom player bar (art, title/artist,
   transport with shuffle and repeat, seek, volume, format badge e.g. `24/96 FLAC · Exclusive`, and the toggles of the
   right panel); right panel showing one of Queue (drag reorder), Lyrics or Credits, or none. Logged out, only the
   login page and Settings show.
@@ -217,14 +218,15 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
   playlist. A menu left open across a reload closes rather than act on another row.
 - **Keyboard** (Cmd on macOS): space play/pause, Ctrl+→/← next/prev, Ctrl+F search, Alt+←/→ back/forward, Ctrl+,
   Settings, Ctrl+Q quit (on every page; it never just hides to the tray); shortcut list in Settings.
-- **Theme:** dark default plus light (fastframe-theme). Accessibility via AccessKit. All strings through
-  fastframe-i18n.
+- **Theme:** Dark (TIDAL look, default), Light and Follow system, plus palette files: fastframe's presets and the
+  user's own in `<config>/themes/` (fastframe-theme). See the design-system design
+  (`2026-10-10-design-system-design.md`). Accessibility via AccessKit. All strings through fastframe-i18n.
 - **Settings** (as built in M4; the login page leads there too, with Back and without Log out): Account (Log out;
-  client ID and redirect URL, empty for the built-in client, Apply logs out), Appearance (Dark/Light), Audio (output
-  device, exclusive off by default, Hi-Res on by default, normalization Off/Track/Album, Off by default), Behavior
-  (Close to tray, on by default; Start minimized), Integrations (Last.fm, ListenBrainz, the Discord toggle; §8),
-  Keyboard shortcuts. Updates (check, pre-release channel) come with the updater (M5). Stored as `settings.json` in
-  the config dir; secrets in the credential store.
+  client ID and redirect URL, empty for the built-in client, Apply logs out), Appearance (the theme, Colour from
+  album art), Audio (output device, exclusive off by default, Hi-Res on by default, normalization Off/Track/Album,
+  Off by default), Behavior (Close to tray, on by default; Start minimized), Integrations (Last.fm, ListenBrainz,
+  the Discord toggle; §8), Keyboard shortcuts. Updates (check, pre-release channel) come with the updater (M5).
+  Stored as `settings.json` in the config dir; secrets in the credential store.
 
 ## 8. Integrations
 
@@ -343,6 +345,12 @@ minute): 126–149 ms over three runs; to 25:21: 127–144 ms; to 0:30: 2 ms. Un
 no index or byte-offset seek is needed; the cost scales with the target's byte offset (~0.09 ms per
 second of 24/192 audio).
 
+Design system (2026-10-11, Windows, same machine, release build `04d991e`, logged in, Home loaded 15 s
+after launch, then 10 s idle with `TIDASH_REPAINT_LOG=1`, three launches): first frame after 140–158 ms;
+a 106.6–108.4 MB working set (206.7–211.0 MB private), about 14 MB over M2's 93 MB and inside the
+150 MB budget; 0 repaint passes idle in every launch; a 22.5 MB binary (22,484,992 bytes; 21.2 MB
+before the SVG loader, resvg, came in; 16.8 MB at M1).
+
 ## 11. Shipping
 
 - **CI (GitHub Actions):** matrix Windows / macOS / Linux: `cargo fmt --check`, `cargo clippy -- -D warnings`,
@@ -363,7 +371,8 @@ second of 24/192 audio).
   FLAC fixtures (16/44.1, 24/96) committed under `crates/player/tests/fixtures`.
 - `app`: queue logic (shuffle, repeat, insert, reorder), scrobble rule, `Model::apply`; the backend, playlist edits
   and scrobbling against wiremock; views headless (an egui pass, clicked through their AccessKit labels).
-- No screenshot tests in v1; add when visual regressions appear.
+- No screenshot tests in v1; add when visual regressions appear. The `TIDASH_SCREENSHOT` switch (design system
+  §6.2) is a manual aid for looking at the UI, not a screenshot test.
 
 ## 13. Milestones
 
@@ -404,6 +413,13 @@ Last.fm and Discord need the build-time keys (§8), which the human creates; unt
 on wiremock only. The exit criterion, v1 scope complete, awaits the acceptance session (M4 plan, Task 15 Step 3),
 with the M3 session still owed.
 
+Design system outcome (2026-10-11, built; human acceptance pending): TIDAL 2.43's look and shell (a top bar with
+history, the search pill and a Settings gear; a collapsible sidebar holding the collection's tabs; TIDAL's rows,
+cards, shelves, page headers over the cover, the artist hero and the player bar), themes as Spotifast has them
+(Follow system, Dark, Light, fastframe's 8 presets and palette files, switched live with a reveal) and the player
+bar tinted from the playing cover. Budgets hold (§10). Details, rulings and the acceptance checklist: the design
+system plan's Outcome (`docs/superpowers/plans/2026-10-10-design-system.md`).
+
 ## 14. Spikes
 
 | Spike | Question | Done when |
@@ -436,8 +452,8 @@ with the M3 session still owed.
 
 | Crate | Version | Use |
 |---|---|---|
-| eframe / egui / egui_extras | 0.36.2 | UI (glow renderer, accesskit) |
-| fastframe-* | git tag v0.4.1 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (fonts pinned to crmne/fastframe#17 until it ships; tray, shell, instance added in M4) |
+| eframe / egui / egui_extras | 0.36.2 | UI (glow renderer, accesskit); egui_extras' `svg` loader for the icons (design system) |
+| fastframe-* | git tag v0.4.1 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (fonts pinned to crmne/fastframe#17 until it ships; tray, shell, instance added in M4; theme, icons in the design system) |
 | symphonia | 0.6.1 | FLAC decode, MP4 demux |
 | cpal | 0.18.2 | shared output (via fastframe-audio); exclusive on macOS and Linux (`hw:`) |
 | wasapi | 0.25.0 | Windows exclusive |

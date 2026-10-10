@@ -1,6 +1,6 @@
 # Tidash design system: design
 
-**Date:** 2026-10-10. **Status:** draft for review. **Comes before:** M5 (ship).
+**Date:** 2026-10-10. **Status:** built (2026-10-11); human acceptance pending. **Comes before:** M5 (ship).
 **Builds on:** `2026-10-07-tidash-design.md` §7 ("Theme: dark default plus light (fastframe-theme)").
 
 ## 1. Goal
@@ -177,7 +177,8 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Card | target 175 wide, gap 16, `n = clamp(floor(W / 175), 1, 8)` per row, `width = (W − (n−1)·16) / n` |
 | Covers | page header 240, player 52, sidebar 36, queue 40 |
 | Buttons | icon 32 (16 glyph), transport 40, play disc 40 (22 glyph), card play/overlay controls 36, pill 40 tall |
-| Radii | artwork 2, row 5, badge 4, field and stock widget 8, nav row / menu / card hover 12, dialog 20, pills and discs full |
+| Radii | artwork 2, row 5, field and stock widget 8, nav row / menu / card hover 12, dialog 20, pills (the badge too) and discs full |
+| Window minimum | 960 × 600 (the sidebar, the side panel and the player bar's columns need it) |
 
 ### 4.5 Motion
 
@@ -257,8 +258,12 @@ neither sidebar nor top bar (as today).
 
 ### 5.3 Top bar and search
 
-- 56 tall, window fill, inside the central panel above the page scroll; page padding on both sides. As in TIDAL 2.43:
+- 56 tall, inside the central panel above the page scroll; page padding on both sides. As in TIDAL 2.43:
   history on the left, search and the gear on the right.
+- Drawn before the page, so it comes first in Tab and AccessKit order, on a sublayer above the page's, so it paints
+  over and takes the clicks from what paints behind it. It has no fill: the album, playlist and mix backdrop, the
+  artist hero and the coverless tint (§5.9) start at the window's top, behind it; the page's scroll viewport starts
+  below it.
 - Back and Forward: 32 px `icon_button`s (`chevron-left` / `chevron-right`) side by side on one `surface` pill,
   disabled at the history's ends, labels "Back" / "Forward".
 - `search_field`: a 40 px pill, 280 wide, right-aligned before the gear, surface fill, `search` icon and placeholder "Search TIDAL" in dim; focused
@@ -310,14 +315,18 @@ neither sidebar nor top bar (as today).
 
 ### 5.7 Player bar
 
-- Panel fill, 88 tall, 1 px outline on its top edge; three columns 1 : 1.5 : 1.
+- Panel fill, 88 tall, 1 px outline on its top edge; three columns about 1 : 1.5 : 1: the right one at least wide
+  enough for its controls and the widest format pill the exclusive setting can show ("24/176.4 FLAC · Exclusive",
+  or without " · Exclusive"), playing or not, so Play never moves; the left takes what is left.
 - Left: 52 px cover (radius 2); title Label; artists Small secondary.
 - Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc), Previous and Next (40,
   `skip-back-filled` / `skip-forward-filled`), Play/Pause a bare 24 px `play-filled` / `pause-filled` glyph in text
   in a 40 px hit box (TIDAL 2.43 draws no disc).
   Below, the seek row (max 800 wide): times in Small secondary, tabular; a stock slider styled per §4.6.
-- Right: the format badge (`badge`, tier colours), then Queue (`list-music`), Lyrics (`mic-vocal`), Credits (`info`)
-  icon buttons, text when their panel shows and secondary otherwise, then a volume icon and a 90 px slider.
+- Right: the format badge (`badge`, tier colours) with the short format ("24/96 FLAC", plus " · Exclusive"), its
+  hover text and AccessKit value the full badge text and its explanation; then Queue (`list-music`), Lyrics
+  (`mic-vocal`), Credits (`info`) icon buttons, toggles drawn like Shuffle (text and a surface_active disc when their
+  panel shows, secondary otherwise), then a volume icon and a 90 px slider.
 - Every control keeps its current AccessKit label: "Play"/"Pause", "Previous", "Next", "Shuffle", "Repeat off" /
   "Repeat all" / "Repeat one", "Queue", "Lyrics", "Credits", "Volume"; tooltips show the same text.
 
@@ -327,7 +336,8 @@ neither sidebar nor top bar (as today).
   40 px cover. Lyrics: lines in 16 SemiBold, the current one in text and the rest in dim. Credits: role headers in
   Small secondary, names as links.
 - Menus, popovers, tooltips and dialogs are stock egui, styled by §4.6 (overlay fill, radius 12 and 20, shadow).
-- Settings: Heading per section, one row per setting (label left, control right). Appearance becomes a combo box:
+- Settings: Heading per section, one row per setting, left to right: the label in a 180 px column (cut to it), then
+  the controls in reading order; in a narrower content area the label sits above them. Appearance becomes a combo box:
   Follow system, Dark, Light, a separator, then the catalog's themes by `display_name`; beside it "Open themes folder";
   under it the catalog status line. Primary actions (Apply, Log in) are primary pills; the rest stock buttons.
 - Login: a centred column with the primary pill "Log in with TIDAL" and a Settings link.

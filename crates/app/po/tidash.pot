@@ -78,6 +78,7 @@ msgstr ""
 
 #: src/ui/header.rs
 #: src/tray.rs
+#: src/ui/player_bar.rs
 msgid "Play"
 msgstr ""
 
@@ -208,6 +209,7 @@ msgid "Scroll right"
 msgstr ""
 
 #: src/ui/shelf.rs
+#: src/ui/tracks.rs
 msgid "Artist"
 msgstr ""
 
@@ -366,6 +368,7 @@ msgstr ""
 
 #: src/ui/album.rs
 #: src/ui/settings.rs
+#: src/ui/tracks.rs
 msgid "Album"
 msgstr ""
 
@@ -565,6 +568,7 @@ msgid "Cancel"
 msgstr ""
 
 #: src/ui/library.rs
+#: src/ui/tracks.rs
 msgid "Title"
 msgstr ""
 

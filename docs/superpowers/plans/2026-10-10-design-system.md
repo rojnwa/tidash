@@ -306,3 +306,79 @@
 - [ ] **Step 3 (controller): budgets.** Release build, three launches each: first frame time, working set on Home after 15 s, idle passes with `TIDASH_REPAINT_LOG=1` (pointer away), binary size; compare with spec §10's last numbers and record them in its §10.
 - [ ] **Step 4: Commit.** `docs: design system outcome and follow-ups`
 - [ ] **Step 5: Human acceptance** (one session, spec §6.3): Tidash beside TIDAL on Home, an album, a playlist, Search; switch Follow system / Dark / Light / Nord live and watch the reveal; edit a palette file, then break it; play tracks with different covers and watch the bar's tint follow, then turn "Colour from album art" off; collapse and expand the sidebar; Tab through the top bar, sidebar, a list and the player bar with the focus ring visible; hover and press cards, rows and buttons. Results go into this plan's outcome and the follow-ups.
+
+## Outcome
+
+Built (2026-10-11, `3c50119..04d991e` plus the docs commit; human acceptance pending): TIDAL 2.43's look by
+default and Spotifast's themes. `theme.rs` holds the `Palette` (fastframe's 16 colour names; TIDAL's Dark, our
+Light), its egui `Style` mapping, TIDAL's sizes, type scale and quality tiers, and the `Icon` set (fastframe's
+Lucide plus app SVGs). `ui/widgets.rs` paints the controls stock egui cannot. The shell is TIDAL's: a top bar
+(history pill, search pill, Settings gear) above every page, the offline notice and errors in a strip under it; a
+sidebar with Home, Explore, the collection's tabs and the library tree that collapses to 78 px icons; track rows
+with a column header, hover play glyph and the playing row in its tier colour; cards sized to the window, shelves
+with ‹ › and View all; album, playlist and mix headers over their cover's 16 px backdrop, the artist page a hero;
+the player bar with bare transport glyphs, a format pill and toggles; the side panel, Settings and login restyled.
+Themes: Follow system, Dark, Light, fastframe's 8 presets (installed into `<config>/themes/` on the first run) and
+any palette file dropped there, switched live with the band reveal; a broken or vanished file keeps its cached
+colours and Settings says why. "Colour from album art" (on by default) tints the player bar and the top of
+coverless pages from the playing cover. The window's minimum is 960×600. Also a `TIDASH_SCREENSHOT` switch for
+looking at the UI and `TIDASH_THEME` for one run's theme (spec §6.2). `cargo test -p tidash`: 266 passed at the
+docs commit; clippy clean at each task. Budgets (main spec §10): first frame 140–158 ms, 106.6–108.4 MB working
+set on Home (M2: 93 MB; budget 150 MB), 0 idle passes, a 22.5 MB binary (+1.0 MB for the SVG loader).
+
+Rulings that changed the spec or the plan (32 in the controller's ledger, which is not committed; the design
+spec's text now carries those that change what it says):
+
+- From TIDAL 2.43's screenshots: the top bar has history on the left and search and the gear on the right (R6);
+  sidebar headers in sentence case, "Collection" and "All playlists" (R7); Play/Pause a bare 24 px glyph with no
+  disc, hover scaling it (R8, R26, R27); the artist page a hero with no type line or placeholder slab (R9, R23);
+  the album, playlist and mix action row under the cover-and-title block (R22); the format badge a pill with a 1 px
+  tier stroke (R10).
+- Layout: everything below the sidebar's collapse button scrolls as one (R17); the window's minimum is 960×600
+  (R16); Settings rows read left to right, a 180 px label column then the controls, stacking when narrow, no
+  `egui::Sides` (R30); the top bar is drawn before the page on a sublayer above it, so it is first in Tab order
+  while backdrops and the hero paint up behind it (R31).
+- Player bar: the format pill shows the short format, the full text in its hover and AccessKit value (R25); the
+  right column is sized for the widest pill the exclusive setting can show, playing or not, so Play never moves
+  (R28); its sliders' trailing fill is `text` locally and the rail `surface_active` (R14, R32).
+- Headers: the backdrop gradient starts at `window` 60% (R21); the 16 px backdrop is cropped, not stretched (R24);
+  the backdrop and the tint read only the exact 16 px texture (R20), while covers drawn at their own size take the
+  nearest cached size as a stand-in and are requested in 32 px steps above 64 px, so a resize does not reload
+  every cover (R19).
+- Kit and tokens: `icon_button` takes `toggle: Option<bool>`, every toggle (Shuffle, Repeat, Queue, Lyrics,
+  Credits) one look with its on state reported to AccessKit (R15); egui's solid scroll bars stay, a little heavier
+  than TIDAL's (R13); the dominant-colour test's fixture is a grey ramp (R12); durations need no tabular work, Inter's
+  figures are tabular already (R18).
+- Process: Tidash had no stored session, so the logged-in screenshot checks waited for the human's login (R11) and
+  ran as two visual passes; the first one's five fixes (V1–V5: the history pill's size, backdrops behind the top
+  bar, the player sliders' knobs, no cover placeholder with nothing playing, the module gap) went to one polish
+  task reviewed like the others (R29).
+
+Visual verification (controller; screenshots in the session scratchpad, not committed: TIDAL's UI and artwork):
+TIDAL 2.43 references of Home, an album, a playlist, an artist and a mix at 1440×900 by `PrintWindow`, no input
+sent; the login page in Dark, Light and Nord after Task 3; once the human had logged in, a pass at `daac5d3`
+(`s11-*`, Dark, Light and Nord) that found V1–V5, and after the polish a release pass at `04d991e`
+(`p-{dark,light,nord}-{home,album,playlist,artist,mix}.png`) laid beside the references on a comparison page for
+the human. Not looked at yet: the player bar while a track plays (and its tint), the collapsed sidebar, Settings,
+the login page in the new look, and the queue, lyrics and credits panels.
+
+Still owed: the human acceptance session (Step 5), as this checklist, release build, beside TIDAL 2.43:
+
+- [ ] Home, an album, a playlist and Search beside TIDAL: the same family (canvas, shell, sizes, hover).
+- [ ] Settings › Appearance: Follow system, Dark, Light, Nord, switched live; the band reveal plays each time.
+  Follow system follows Windows' light/dark setting.
+- [ ] Edit a palette file in the themes folder (Open themes folder): the change shows after reopening Settings.
+  Break it (invalid JSON) while selected: the last colours stay and the status line says it can't be read. Delete
+  it: the same.
+- [ ] Play tracks with different covers: the player bar's tint follows, easing; coverless pages (Home, Search) get
+  the tint at the top. Turn "Colour from album art" off: both plain.
+- [ ] The player bar while playing: cover, title, artists, the format pill (tier colour), times and seek; Play does
+  not move between tracks or at start/stop. With Exclusive on at the 960×600 minimum, the title column is tight
+  (~31 px, R25/R28): decide whether that is acceptable.
+- [ ] Collapse and expand the sidebar: it slides; collapsed, every row navigates and shows its name as a tooltip.
+- [ ] Tab through the top bar, the sidebar, a track list and the player bar: the 2 px focus ring shows on every
+  control; Enter and Space activate.
+- [ ] Hover and press cards (the cover's shade), rows (the play glyph), shelf arrows, pills and transport glyphs:
+  the feel matches TIDAL's.
+- [ ] Settings, the login page (log out once), the queue, lyrics and credits panels in Dark and Light.
+- [ ] Results go here and into `docs/follow-ups.md`.

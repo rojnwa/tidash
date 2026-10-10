@@ -1,4 +1,4 @@
-# Follow-ups carried out of M0–M4
+# Follow-ups carried out of M0–M4 and the design system
 
 Parked by task reviews and the final reviews. Pick each up in the milestone that touches its code.
 
@@ -112,6 +112,55 @@ Parked in M4:
   shows) and the `quit_shortcuts` clear in `setup_look` (`main.rs`); the backend's
   `Action::OpenTrack` arm; `set_audio`'s abort of an unsent preload and a normalization-only change
   (`playback/tests.rs`).
+
+## Design system
+
+Parked in the design-system milestone (2026-10-11; its rulings are summarized in the plan's Outcome).
+
+- Not built: play and favourite buttons on cards (playing an album or playlist by id needs a backend
+  action that does not exist yet); the track row's "…" button (the context menu covers it); Shuffle on
+  page headers, beside Play, as TIDAL 2.43 has it.
+- Ship Inter's licence (`Inter-LICENSE.txt`) and the icons' Lucide (ISC) and Spotifast (MIT) notices
+  (`crates/app/assets/icons/LICENSE.txt`) in every package (M5).
+- With Exclusive on, a window at the 960×600 minimum leaves the player's title column ~31 px: the
+  right column is sized for the widest short pill ("24/176.4 FLAC · Exclusive") so Play never moves
+  (Rulings 25, 28); a longer "Exclusive" translation could make the left column's floor bind and cut
+  the pill (`ui/player_bar.rs`). Look at it in the acceptance session.
+- Between tracks the player bar dips toward `panel` until the new cover's 16 px image loads: keep the
+  last tint (one `Option` in `UiState`). The bar's tint also fades on a theme change while everything
+  else switches at once (`ui/mod.rs`).
+- `ui/mod.rs` is ~980 lines, `main.rs` 865 and `ui/settings.rs` 832 (soft limit ~800): move the tint
+  (`tint`, `bar_fill`, their test) to `ui/tint.rs` and the behind-the-bar helpers (`bar_id`,
+  `behind_bar`) to `top_bar.rs`; `pick` and its tests to `theme.rs`.
+- Theme changes: a change and a change back within 0.25 s leave the `Transition` capturing, so the next
+  change skips the reveal (`ui/mod.rs`); "Loading themes…" blinks and shifts Settings on each visit
+  (reserve its line, `ui/settings.rs`); `widgets.noninteractive`'s `fg_stroke` and `bg_fill` keep
+  egui's greys (`theme.rs`).
+- Top bar: Ctrl+F still opens the Search page now that the field is on every page (product question);
+  the focused search pill draws its hint like typed text, and a click on its icon does not focus it
+  (`ui/widgets.rs`); a long error pushes its Dismiss button off-screen.
+- Sidebar: collapsed, the icons pop in at the end of the slide, and the scroll bar leaves 36 px for the
+  40 px nav rows (~4 px spill, icons off-centre); a long "All playlists" translation pushes the New
+  buttons out (`ui/sidebar.rs`, `ui/library.rs`).
+- Shelves: a quick second › click lands short of a page (it retargets from the animated offset); the
+  arrows are never dimmed at the ends or when every card fits; "View all" lost its pointing-hand
+  cursor (`ui/shelf.rs`).
+- The artist hero's picture is requested per 32 px of width (clamp to the largest rendition); the
+  exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`).
+- Settings' help texts under the rows are not AccessKit descriptions; the token field says "User token"
+  twice (name and placeholder) (`ui/settings.rs`).
+- "Album", "Artist" and "Playlist" share one msgid across senses (type line, column header, setting)
+  without `msgctxt` (`tidash.pot`).
+- The player bar's slider knob copies egui's private slider geometry (height / 2.5, `shrink(radius)`),
+  so an egui upgrade can move the rail out from under it; add a same-centre check (`ui/player_bar.rs`).
+- Screenshot switch: a minimized or occluded window can hang it (the 20 s cap lives in `draw`; put the
+  deadline in `logic`), and a run while Tidash runs exits silently (`main.rs`). The pageless-route
+  list is in three places (`main.rs`, `model.rs`, `pages.rs`; a `Route::has_page`).
+- Untested: the top bar painting above the backdrop and hero, and the AccessKit order; the off-screen
+  16 px tint request, the coverless gradient and the 16 px texture surviving an over-budget insert;
+  folder open state across the sidebar switch; ‹ on shelves and the grid geometry. `testing::bounds`
+  matches only `label()` (`Role::Label` nodes keep their text in `value`). The 960×600 minimum is a
+  literal in `main.rs` and the tests (a `theme` constant).
 
 ## Player
 
