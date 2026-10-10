@@ -324,7 +324,9 @@ colours and Settings says why. "Colour from album art" (on by default) tints the
 coverless pages from the playing cover. The window's minimum is 960×600. Also a `TIDASH_SCREENSHOT` switch for
 looking at the UI and `TIDASH_THEME` for one run's theme (spec §6.2). `cargo test -p tidash`: 266 passed at the
 docs commit; clippy clean at each task. Budgets (main spec §10): first frame 140–158 ms, 106.6–108.4 MB working
-set on Home (M2: 93 MB; budget 150 MB), 0 idle passes, a 22.5 MB binary (+1.0 MB for the SVG loader).
+set on Home (M2: 93 MB; budget 150 MB), 0 idle passes, a 22.5 MB binary (+1.0 MB at Task 4 for the SVG loader,
++0.2 MB since). The measured budgets hold (first frame, idle RAM, idle passes, binary size); scroll pacing and CPU
+while paused or minimized were not re-measured.
 
 Rulings that changed the spec or the plan (32 in the controller's ledger, which is not committed; the design
 spec's text now carries those that change what it says):

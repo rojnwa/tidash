@@ -25,7 +25,7 @@ Success:
 | Architecture | Spotifast's pattern: the app owns a `Palette` with fastframe's 16 colour names, maps it onto egui's `Style` for stock widgets, and paints its own controls from it; sizes and type are constants. |
 | Font | Inter (already bundled by `fastframe-fonts`, 400/500/600/700). TIDAL draws Cash Sans and bundles Nationale; both are proprietary. |
 | Icons | SVG through `fastframe-icons` (Lucide, ISC), tinted at draw time; filled play/pause/skip/heart variants as app SVGs. |
-| Frosted glass | egui has no backdrop blur: the player bar is opaque (`#1e1e1e` is TIDAL's `#282828bf` over black). The page header's blurred cover is a 16 px texture stretched with linear filtering. |
+| Frosted glass | egui has no backdrop blur: the player bar is opaque (`#1e1e1e` is TIDAL's `#282828bf` over black). The page header's blurred cover is a 16 px texture cropped to the page's width with linear filtering (§5.4). |
 | Album-art tint | Yes, as Spotifast: the playing cover's colour tints the player bar and the top of pages without a cover of their own; a setting turns it off (§5.9). |
 | Theme change | Animated with fastframe-theme's `Transition` (a band revealing the new colours, 0.42 s). |
 | Sidebar | Collapsible to 78 px, icons only, with egui's `Panel::show_switched` sliding between the two (§5.2). |
@@ -46,7 +46,8 @@ Success:
   - `Icon`: `fastframe_icons::icons!` over the Lucide set plus app SVGs in `crates/app/assets/icons/`.
 - **`crates/app/src/ui/widgets.rs`** (new): the controls stock egui cannot draw in TIDAL's style, each a free function
   that allocates, paints from the palette, sets its AccessKit `WidgetInfo` and draws the focus ring:
-  `icon_button`, `circle_button`, `pill_button` (primary or secondary), `nav_row`, `search_field`, `badge`,
+  `icon_button`, `circle_button`, `glyph_button` (the player's bare transport glyphs), `pill_button` (primary or
+  secondary), `nav_row`, `search_field`, `badge`,
   `vertical_gradient`, `focus_ring`. Sliders, checkboxes, combo boxes, text fields and menus stay stock egui,
   styled through §4.6.
 - Views (`ui/*.rs`) lose their local sizes and colours and draw with `theme` and `widgets`.
@@ -126,8 +127,8 @@ Dark is TIDAL's dark mode (its only mode). Light is ours, built with the same ru
 | text | `#ffffff` | `#000000` | primary text and icons |
 | secondary | `#ffffff8c` | `#0000008c` | subtitles, idle icons, index and duration columns, times |
 | dim | `#ffffff4d` | `#00000059` | section headers, placeholders, disabled |
-| accent | `#ffffff` | `#000000` | primary pill, play disc, slider fill, focus ring, selection |
-| accent_hover | `#e5e5e5` | `#333333` | hovered primary pill and play disc |
+| accent | `#ffffff` | `#000000` | primary pill, slider fill (outside the player bar), focus ring, selection |
+| accent_hover | `#e5e5e5` | `#333333` | hovered primary pill |
 | on_accent | `#000000` | `#ffffff` | glyphs and labels on accent |
 | danger | `#ff4242` | `#d92d2d` | destructive menu items, failures |
 | warning | `#ff3269` | `#d4145a` | offline and error strip |
@@ -176,7 +177,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Track row / column header | 48 / 36; index column 42; cover column 42 (40 px cover) |
 | Card | target 175 wide, gap 16, `n = clamp(floor(W / 175), 1, 8)` per row, `width = (W − (n−1)·16) / n` |
 | Covers | page header 240, player 52, sidebar 36, queue 40 |
-| Buttons | icon 32 (16 glyph), transport 40, play disc 40 (22 glyph), card play/overlay controls 36, pill 40 tall |
+| Buttons | icon 32 (16 glyph); transport 40 hit box with a bare glyph, Play/Pause 24, Previous/Next 22; heart disc 40; card play/overlay controls 36; pill 40 tall |
 | Radii | artwork 2, row 5, field and stock widget 8, nav row / menu / card hover 12, dialog 20, pills (the badge too) and discs full |
 | Window minimum | 960 × 600 (the sidebar, the side panel and the player bar's columns need it) |
 
@@ -207,8 +208,9 @@ From `Visuals::dark()` or `light()` by `dark`, then:
   active surface_active, each composited over surface into an opaque colour (Dark's are translucent: on their own
   they would be darker than the idle fill); `weak_bg_fill` the same.
 - Text styles of §4.3; `item_spacing` (8, 8); `button_padding` (16, 8); `interact_size` (40, 32); `menu_margin` 4.
-- Sliders: `slider_rail_height` 4, circle handle; the trailing fill is egui's selection fill globally, and the player
-  bar's sliders set it to text locally (§5.7).
+- Sliders: `slider_rail_height` 4, circle handle; the trailing fill is egui's selection fill globally. The player
+  bar's sliders differ (§5.7): a `surface_active` rail, `text` up to the value, and an app-drawn `text` knob with no
+  stroke (~13.6 px) over egui's handle, which takes the rail's colour.
 - Scroll bars stay `ScrollStyle::solid()` (the floating bars' fade repaints while idle, S3): 6 px wide; egui's solid
   bars always show their track (`surface`) and draw the handle at 55% text, full text hovered or dragged. TIDAL's
   hidden track is out of reach without the floating bars.
@@ -319,10 +321,12 @@ neither sidebar nor top bar (as today).
   enough for its controls and the widest format pill the exclusive setting can show ("24/176.4 FLAC · Exclusive",
   or without " · Exclusive"), playing or not, so Play never moves; the left takes what is left.
 - Left: 52 px cover (radius 2); title Label; artists Small secondary.
-- Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc), Previous and Next (40,
-  `skip-back-filled` / `skip-forward-filled`), Play/Pause a bare 24 px `play-filled` / `pause-filled` glyph in text
-  in a 40 px hit box (TIDAL 2.43 draws no disc).
-  Below, the seek row (max 800 wide): times in Small secondary, tabular; a stock slider styled per §4.6.
+- Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc); Previous and Next bare 22 px
+  `skip-back-filled` / `skip-forward-filled` glyphs and Play/Pause a bare 24 px `play-filled` / `pause-filled`
+  glyph, in text, each in a 40 px hit box (`glyph_button`; TIDAL 2.43 draws no disc, hovered or not: hover scales
+  the glyph).
+  Below, the seek row (max 800 wide): times in Small secondary, tabular; egui's slider with the player bar's look
+  (§4.6: `surface_active` rail, `text` fill and a stroke-less `text` knob).
 - Right: the format badge (`badge`, tier colours) with the short format ("24/96 FLAC", plus " · Exclusive"), its
   hover text and AccessKit value the full badge text and its explanation; then Queue (`list-music`), Lyrics
   (`mic-vocal`), Credits (`info`) icon buttons, toggles drawn like Shuffle (text and a surface_active disc when their

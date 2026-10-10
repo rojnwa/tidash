@@ -348,8 +348,8 @@ second of 24/192 audio).
 Design system (2026-10-11, Windows, same machine, release build `04d991e`, logged in, Home loaded 15 s
 after launch, then 10 s idle with `TIDASH_REPAINT_LOG=1`, three launches): first frame after 140–158 ms;
 a 106.6–108.4 MB working set (206.7–211.0 MB private), about 14 MB over M2's 93 MB and inside the
-150 MB budget; 0 repaint passes idle in every launch; a 22.5 MB binary (22,484,992 bytes; 21.2 MB
-before the SVG loader, resvg, came in; 16.8 MB at M1).
+150 MB budget; 0 repaint passes idle in every launch; a 22.5 MB binary (22,484,992 bytes: +1.0 MB at
+Task 4 for the SVG loader, resvg, +0.2 MB since; 16.8 MB at M1).
 
 ## 11. Shipping
 
@@ -417,8 +417,9 @@ Design system outcome (2026-10-11, built; human acceptance pending): TIDAL 2.43'
 history, the search pill and a Settings gear; a collapsible sidebar holding the collection's tabs; TIDAL's rows,
 cards, shelves, page headers over the cover, the artist hero and the player bar), themes as Spotifast has them
 (Follow system, Dark, Light, fastframe's 8 presets and palette files, switched live with a reveal) and the player
-bar tinted from the playing cover. Budgets hold (§10). Details, rulings and the acceptance checklist: the design
-system plan's Outcome (`docs/superpowers/plans/2026-10-10-design-system.md`).
+bar tinted from the playing cover. The measured budgets hold (first frame, idle RAM, idle passes, binary size;
+§10); scroll pacing and CPU while paused or minimized were not re-measured. Details, rulings and the acceptance
+checklist: the design system plan's Outcome (`docs/superpowers/plans/2026-10-10-design-system.md`).
 
 ## 14. Spikes
 

@@ -39,8 +39,6 @@ Parked in M4:
   request timing out last; Failed should never overwrite Ready, `model.rs`); the lyrics and credits
   scroll offset carries over between tracks (`id_salt` not keyed by the track); the highlight lags a
   line change by up to 250 ms; a blank synced line shows "…" outside `tr` (`ui/lyrics.rs`).
-- The player bar reserves an estimated 420 pt for the three panel toggles (`ui/player_bar.rs`);
-  measure it in the acceptance session.
 - "Added n tracks" and "Already in this playlist" go out through the error list, warn-coloured (R17);
   a styled info notice (`library.rs`).
 - The "Added n tracks to {playlist}" notice reads the title through the cached GET, so a just-renamed
@@ -120,12 +118,14 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Not built: play and favourite buttons on cards (playing an album or playlist by id needs a backend
   action that does not exist yet); the track row's "…" button (the context menu covers it); Shuffle on
   page headers, beside Play, as TIDAL 2.43 has it.
-- Ship Inter's licence (`Inter-LICENSE.txt`) and the icons' Lucide (ISC) and Spotifast (MIT) notices
-  (`crates/app/assets/icons/LICENSE.txt`) in every package (M5).
+- Ship Inter's licence (`Inter-LICENSE.txt`, in fastframe-fonts' `fonts/` folder) and the icons'
+  Lucide (ISC) and Spotifast (MIT) notices (`crates/app/assets/icons/LICENSE.txt`) in every package
+  (M5).
 - With Exclusive on, a window at the 960×600 minimum leaves the player's title column ~31 px: the
-  right column is sized for the widest short pill ("24/176.4 FLAC · Exclusive") so Play never moves
-  (Rulings 25, 28); a longer "Exclusive" translation could make the left column's floor bind and cut
-  the pill (`ui/player_bar.rs`). Look at it in the acceptance session.
+  right column is sized from its measured controls and the widest short pill ("24/176.4 FLAC ·
+  Exclusive") so Play never moves (Rulings 25, 28; this replaced M4's estimated 420 pt); a longer
+  "Exclusive" translation could make the left column's floor bind and cut the pill
+  (`ui/player_bar.rs`). Look at it in the acceptance session.
 - Between tracks the player bar dips toward `panel` until the new cover's 16 px image loads: keep the
   last tint (one `Option` in `UiState`). The bar's tint also fades on a theme change while everything
   else switches at once (`ui/mod.rs`).
@@ -145,22 +145,28 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Shelves: a quick second › click lands short of a page (it retargets from the animated offset); the
   arrows are never dimmed at the ends or when every card fits; "View all" lost its pointing-hand
   cursor (`ui/shelf.rs`).
-- The artist hero's picture is requested per 32 px of width (clamp to the largest rendition); the
-  exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`).
+- Headers: the artist hero's picture is requested per 32 px of width (clamp to the largest
+  rendition); the exact-size cover request is built twice (`ui/header.rs`, `ui/mod.rs`); a debug build
+  logs egui's PERF WARNING when a header's height changes three frames running; the cover to action
+  row gap is 40 against TIDAL's ~48 (check in the acceptance session).
 - Settings' help texts under the rows are not AccessKit descriptions; the token field says "User token"
   twice (name and placeholder) (`ui/settings.rs`).
 - "Album", "Artist" and "Playlist" share one msgid across senses (type line, column header, setting)
   without `msgctxt` (`tidash.pot`).
 - The player bar's slider knob copies egui's private slider geometry (height / 2.5, `shrink(radius)`),
-  so an egui upgrade can move the rail out from under it; add a same-centre check (`ui/player_bar.rs`).
+  so an egui upgrade can move egui's handle out from under it; add a same-centre check
+  (`ui/player_bar.rs`).
 - Screenshot switch: a minimized or occluded window can hang it (the 20 s cap lives in `draw`; put the
-  deadline in `logic`), and a run while Tidash runs exits silently (`main.rs`). The pageless-route
-  list is in three places (`main.rs`, `model.rs`, `pages.rs`; a `Route::has_page`).
+  deadline in `logic`), it does not wait for a running theme `Transition`, and a run while Tidash
+  runs exits silently (`main.rs`). The pageless-route list is in three places (`main.rs`, `model.rs`,
+  `pages.rs`; a `Route::has_page`).
 - Untested: the top bar painting above the backdrop and hero, and the AccessKit order; the off-screen
   16 px tint request, the coverless gradient and the 16 px texture surviving an over-budget insert;
-  folder open state across the sidebar switch; ‹ on shelves and the grid geometry. `testing::bounds`
-  matches only `label()` (`Role::Label` nodes keep their text in `value`). The 960×600 minimum is a
-  literal in `main.rs` and the tests (a `theme` constant).
+  folder open state across the sidebar switch; ‹ on shelves and the grid geometry; the widget kit at
+  idle (`repaint_delay == MAX`); `dominant()` on partly transparent images. `testing::bounds` matches
+  only `label()` (`Role::Label` nodes keep their text in `value`); the settings test pairs "Nord.json"
+  with `presets::themes().nth(2)` instead of finding it by filename. The 960×600 minimum is a literal
+  in `main.rs` and the tests (a `theme` constant).
 
 ## Player
 
