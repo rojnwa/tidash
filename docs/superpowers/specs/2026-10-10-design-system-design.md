@@ -26,6 +26,9 @@ Success:
 | Font | Inter (already bundled by `fastframe-fonts`, 400/500/600/700). TIDAL draws Cash Sans and bundles Nationale; both are proprietary. |
 | Icons | SVG through `fastframe-icons` (Lucide, ISC), tinted at draw time; filled play/pause/skip/heart variants as app SVGs. |
 | Frosted glass | egui has no backdrop blur: the player bar is opaque (`#1e1e1e` is TIDAL's `#282828bf` over black). The page header's blurred cover is a 16 px texture stretched with linear filtering. |
+| Album-art tint | Yes, as Spotifast: the playing cover's colour tints the player bar and the top of pages without a cover of their own; a setting turns it off (§5.9). |
+| Theme change | Animated with fastframe-theme's `Transition` (a band revealing the new colours, 0.42 s). |
+| Sidebar | Collapsible to 78 px, icons only, with egui's `Panel::show_switched` sliding between the two (§5.2). |
 
 ## 3. Architecture
 
@@ -65,6 +68,8 @@ Success:
 - `custom_theme_cache: Option<fastframe_theme::CustomTheme<Palette>>`: the last palette read for `custom_theme`,
   deserialized with `fastframe_theme::read_cached_theme` (a damaged cache is `None`, never a failed load).
 - Picking System, Dark or Light clears `custom_theme` and the cache.
+- `accent_from_art: bool`, default `true` (§5.9).
+- `sidebar_collapsed: bool`, default `false` (§5.2).
 
 ### 3.4 Data flow
 
@@ -76,7 +81,10 @@ Success:
   2. Pick the palette: `TIDASH_THEME` (§6.2) if set, else the cached custom palette, else `Palette::dark()` or
      `light()` by `ctx.theme()`, with `ctx.set_theme` given `ThemePreference::System`, `Dark` or `Light` (a custom
      palette sets its own `dark`).
-  3. Only if the result differs from the last applied one: `theme::apply` and store it.
+  3. Only if the result differs from the last applied one: past the first pass, `Transition::begin` (fastframe-theme,
+     `Reveal::Band`) and keep drawing the old palette while `holding`; then `theme::apply` and store it.
+     `Transition::paint` runs last in every pass. Without a screenshot (none arrives within 0.25 s) the new colours
+     show without the animation.
 - The palette reaches views as a field of `ui::Ctx` (it is `Copy`); `player_bar::show` and `queue_panel::show`, which
   take no `Ctx`, get it as a parameter.
 - A Settings change (`Event::Settings`) needs nothing extra: the next pass resolves the new palette.
@@ -166,7 +174,9 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Hover colour on rows, nav rows, icons | 150 ms (`ctx.animate_bool_with_time`) |
 | Card cover overlay | 300 ms fade |
 | Discs and icon buttons | hover scale 1.1, press 0.9 |
-| egui `animation_time` | 0.15 s |
+| egui `animation_time` | 0.15 s (also the sidebar's slide) |
+| Theme change | fastframe `Reveal::Band`, 0.42 s |
+| Player bar tint | 0.45 s per channel (`ctx.animate_value_with_time`) |
 
 Animations repaint only while running; nothing animates at rest, so idle stays at 0 passes.
 
@@ -222,6 +232,11 @@ neither sidebar nor top bar (as today).
   tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
   their open/closed chevron. Rename, move and delete menus are unchanged.
 - Back and Forward leave the sidebar for the top bar. Search and Settings leave it too.
+- Collapse: a 32 px `panel-left` `icon_button` at the sidebar's top (label "Collapse sidebar" / "Expand sidebar")
+  flips `sidebar_collapsed`. `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct
+  ids). Collapsed, nav rows show only their icon (tooltip and AccessKit label keep the name), section headers become a
+  1 px outline line with the `+` button kept, and library rows show only the 36 px cover or folder icon, with the
+  title as tooltip and label; folders still open and close in place. Menus are unchanged.
 
 ### 5.3 Top bar and search
 
@@ -294,6 +309,23 @@ neither sidebar nor top bar (as today).
   under it the catalog status line. Primary actions (Apply, Log in) are primary pills; the rest stock buttons.
 - Login: a centred column with the primary pill "Log in with TIDAL" and a Settings link.
 
+### 5.9 Album-art tint
+
+- Source: the playing track's cover at 16 px, the size the page backdrop (§5.4) already asks for; the player bar asks
+  for it too, so it loads without a page header in view.
+- Colour: when a 16 px image arrives (`Event::Image`), before upload, the UI takes its dominant colour as Spotifast
+  does: bucket the pixels by 4-bit RGB, weight each `(1 + 6·saturation) · max(0.05, 1 − 1.4·|lightness − 0.5|)`, and
+  keep the heaviest bucket's mean. 256 pixels, so no background job. `TextureCache` keeps it by image key beside the
+  texture, and drops it with the texture.
+- At draw time it is moved to lightness 0.30 on a dark palette, 0.72 on a light one (`theme::tint`), so a theme change
+  needs no recomputation.
+- Uses: the player bar's fill is `panel` blended 12% toward the tint, eased per channel over 0.45 s as tracks change;
+  pages without a cover of their own (Home, Explore, Collection, Search, View all) get a 340 px `vertical_gradient`
+  from `window` blended 35% toward the tint down to `window`, behind the top of the page. The accent is never
+  replaced.
+- Settings › Appearance: "Colour from album art" (`accent_from_art`), on by default. Off, or with nothing playing,
+  both fills are plain.
+
 ## 6. Verification and testing
 
 ### 6.1 Tests (`cargo test`)
@@ -302,15 +334,19 @@ neither sidebar nor top bar (as today).
   `Palette`; `apply` sets `panel_fill`, `window_fill` and `override_text_color` from the palette.
 - Settings: old `"Dark"` / `"Light"` files load; the default is Dark; a damaged `custom_theme_cache` loads as `None`.
 - Tier from `OutputInfo` (lossy, 16/44.1 FLAC, 24/96 FLAC, 16/96 FLAC).
+- Dominant colour: a 16 px image mostly grey with a vivid red patch gives red; `theme::tint` lands at lightness 0.30
+  and 0.72. Settings default `accent_from_art` on and `sidebar_collapsed` off.
 - Views (headless, by AccessKit label): the existing player bar, shortcut and dismiss tests pass unchanged; Enter in
   the top-bar search sends `Search` and opens the Search page; Collection nav rows open their tab; picking a theme in
-  Appearance emits settings with `custom_theme` set.
+  Appearance emits settings with `custom_theme` set; "Collapse sidebar" emits settings with `sidebar_collapsed`, and
+  the collapsed sidebar's rows still navigate by their labels.
 
 ### 6.2 Looking at it
 
 - `TIDASH_SCREENSHOT=<file.png>`: the window opens at 1440×900 on the route of the launch's TIDAL link (Home without
   one); once the page has loaded and no artwork is still loading (at most 20 s), it saves a screenshot of the window
-  (`ViewportCommand::Screenshot`) and quits.
+  (`ViewportCommand::Screenshot`, tagged with its own `UserData` so the theme `Transition`'s screenshots are not
+  taken for it, nor its for theirs) and quits.
 - `TIDASH_THEME=<dark|light|system|filename>`: overrides the theme for that run without saving it.
 - Reference screenshots of TIDAL 2.43 on the same pages, captured once by window capture with no input sent, kept in
   the session scratchpad and not committed (TIDAL's UI and artwork).
@@ -321,12 +357,13 @@ neither sidebar nor top bar (as today).
 ### 6.3 Human acceptance
 
 One session at the end: Tidash beside TIDAL; theme switching live, including a hand-edited palette file and a broken
-one; keyboard focus visible on every control; hover and press feel.
+one, and the reveal animation; the tint following tracks (and off via its setting); collapsing and expanding the
+sidebar; keyboard focus visible on every control; hover and press feel.
 
 ## 7. Not in this design
 
-- Album-art tint of the player bar and headers (declined); the theme-change reveal animation; Omarchy.
-- Theming sizes, spacing or fonts; a collapsible sidebar; search as you type.
+- Omarchy; a setting to turn the theme-change animation off.
+- Theming sizes, spacing or fonts; search as you type.
 - Card play and favourite buttons, and the track row's "…" button (the context menu covers them); playing by id
   needs a backend action.
 - A now-playing full-screen view.
