@@ -1,4 +1,5 @@
-//! A page's header: artwork, title, lines of detail, Play and the favorite heart.
+//! A page's header: artwork, title, lines of detail, Play, the favorite heart and the page's
+//! own buttons.
 
 use super::Ctx;
 use crate::i18n::tr;
@@ -9,6 +10,8 @@ const COVER: f32 = 200.0;
 
 /// `details` draws the lines under the title. With `play`, a Play button sends all of it from
 /// the start (disabled when empty); with `fav`, a heart adds it to the favorites or removes it.
+/// `extra` draws the page's own buttons after them, in the same row.
+#[expect(clippy::too_many_arguments)] // one call per page, each part named at the call
 pub fn header(
     ui: &mut egui::Ui,
     ctx: &mut Ctx,
@@ -17,6 +20,7 @@ pub fn header(
     details: impl FnOnce(&mut egui::Ui, &mut Ctx),
     play: Option<&[tidal::Track]>,
     fav: Option<tidal::Favorite>,
+    extra: impl FnOnce(&mut egui::Ui, &mut Ctx),
 ) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(COVER, COVER), Sense::hover());
@@ -32,6 +36,7 @@ pub fn header(
                 if let Some(item) = fav {
                     heart(ui, ctx, item);
                 }
+                extra(ui, ctx);
             });
         });
     });

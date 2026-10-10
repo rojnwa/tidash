@@ -197,6 +197,13 @@ fn menu(row: &egui::Response, ctx: &mut Ctx, t: &tidal::Track) {
             ctx.go(Route::Artist(artist.id));
             ui.close();
         }
+        let radio = egui::Button::new(tr("Track radio"));
+        if ui.add_enabled(t.mixes.track.is_some(), radio).clicked()
+            && let Some(mix) = &t.mixes.track
+        {
+            ctx.go(Route::Mix(mix.clone()));
+            ui.close();
+        }
         let fav = tidal::Favorite::Track(t.id);
         let label = ctx.favorite_label(&fav);
         if ctx.favorite_button(ui, fav, &label).clicked() {
@@ -345,6 +352,39 @@ mod tests {
         let ids = |t: &[tidal::Track]| t.iter().map(|t| t.id).collect::<Vec<_>>();
         assert!(matches!(pick("Play next"), Action::PlayNext(t) if ids(&t) == [1]));
         assert!(matches!(pick("Add to queue"), Action::AddToQueue(t) if ids(&t) == [1]));
+    }
+
+    /// "Track radio" opens the track's mix.
+    #[test]
+    fn track_radio_opens_the_mix() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut t = track();
+        t.mixes.track = Some("m".into());
+        let list = vec![t];
+        let out = open_menu(&ctx, &tx, &list);
+        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Track radio")]);
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Mix(id))] if id == "m"),
+            "{events:?}"
+        );
+    }
+
+    /// Without a mix, "Track radio" is shown but disabled, and a click does nothing.
+    #[test]
+    fn no_mix_disables_track_radio() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let list = vec![track()];
+        let out = open_menu(&ctx, &tx, &list);
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let radio = nodes.iter().find(|(_, n)| n.label() == Some("Track radio"));
+        assert!(radio.expect("Track radio shown").1.is_disabled());
+        let (events, _) = pass(&ctx, &tx, &list, vec![click(&out, "Track radio")]);
+        assert!(events.is_empty(), "{events:?}");
     }
 
     #[test]

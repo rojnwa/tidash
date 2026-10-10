@@ -27,6 +27,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             details,
             Some(list),
             fav,
+            |_, _| {},
         );
         tracks::show(ui, ctx, "playlist-tracks", list, false);
     });

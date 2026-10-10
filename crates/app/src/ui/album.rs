@@ -38,6 +38,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             details,
             Some(list),
             Some(tidal::Favorite::Album(album.id)),
+            |_, _| {},
         );
         tracks::show(ui, ctx, "album-tracks", list, true);
     });

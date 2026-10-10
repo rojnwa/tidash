@@ -436,3 +436,11 @@ msgstr ""
 #: src/backend.rs
 msgid "TIDAL refused the client ID. Check Settings › Account."
 msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Track radio"
+msgstr ""
+
+#: src/ui/artist.rs
+msgid "Artist radio"
+msgstr ""

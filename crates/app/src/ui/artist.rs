@@ -1,6 +1,7 @@
-//! Artist page: picture, name and the start of the biography, then the shelves.
+//! Artist page: picture, name and the start of the biography, its radio, then the shelves.
 
 use super::{Ctx, header, shelf};
+use crate::i18n::tr;
 use crate::model::{PageData, Route};
 use std::borrow::Cow;
 
@@ -18,6 +19,13 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
                 ui.label(excerpt(bio, BIO));
             }
         };
+        let radio = |ui: &mut egui::Ui, ctx: &mut Ctx| {
+            if let Some(mix) = &artist.mixes.artist
+                && ui.button(tr("Artist radio")).clicked()
+            {
+                ctx.go(Route::Mix(mix.clone()));
+            }
+        };
         header::header(
             ui,
             ctx,
@@ -26,6 +34,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, route: &Route) {
             bio,
             None,
             Some(tidal::Favorite::Artist(artist.id)),
+            radio,
         );
         shelf::shelves(ui, &page.shelves, ctx);
     });
@@ -41,8 +50,8 @@ fn excerpt(text: &str, max: usize) -> Cow<'_, str> {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{Event, PageData, Route};
-    use crate::ui::testing::{album, artist, at, every_state, key, pass};
+    use crate::model::{Event, Model, PageData, Route};
+    use crate::ui::testing::{album, artist, at, click, every_state, key, pass, shown};
     use egui::Key;
     use std::time::Instant;
     use tidal::{ArtistPage, Item, Layout, Shelf};
@@ -86,6 +95,50 @@ mod tests {
             }
         }
         assert_eq!(model.open_current(now), Some(route));
+    }
+
+    /// Artist 1's page, `mix` its radio.
+    fn with_mix(mix: Option<&str>) -> Model {
+        let route = Route::Artist(1);
+        let mut model = at(route.clone());
+        let mut artist = artist(1);
+        artist.mixes.artist = mix.map(Into::into);
+        let page = ArtistPage {
+            artist,
+            bio: None,
+            shelves: vec![],
+        };
+        let data = PageData::Artist(page);
+        model.apply(Event::Page { route, data });
+        model
+    }
+
+    /// "Artist radio" opens the artist's mix.
+    #[test]
+    fn artist_radio_button_opens_the_mix() {
+        let model = with_mix(Some("m"));
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let radio = click(&out, "Artist radio");
+        let (events, _) = pass(&egui, &tx, &model, super::show, vec![radio]);
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Mix(id))] if id == "m"),
+            "{events:?}"
+        );
+    }
+
+    #[test]
+    fn no_artist_mix_no_button() {
+        let model = with_mix(None);
+        let egui = egui::Context::default();
+        egui.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_, out) = pass(&egui, &tx, &model, super::show, vec![]);
+        let shown = shown(&out);
+        assert!(shown.contains(&"Artist 1".into()), "{shown:?}");
+        assert!(!shown.contains(&"Artist radio".into()), "{shown:?}");
     }
 
     #[test]
