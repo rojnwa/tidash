@@ -16,14 +16,15 @@ use tidal::{Client, ClientConfig, DiskCache, Pkce, TokenStore};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::task::{AbortHandle, JoinHandle, JoinSet};
 
-/// Spawns the backend. Before it handles actions it reads the settings and the stored session
-/// and opens the audio output, off the UI thread: all can take a while. Every event sent is
-/// followed by `waker()`. Without an audio device the app runs, and play actions report the
-/// missing output.
+/// Spawns the backend with the `settings` `main` read. Before it handles actions it reads the
+/// stored session and opens the audio output, off the UI thread: both can take a while. Every
+/// event sent is followed by `waker()`. Without an audio device the app runs, and play actions
+/// report the missing output.
 /// It also opens the images cache, set in `images` for the media controls before any track.
 pub fn start(
     waker: impl Fn() + Send + Sync + 'static,
     images: Arc<OnceLock<Arc<DiskCache>>>,
+    settings: Settings,
 ) -> (UnboundedSender<Action>, Receiver<Event>) {
     let (action_tx, action_rx) = unbounded_channel();
     let (event_tx, event_rx) = channel();
@@ -45,13 +46,8 @@ pub fn start(
                     return;
                 }
             };
-            // The settings file and the store block: read them before the runtime runs on
-            // this thread. Logging in first lets the UI leave the login page before the device
-            // is open.
-            let settings_path = crate::settings::path();
-            let settings = settings_path.as_deref().map(Settings::load);
-            let settings = settings.unwrap_or_default();
-            emit.send(Event::Settings(settings.clone()));
+            // The store blocks: read it before the runtime runs on this thread. Logging in
+            // first lets the UI leave the login page before the device is open.
             let audio = settings.audio.clone();
             let (msg_tx, msg_rx) = unbounded_channel();
             let mut backend = Backend::new(
@@ -70,7 +66,7 @@ pub fn start(
                 emit.send(Event::Player(p.clone()));
                 Playback::new(p, emit, msg_tx, audio)
             });
-            backend.settings_path = settings_path;
+            backend.settings_path = crate::settings::path();
             rt.block_on(backend.run(action_rx, msg_rx));
         });
     if let Err(e) = spawned {

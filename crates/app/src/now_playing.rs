@@ -1,8 +1,10 @@
 //! The OS media controls (fastframe-now-playing): the Windows media overlay, macOS Now
 //! Playing and MPRIS show the current track; media keys and overlay buttons come back as
-//! actions. Driven from the UI thread, where macOS wants the controls started and used.
+//! actions, and MPRIS Raise and Quit as the tray's Show and Quit. Driven from the main thread,
+//! where macOS wants the controls started and used.
 
 use crate::model::{Action, PlaybackSnapshot};
+use crate::tray::TrayAction;
 use fastframe_now_playing::{App, Command, NowPlaying, Playback, State, Track};
 use player::PlayState;
 use reqwest::Url;
@@ -40,9 +42,9 @@ impl MediaControls {
     ) -> Self {
         let wake: Wake = Arc::new(wake);
         let mut app = App::new("tidash", "Tidash");
-        // Nothing raises or quits the app from the panel (MPRIS) yet.
-        app.can_raise = false;
-        app.can_quit = false;
+        // The panel (MPRIS) brings the window up and quits.
+        app.can_raise = true;
+        app.can_quit = true;
         let w = wake.clone();
         Self {
             controls: NowPlaying::start(app, move || w()),
@@ -77,9 +79,9 @@ impl MediaControls {
         self.controls.seeked(at);
     }
 
-    /// What the desktop asked for since the last call, as actions. Also shows a cover
-    /// that finished downloading.
-    pub fn poll(&mut self, pb: &PlaybackSnapshot, position: Duration) -> Vec<Action> {
+    /// What the desktop asked for since the last call. Also shows a cover that finished
+    /// downloading.
+    pub fn poll(&mut self, pb: &PlaybackSnapshot, position: Duration) -> Vec<TrayAction> {
         if self.landed.1.try_iter().count() > 0 {
             self.show(pb, position);
         }
@@ -176,8 +178,11 @@ fn state_for(
     }
 }
 
-fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Option<Action> {
-    Some(match command {
+/// Raise and Quit are the app's; the rest the backend's.
+fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Option<TrayAction> {
+    Some(TrayAction::Play(match command {
+        Command::Raise => return Some(TrayAction::Show),
+        Command::Quit => return Some(TrayAction::Quit),
         Command::Play => Action::Play,
         Command::Pause | Command::Stop => Action::Pause,
         Command::PlayPause => Action::TogglePlay,
@@ -201,7 +206,7 @@ fn action_for(command: Command, pb: &PlaybackSnapshot, position: Duration) -> Op
             Action::Seek(position)
         }
         _ => return None,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -237,25 +242,33 @@ mod tests {
         let s = Duration::from_secs(1);
         let act = |c, st| format!("{:?}", action_for(c, &snapshot(st), s * 20));
         for st in [PlayState::Playing, PlayState::Paused, PlayState::Stopped] {
-            assert_eq!(act(Command::PlayPause, st), "Some(TogglePlay)", "{st:?}");
+            assert_eq!(
+                act(Command::PlayPause, st),
+                "Some(Play(TogglePlay))",
+                "{st:?}"
+            );
         }
-        assert_eq!(act(Command::Play, PlayState::Playing), "Some(Play)");
-        assert_eq!(act(Command::Stop, PlayState::Playing), "Some(Pause)");
+        assert_eq!(act(Command::Play, PlayState::Playing), "Some(Play(Play))");
+        assert_eq!(act(Command::Stop, PlayState::Playing), "Some(Play(Pause))");
         assert_eq!(
             act(Command::SeekBy(-30_000), PlayState::Playing),
-            "Some(Seek(0ns))"
+            "Some(Play(Seek(0ns)))"
         );
         assert_eq!(
             act(Command::SeekBy(10_000), PlayState::Playing),
-            "Some(Seek(30s))"
+            "Some(Play(Seek(30s)))"
         );
         let to = |id: &str| Command::SetPosition {
             track_id: id.into(),
             position: s * 5,
         };
-        assert_eq!(act(to("7"), PlayState::Paused), "Some(Seek(5s))");
+        assert_eq!(act(to("7"), PlayState::Paused), "Some(Play(Seek(5s)))");
         assert_eq!(act(to("8"), PlayState::Paused), "None", "another track's");
-        assert_eq!(act(Command::Raise, PlayState::Paused), "None");
+        // The app's, not the backend's: MPRIS Raise and Quit.
+        assert_eq!(act(Command::Raise, PlayState::Paused), "Some(Show)");
+        assert_eq!(act(Command::Quit, PlayState::Paused), "Some(Quit)");
+        let uri = Command::OpenUri("tidal://track/1".into());
+        assert_eq!(act(uri, PlayState::Paused), "None");
     }
 
     #[test]

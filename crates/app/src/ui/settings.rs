@@ -1,8 +1,8 @@
-//! Settings view: account, appearance, audio, integrations, and the keyboard shortcuts; the
-//! login page leads here too, logged out. A change shows at once (`Event::Settings`) and goes
-//! to the backend (`Action::SetSettings`), which saves it and sends the settings back. The
-//! scrobbling services are the backend's to set: Connect and Disconnect are actions. The
-//! Discord toggle is a setting like the others.
+//! Settings view: account, appearance, audio, behavior, integrations, and the keyboard
+//! shortcuts; the login page leads here too, logged out. A change shows at once
+//! (`Event::Settings`) and goes to the backend (`Action::SetSettings`), which saves it and sends
+//! the settings back. The scrobbling services are the backend's to set: Connect and Disconnect
+//! are actions. The Discord toggle and the behavior are settings like the others.
 
 use super::Ctx;
 use crate::i18n::tr;
@@ -70,6 +70,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         });
         section(ui, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
+        section(ui, tr("Behavior"));
+        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
+        ui.checkbox(&mut new.behavior.start_minimized, tr("Start minimized"));
+        ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, tr("Integrations"));
         if state.lastfm {
             connect = lastfm(ui, model);
@@ -125,6 +129,7 @@ pub fn shortcuts() -> Vec<(String, Cow<'static, str>)> {
         ("Alt+→".into(), tr("Forward")),
         (format!("{cmd}+F"), tr("Search")),
         (format!("{cmd}+,"), tr("Settings")),
+        (format!("{cmd}+Q"), tr("Quit")),
     ]
 }
 
@@ -492,6 +497,7 @@ mod tests {
             "Alt+→".into(),
             format!("{cmd}+F"),
             format!("{cmd}+,"),
+            format!("{cmd}+Q"),
         ];
         for k in &want {
             assert!(keys.contains(&k.as_str()), "no {k} in {keys:?}");

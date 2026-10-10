@@ -350,6 +350,7 @@ impl Model {
                 self.forward();
             }
             Event::DismissError(id) => self.errors.retain(|(e, _)| *e != id),
+            Event::Quit => {} // the app's (main.rs)
         }
     }
 

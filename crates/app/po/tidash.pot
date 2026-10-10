@@ -78,6 +78,7 @@ msgid "Tracks"
 msgstr ""
 
 #: src/ui/header.rs
+#: src/tray.rs
 msgid "Play"
 msgstr ""
 
@@ -112,14 +113,17 @@ msgid "Retry"
 msgstr ""
 
 #: src/ui/player_bar.rs
+#: src/tray.rs
 msgid "Previous"
 msgstr ""
 
 #: src/ui/player_bar.rs
+#: src/tray.rs
 msgid "Pause"
 msgstr ""
 
 #: src/ui/player_bar.rs
+#: src/tray.rs
 msgid "Next"
 msgstr ""
 
@@ -641,4 +645,29 @@ msgstr ""
 
 #: src/ui/settings.rs
 msgid "Discord must be running on this computer."
+msgstr ""
+
+#: src/tray.rs
+msgid "Show or hide Tidash"
+msgstr ""
+
+#: src/tray.rs
+#: src/ui/settings.rs
+msgid "Quit"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Behavior"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Close to tray"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Start minimized"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Only where the desktop shows a tray icon."
 msgstr ""

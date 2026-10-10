@@ -1,12 +1,16 @@
 //! Tidash desktop app.
 //!
+//! The app outlives its window (fastframe-shell): with Close to tray on, closing the window
+//! leaves playback, the media controls and the tray item running headless until the tray asks
+//! for a new window.
+//!
 //! Debug switches for measuring frame pacing (spec §10, §14), read once at start:
 //! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page this many points a second, every
 //!   pass, repainting without pause; it starts down (up if negative) and bounces at either end.
 //!   Unset, 0 or not a number is off.
 //! - `TIDASH_REPAINT_LOG=1`: logs each pass's repaint causes at info.
 //!
-//! The OpenGL renderer in use is logged at start either way.
+//! The OpenGL renderer in use is logged for each window either way.
 
 mod backend;
 mod discord;
@@ -21,13 +25,16 @@ mod playback;
 mod queue;
 mod scrobble;
 mod settings;
+mod tray;
 mod ui;
 
+use fastframe_shell::{Closed, Headless, Held, Resident, Waker};
 use model::{Action, Event, Model};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
+use tray::TrayAction;
 
 /// The debug switches the crate docs list.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,17 +55,33 @@ impl Switches {
     }
 }
 
+/// What lives as long as the process: the model, the backend's channels, the media controls,
+/// the Discord status and the tray. Windows come and go around it (`Window`).
 struct App {
     model: Model,
     actions: UnboundedSender<Action>,
     events: Receiver<Event>,
+    /// The current window's: its textures belong to that window's context, so each window
+    /// gets its own (`new_ui`). The player carries over.
     ui: ui::UiState,
     media: now_playing::MediaControls,
     /// With a Discord application ID compiled in.
     presence: Option<discord::Presence>,
+    /// `None` where the desktop has no tray at all.
+    tray: Option<fastframe_tray::Tray>,
+    /// What the tray's Play/Pause entry was last set for.
+    tray_playing: bool,
+    /// No window exists: the app runs headless.
+    hidden: bool,
+    /// The tray asked to close the window to it.
+    hide: bool,
+    /// Headless, a window was asked for.
+    show: bool,
+    /// Ctrl+Q, the tray or the media controls asked to quit.
+    quit: bool,
     /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
-    repaint_log: bool,
+    switches: Switches,
 }
 
 /// Which OpenGL renderer eframe's glow painter runs on.
@@ -80,42 +103,86 @@ fn log_renderer(cc: &eframe::CreationContext<'_>) {
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>, started: Instant, switches: Switches) -> Self {
-        log_renderer(cc);
-        setup_look(&cc.egui_ctx);
+    /// Starts the backend, the media controls, the Discord status and the tray, all waking
+    /// whichever window exists through `waker`.
+    fn new(
+        waker: &Waker,
+        settings: settings::Settings,
+        started: Instant,
+        switches: Switches,
+    ) -> Self {
+        let wake = |w: &Waker| {
+            let w = w.clone();
+            move || w.wake()
+        };
         // The images cache: the backend opens it off this thread, for both.
         let artwork = Arc::new(OnceLock::new());
-        let ctx = cc.egui_ctx.clone();
-        let (actions, events) = backend::start(move || ctx.request_repaint(), artwork.clone());
-        let ctx = cc.egui_ctx.clone();
-        let wake = move || ctx.request_repaint();
+        let (actions, events) = backend::start(wake(waker), artwork.clone(), settings.clone());
         let image_base = tidal::ClientConfig::default().image_base;
         let presence = discord::app_id().map(|id| discord::Presence::start(id, image_base.clone()));
-        let media = now_playing::MediaControls::start(wake, artwork, image_base);
-        if let Some(speed) = switches.autoscroll {
-            ui::autoscroll(&cc.egui_ctx, speed);
-        }
+        let media = now_playing::MediaControls::start(wake(waker), artwork, image_base);
+        let tray = fastframe_tray::Tray::spawn(tray::config(), wake(waker));
+        let mut model = Model::default();
+        model.apply(Event::Settings(settings));
         Self {
-            model: Model::default(),
+            model,
             actions,
             events,
             ui: ui::UiState::default(),
             media,
             presence,
+            tray,
+            tray_playing: false,
+            hidden: false,
+            hide: false,
+            show: false,
+            quit: false,
             started: Some(started),
-            repaint_log: switches.repaint_log,
+            switches,
         }
     }
 
-    /// Applies `ev` to the model; a new theme restyles the window.
+    /// Readies a new window: its look and UI state; on macOS the tray item comes with the
+    /// first.
+    fn attach(&mut self, ctx: &egui::Context) {
+        setup_look(ctx, self.model.settings.theme);
+        if let Some(speed) = self.switches.autoscroll {
+            ui::autoscroll(ctx, speed);
+        }
+        self.new_ui();
+        self.hidden = false;
+        if let Some(tray) = &mut self.tray {
+            tray.attach();
+        }
+    }
+
+    /// Empty UI state for the next window; the player carries over.
+    fn new_ui(&mut self) {
+        let player = self.ui.player.take();
+        self.ui = ui::UiState::default();
+        self.ui.player = player;
+    }
+
+    fn tray_shown(&self) -> bool {
+        self.tray
+            .as_ref()
+            .is_some_and(fastframe_tray::Tray::is_shown)
+    }
+
+    fn hides_to_tray(&self) -> bool {
+        let close_to_tray = self.model.settings.behavior.close_to_tray;
+        tray::hides_to_tray(self.tray_shown(), close_to_tray)
+    }
+
+    /// Applies `ev` to the model; a new theme restyles the window, and Quit quits.
     fn apply(&mut self, ctx: &egui::Context, ev: Event) {
+        if let Event::Quit = ev {
+            return self.quit(ctx);
+        }
         if let Event::Settings(s) = &ev
             && s.theme != self.model.settings.theme
         {
-            ctx.set_theme(match s.theme {
-                settings::Theme::Dark => egui::Theme::Dark,
-                settings::Theme::Light => egui::Theme::Light,
-            });
+            ctx.set_theme(egui_theme(s.theme));
             ctx.request_repaint(); // a change from the UI's pass shows in the next
         }
         let settings = matches!(ev, Event::Settings(_));
@@ -123,6 +190,12 @@ impl App {
         if settings {
             self.show_presence(self.position()); // turned off, it clears at once
         }
+    }
+
+    /// Ends the app: the window closes and `closed` says Quit, or headless, the next tick does.
+    fn quit(&mut self, ctx: &egui::Context) {
+        self.quit = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
     /// The player's position, now.
@@ -145,39 +218,10 @@ impl App {
             let _ = self.actions.send(Action::Open(route));
         }
     }
-}
 
-impl Drop for App {
-    /// Closing the action channel stops the backend, which first reports the current play;
-    /// give that a moment (best effort) before the process exits.
-    fn drop(&mut self) {
-        self.actions = tokio::sync::mpsc::unbounded_channel().0;
-        let deadline = Instant::now() + Duration::from_secs(3);
-        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
-            if let Err(RecvTimeoutError::Disconnected) = self.events.recv_timeout(left) {
-                break; // backend finished
-            }
-        }
-    }
-}
-
-/// Fonts, text rendering and the dark theme (until the settings say otherwise), as fastframe's
-/// getting-started guide shows; scroll bars that keep their place beside the content.
-fn setup_look(ctx: &egui::Context) {
-    let mut fonts = fastframe_fonts::FontSetup::default().definitions();
-    let rendering = fastframe_text::detect();
-    rendering.apply_to(&mut fonts);
-    ctx.set_fonts(fonts);
-    ctx.set_theme(egui::Theme::Dark);
-    ctx.all_styles_mut(|style| {
-        rendering.apply_to_visuals(&mut style.visuals);
-        style.spacing.scroll = egui::style::ScrollStyle::solid();
-    });
-}
-
-impl eframe::App for App {
-    /// Backend events and media commands; also runs while the window is hidden or minimized.
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// Backend events, the media controls and the tray: each window pass (also while the
+    /// window is minimized) and each headless tick.
+    fn pump(&mut self, ctx: &egui::Context) {
         let position = self.position();
         while let Ok(ev) = self.events.try_recv() {
             match ev {
@@ -200,16 +244,48 @@ impl eframe::App for App {
             }
         }
         self.open_current(); // Home after `LoggedIn`
-        for action in self.media.poll(&self.model.playback, position) {
-            let _ = self.actions.send(action);
+        for asked in self.media.poll(&self.model.playback, position) {
+            self.handle(ctx, asked);
+        }
+        let clicks = self.tray.as_ref().map(fastframe_tray::Tray::events);
+        for click in clicks.unwrap_or_default() {
+            self.handle(ctx, tray::action_for(&click));
+        }
+        let playing = matches!(self.model.playback.state, Some(player::PlayState::Playing));
+        if let Some(tray) = &mut self.tray
+            && self.tray_playing != playing
+        {
+            self.tray_playing = playing;
+            tray.set_label(tray::PLAY_PAUSE, tray::play_pause_label(playing));
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    /// Does what the tray or the media controls asked.
+    fn handle(&mut self, ctx: &egui::Context, asked: TrayAction) {
+        let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
+        match asked {
+            TrayAction::Play(action) => {
+                let _ = self.actions.send(action);
+            }
+            TrayAction::Quit => self.quit(ctx),
+            TrayAction::Toggle if !self.hidden && !minimized => {
+                self.hide = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            TrayAction::Show | TrayAction::Toggle if self.hidden => self.show = true,
+            TrayAction::Show | TrayAction::Toggle => {
+                // A minimized window comes back before it can take the focus.
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+        }
+    }
+
+    fn draw(&mut self, ui: &mut egui::Ui) {
         if let Some(t) = self.started.take() {
             log::info!("first frame {} ms after start", t.elapsed().as_millis());
         }
-        if self.repaint_log {
+        if self.switches.repaint_log {
             let ctx = ui.ctx();
             let (pass, causes) = (ctx.cumulative_pass_nr(), ctx.repaint_causes());
             log::info!("pass {pass}: repaint causes {causes:?}");
@@ -221,6 +297,102 @@ impl eframe::App for App {
     }
 }
 
+/// What the shell around `eframe::run_native` does with the app between windows.
+impl Resident for App {
+    /// Quit wins; otherwise a closed window hides to the tray when the tray asked for that or
+    /// the setting says so.
+    fn closed(&self) -> Closed {
+        if !self.quit && (self.hide || self.hides_to_tray()) {
+            Closed::Hide
+        } else {
+            Closed::Quit
+        }
+    }
+
+    /// The window's textures go with it.
+    fn window_gone(&mut self) {
+        (self.hidden, self.hide, self.show) = (true, false, false);
+        self.new_ui();
+    }
+
+    /// Playback, the media controls, the Discord status and the tray keep going until Show or
+    /// Quit.
+    fn headless_frame(&mut self, ctx: &egui::Context) -> Headless {
+        self.pump(ctx);
+        if self.quit {
+            Headless::Quit
+        } else if self.show {
+            Headless::Show
+        } else {
+            Headless::Wait
+        }
+    }
+
+    /// Nothing waits for a first frame: the backend started with the app.
+    fn start_hidden(&mut self) -> bool {
+        if !starts_hidden(&self.model.settings.behavior, self.tray_shown()) {
+            return false;
+        }
+        self.started = None; // no first frame to time
+        if let Some(tray) = &mut self.tray {
+            tray.create_item(); // macOS: else made with the first window
+        }
+        true
+    }
+
+    /// Closing the action channel stops the backend, which first reports the current play;
+    /// give that a moment (best effort) before the process exits.
+    fn shutdown(&mut self) {
+        self.tray = None; // gone at once
+        self.actions = tokio::sync::mpsc::unbounded_channel().0;
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            if let Err(RecvTimeoutError::Disconnected) = self.events.recv_timeout(left) {
+                break; // backend finished
+            }
+        }
+    }
+}
+
+/// Whether a launch starts in the tray: asked for, and with a tray to come back from.
+fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool) -> bool {
+    behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray)
+}
+
+/// One window around the app; dropping it with the window hands the app back to the shell.
+struct Window(Held<App>);
+
+impl eframe::App for Window {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.0.pump(ctx);
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.0.draw(ui);
+    }
+}
+
+fn egui_theme(theme: settings::Theme) -> egui::Theme {
+    match theme {
+        settings::Theme::Dark => egui::Theme::Dark,
+        settings::Theme::Light => egui::Theme::Light,
+    }
+}
+
+/// Fonts, text rendering and `theme`, as fastframe's getting-started guide shows; scroll bars
+/// that keep their place beside the content.
+fn setup_look(ctx: &egui::Context, theme: settings::Theme) {
+    let mut fonts = fastframe_fonts::FontSetup::default().definitions();
+    let rendering = fastframe_text::detect();
+    rendering.apply_to(&mut fonts);
+    ctx.set_fonts(fonts);
+    ctx.set_theme(egui_theme(theme));
+    ctx.all_styles_mut(|style| {
+        rendering.apply_to_visuals(&mut style.visuals);
+        style.spacing.scroll = egui::style::ScrollStyle::solid();
+    });
+}
+
 fn main() -> eframe::Result {
     let started = Instant::now();
     let _ = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
@@ -229,22 +401,54 @@ fn main() -> eframe::Result {
         .filter("warn,tidash=info,symphonia_core::formats::probe=error")
         .init();
     let switches = Switches::parse(|k| std::env::var(k).ok());
-    // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu whenever
-    // anything in the graph turns on its `wgpu` feature.
-    let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
-        ..Default::default()
-    };
-    eframe::run_native(
-        "tidash",
-        options,
-        Box::new(move |cc| Ok(Box::new(App::new(cc, started, switches)))),
-    )
+    // Before any window: whether one opens at start depends on them. Blocks briefly.
+    let settings = settings::path().as_deref().map(settings::Settings::load);
+    let settings = settings.unwrap_or_default();
+    let hidden = settings.behavior.start_minimized;
+    let waker = Waker::default();
+    let app = App::new(&waker, settings, started, switches);
+    fastframe_shell::Shell::new(app, &waker)
+        .idle(fastframe_tray::idle)
+        .start_hidden(hidden)
+        .run(|lease| {
+            // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu
+            // whenever anything in the graph turns on its `wgpu` feature.
+            let options = eframe::NativeOptions {
+                renderer: eframe::Renderer::Glow,
+                ..Default::default()
+            };
+            eframe::run_native(
+                "tidash",
+                options,
+                Box::new(move |cc| {
+                    log_renderer(cc);
+                    let mut app = lease.take(&cc.egui_ctx);
+                    app.attach(&cc.egui_ctx);
+                    Ok(Box::new(Window(app)))
+                }),
+            )
+        })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Switches;
+    use super::{Switches, starts_hidden};
+    use crate::settings::Behavior;
+
+    #[test]
+    fn start_hidden_only_with_a_tray() {
+        let behavior = |close_to_tray, start_minimized| Behavior {
+            close_to_tray,
+            start_minimized,
+        };
+        assert!(starts_hidden(&behavior(true, true), true));
+        assert!(!starts_hidden(&behavior(true, true), false), "no tray host");
+        assert!(
+            !starts_hidden(&behavior(false, true), true),
+            "closing quits"
+        );
+        assert!(!starts_hidden(&behavior(true, false), true), "not asked");
+    }
 
     #[test]
     fn switches_parse_and_default_off() {

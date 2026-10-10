@@ -290,8 +290,8 @@ fn crop(tex: f32, rect: f32) -> egui::Rect {
 }
 
 /// Keyboard and mouse shortcuts; Settings lists the keys (`settings::shortcuts`). None while
-/// typing but the mouse's back and forward; Space also leaves a focused widget alone (it
-/// clicks it).
+/// typing but Quit and the mouse's back and forward; Space also leaves a focused widget alone
+/// (it clicks it).
 fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events: &mut Vec<Event>) {
     use egui::{Key, Modifiers, PointerButton};
     let ctx = ui.ctx();
@@ -302,6 +302,9 @@ fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events:
         let _ = tx.send(a);
     };
     let find = ctx.input_mut(|i| {
+        if i.consume_key(Modifiers::COMMAND, Key::Q) {
+            events.push(Event::Quit);
+        }
         let mut key = |mods: Modifiers, k: Key| !typing && i.consume_key(mods, k);
         let find = model.logged_in && key(Modifiers::COMMAND, Key::F); // Search needs a session
         if key(Modifiers::COMMAND, Key::Comma) {
@@ -502,6 +505,49 @@ mod tests {
             model.apply(ev);
         }
         assert_eq!(model.route(), &Route::Settings);
+    }
+
+    /// Ctrl+Q (Cmd+Q on macOS) quits, also while typing.
+    #[test]
+    fn ctrl_q_quits() {
+        let ctx = egui::Context::default();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        let ctrl = |key| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        };
+        let mut pass = |model: &Model, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..Default::default()
+            };
+            let mut out = Vec::new();
+            let mut full = ctx.run_ui(input, |ui| out = draw(ui, model, &tx, &mut state));
+            full.textures_delta.clear(); // nothing renders them
+            out
+        };
+        assert!(matches!(
+            pass(&model, vec![ctrl(Key::Q)])[..],
+            [Event::Quit]
+        ));
+        for ev in pass(&model, vec![ctrl(Key::F)]) {
+            model.apply(ev);
+        }
+        pass(&model, vec![]); // the search box appears and takes the focus
+        assert!(ctx.text_edit_focused());
+        assert!(matches!(
+            pass(&model, vec![ctrl(Key::Q)])[..],
+            [Event::Quit]
+        ));
     }
 
     /// As a screen reader finds them: Space and Play send `TogglePlay` (the backend decides),

@@ -13,6 +13,27 @@ pub struct Settings {
     pub theme: Theme,
     pub account: Account,
     pub integrations: Integrations,
+    pub behavior: Behavior,
+}
+
+/// What closing the window and a launch do; both need a tray the desktop shows
+/// (`tray::hides_to_tray`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Behavior {
+    /// Closing the window keeps the app playing in the tray.
+    pub close_to_tray: bool,
+    /// A launch opens no window, only the tray item.
+    pub start_minimized: bool,
+}
+
+impl Default for Behavior {
+    fn default() -> Self {
+        Self {
+            close_to_tray: true,
+            start_minimized: false,
+        }
+    }
 }
 
 /// Who each scrobbling service is connected as; its secret is in the credential store, never
@@ -265,6 +286,10 @@ mod tests {
                 listenbrainz_user: Some("rob".into()),
                 discord: true,
             },
+            behavior: Behavior {
+                close_to_tray: false,
+                start_minimized: true,
+            },
         };
         saved.save(&file).expect("saved");
         assert_eq!(Settings::load(&file), saved);
@@ -285,6 +310,17 @@ mod tests {
         std::fs::write(&file, "not json {").expect("written");
         assert_eq!(Settings::load(&file), defaults, "garbage");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Close to tray on and start minimized off, also for settings saved before either existed.
+    #[test]
+    fn behavior_defaults() {
+        let b = Settings::default().behavior;
+        assert!(b.close_to_tray && !b.start_minimized, "{b:?}");
+        let old: Settings = serde_json::from_str(r#"{"theme":"Light"}"#).expect("parsed");
+        assert_eq!(old.behavior, b);
+        let one: Behavior = serde_json::from_str(r#"{"start_minimized":true}"#).expect("parsed");
+        assert!(one.close_to_tray && one.start_minimized, "{one:?}");
     }
 
     #[test]

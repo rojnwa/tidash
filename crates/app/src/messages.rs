@@ -203,8 +203,8 @@ pub enum Event {
     },
     /// The audio output is open; the UI reads the position from it.
     Player(player::Player),
-    /// The settings in force: read at start; on a change, from the UI at once and from the
-    /// backend once saved.
+    /// The settings in force after a change: from the UI at once and from the backend once
+    /// saved. `main` reads them at start.
     Settings(crate::settings::Settings),
     /// The output devices' names; empty when they could not be listed.
     Devices(Vec<String>),
@@ -232,6 +232,8 @@ pub enum Event {
     Navigate(Route),
     Back,
     Forward,
+    /// End the app (Ctrl+Q): the window closes and nothing stays in the tray.
+    Quit,
 }
 
 #[cfg(test)]
