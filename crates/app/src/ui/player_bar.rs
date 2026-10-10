@@ -53,11 +53,11 @@ pub fn show(
         .show_separator_line(false)
         .frame(Frame::NONE.fill(fill));
     let shown = panel.show(ui, |ui| {
-        // The right column fits its controls and the whole pill (ruling 25).
-        let gap = ui.spacing().item_spacing.x;
-        let pill = pb.output.as_ref().map(short_badge);
-        let pill = pill.map_or(0.0, |text| gap + widgets::badge_width(ui, &text));
-        let [left, centre, right] = columns(ui.max_rect(), controls_width(ui) + pill);
+        // The right column fits its controls and the widest pill the exclusive setting can
+        // show, whether anything plays or not, so the transport never moves (rulings 25, 28).
+        let pill = widgets::badge_width(ui, &widest_pill(model.settings.audio.exclusive));
+        let right = controls_width(ui) + ui.spacing().item_spacing.x + pill;
+        let [left, centre, right] = columns(ui.max_rect(), right);
         now_playing(ui, p, images, tx, pb.track.as_ref(), left);
         transport(ui, p, model, tx, player, state, centre);
         extras(ui, p, model, tx, side, right);
@@ -68,11 +68,14 @@ pub fn show(
 }
 
 /// The bar's columns inside `PLAYER_PAD` at either end, each the bar's height: the centre
-/// 1.5 / 3.5 of the width, the right 1 / 3.5 or `right` if wider, the left the rest.
+/// 1.5 / 3.5 of the width, the right 1 / 3.5 or `right` if wider, the left the rest. Below
+/// the window's minimum width, the left keeps the cover and a glyph's width of title, and the
+/// right gives way (its pill is cut).
 fn columns(bar: Rect, right: f32) -> [Rect; 3] {
     let x = bar.shrink2(vec2(theme::PLAYER_PAD, 0.0));
     let unit = x.width() / 3.5;
-    let b = x.right() - right.max(unit);
+    let left = theme::PLAYER_COVER + theme::COL_GAP + theme::GLYPH;
+    let b = x.right() - right.min(x.width() - 1.5 * unit - left).max(unit);
     let a = b - 1.5 * unit;
     [
         x.with_max_x(a),
@@ -232,8 +235,9 @@ fn extras(
         let slot = &mut child(ui, slot, Layout::right_to_left(Align::Center));
         let pill = widgets::badge(slot, p, &short_badge(o), p.tier(Tier::of(o)));
         let full = badge(o);
+        // A label's text is its node's value; screen readers name it from that.
         ui.ctx()
-            .accesskit_node_builder(pill.id, |node| node.set_label(full.as_str()));
+            .accesskit_node_builder(pill.id, |node| node.set_value(full.as_str()));
         pill.on_hover_text(format!("{full}\n{}", badge_hover(o)));
     }
     let row = &mut child(ui, controls, Layout::left_to_right(Align::Center));
@@ -299,6 +303,21 @@ pub fn badge(o: &OutputInfo) -> String {
 /// "24/96 FLAC · Exclusive".
 fn short_badge(o: &OutputInfo) -> String {
     if o.exclusive { badge(o) } else { format_of(o) }
+}
+
+/// The widest pill text there can be, exclusive or not: "24/176.4 FLAC", the longest rate
+/// TIDAL streams (Inter's figures are all one width, ruling 18).
+fn widest_pill(exclusive: bool) -> String {
+    short_badge(&OutputInfo {
+        codec: "FLAC".into(),
+        format: player::Format {
+            rate: 176_400,
+            bits: 24,
+            channels: 2,
+        },
+        exclusive,
+        device_rate: 176_400,
+    })
 }
 
 /// Exclusive output plays at full scale; until the output is known, exclusive is assumed when
@@ -450,26 +469,68 @@ mod tests {
         assert_eq!(play("ع".repeat(400)), short);
     }
 
-    /// From the 960 px minimum up, a 24/176.4 stream shared at 48 kHz shows its whole short
-    /// pill in the right column, before Queue; screen readers hear the full format (ruling 25).
+    /// Where the node whose value is `value` is drawn: a label's text is its value.
+    fn valued(out: &egui::FullOutput, value: &str) -> Rect {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let node = nodes.iter().find(|(_, n)| n.value() == Some(value));
+        let b = node.and_then(|(_, n)| n.bounds());
+        let b = b.unwrap_or_else(|| panic!("no {value:?} placed"));
+        let at = |x: f64, y: f64| pos2(x as f32, y as f32);
+        Rect::from_min_max(at(b.x0, b.y0), at(b.x1, b.y1))
+    }
+
+    /// From the 960 px minimum up, the format pill shows whole in the right column, before
+    /// Queue: a 24/176.4 stream shared at 48 kHz, and the widest, an exclusive 24/176.4 one
+    /// with exclusive mode on. Screen readers hear the full format (ruling 25).
     #[test]
     fn the_format_pill_shows_whole_from_960_px() {
         let ctx = testing::context();
         ctx.enable_accesskit();
-        let o = output(176_400, 24, false, 48_000);
-        let (full, short) = (badge(&o), short_badge(&o));
         let mut model = Model::default();
         model.playback.track = Some(testing::track(1));
-        model.playback.output = Some(o);
-        for width in [960.0, 1280.0] {
+        let shared = output(176_400, 24, false, 48_000);
+        let exclusive = output(176_400, 24, true, 176_400);
+        for (o, width) in [(&shared, 960.0), (&shared, 1280.0), (&exclusive, 960.0)] {
+            model.settings.audio.exclusive = o.exclusive;
+            model.playback.output = Some(o.clone());
             let out = bar(&ctx, &model, width);
-            let pill = testing::bounds(&out, &full);
+            let pill = valued(&out, &badge(o));
             let (_, end) = centre(&out, width);
             assert!(pill.left() >= end - 0.5, "{width}: {pill:?} before {end}");
             let queue = testing::bounds(&out, "Queue");
             assert!(pill.right() <= queue.left(), "{width}: {pill:?} {queue:?}");
-            let text = painted(&out, &short);
+            let text = painted(&out, &short_badge(o));
             assert!(matches!(text[..], [t] if !t.galley.elided), "{width}: cut");
+        }
+    }
+
+    /// At 960 and 1440 px, Play stays put whether anything plays and whatever the format;
+    /// exclusive mode on, whether an exclusive stream plays or not (ruling 28).
+    #[test]
+    fn the_transport_stays_put_whatever_plays() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        let cases = [
+            (false, vec![None, Some(output(44_100, 16, false, 44_100))]),
+            (false, vec![Some(output(176_400, 24, false, 48_000))]),
+            (true, vec![None, Some(output(176_400, 24, true, 176_400))]),
+        ];
+        for width in [960.0, 1440.0] {
+            let mut play = None;
+            for (exclusive, outputs) in &cases {
+                model.settings.audio.exclusive = *exclusive;
+                if *exclusive {
+                    play = None; // the setting widens the pill there can be
+                }
+                for o in outputs {
+                    model.playback.output = o.clone();
+                    let at = testing::bounds(&bar(&ctx, &model, width), "Play");
+                    assert_eq!(*play.get_or_insert(at), at, "{width} {o:?}");
+                }
+            }
         }
     }
 
