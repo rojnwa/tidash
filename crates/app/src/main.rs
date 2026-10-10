@@ -380,12 +380,14 @@ fn egui_theme(theme: settings::Theme) -> egui::Theme {
 }
 
 /// Fonts, text rendering and `theme`, as fastframe's getting-started guide shows; scroll bars
-/// that keep their place beside the content.
+/// that keep their place beside the content. Ctrl+Q is the app's (`ui::draw`): egui's own
+/// closes the window bare, which hides it to the tray.
 fn setup_look(ctx: &egui::Context, theme: settings::Theme) {
     let mut fonts = fastframe_fonts::FontSetup::default().definitions();
     let rendering = fastframe_text::detect();
     rendering.apply_to(&mut fonts);
     ctx.set_fonts(fonts);
+    ctx.options_mut(|o| o.quit_shortcuts.clear());
     ctx.set_theme(egui_theme(theme));
     ctx.all_styles_mut(|style| {
         rendering.apply_to_visuals(&mut style.visuals);

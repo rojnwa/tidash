@@ -289,9 +289,9 @@ fn crop(tex: f32, rect: f32) -> egui::Rect {
     egui::Rect::from_center_size(egui::pos2(0.5, 0.5), size)
 }
 
-/// Keyboard and mouse shortcuts; Settings lists the keys (`settings::shortcuts`). None while
-/// typing but Quit and the mouse's back and forward; Space also leaves a focused widget alone
-/// (it clicks it).
+/// Keyboard and mouse shortcuts but Quit (`draw`); Settings lists the keys
+/// (`settings::shortcuts`). None while typing but the mouse's back and forward; Space also
+/// leaves a focused widget alone (it clicks it).
 fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events: &mut Vec<Event>) {
     use egui::{Key, Modifiers, PointerButton};
     let ctx = ui.ctx();
@@ -302,9 +302,6 @@ fn shortcuts(ui: &egui::Ui, model: &Model, tx: &UnboundedSender<Action>, events:
         let _ = tx.send(a);
     };
     let find = ctx.input_mut(|i| {
-        if i.consume_key(Modifiers::COMMAND, Key::Q) {
-            events.push(Event::Quit);
-        }
         let mut key = |mods: Modifiers, k: Key| !typing && i.consume_key(mods, k);
         let find = model.logged_in && key(Modifiers::COMMAND, Key::F); // Search needs a session
         if key(Modifiers::COMMAND, Key::Comma) {
@@ -347,6 +344,13 @@ pub fn draw(
     // First, before any scroll area reads the input.
     state.scrolling.apply(ui.ctx());
     let mut events = Vec::new();
+    // Ctrl+Q (Cmd+Q) on every page, typing or not: the app's quit, never a bare window close.
+    if ui
+        .ctx()
+        .input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Q))
+    {
+        events.push(Event::Quit);
+    }
     if *model.route() != Route::Login {
         shortcuts(ui, model, tx, &mut events);
     }
@@ -507,13 +511,14 @@ mod tests {
         assert_eq!(model.route(), &Route::Settings);
     }
 
-    /// Ctrl+Q (Cmd+Q on macOS) quits, also while typing.
+    /// Ctrl+Q (Cmd+Q on macOS) quits on every page, the login page too, and while typing. The
+    /// key never reaches egui's own Ctrl+Q, a bare window close, which would hide to the tray.
     #[test]
     fn ctrl_q_quits() {
         let ctx = egui::Context::default();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let mut state = UiState::default();
-        let mut model = testing::at(Route::Home);
+        let mut model = Model::default();
         let ctrl = |key| egui::Event::Key {
             key,
             physical_key: None,
@@ -521,6 +526,7 @@ mod tests {
             repeat: false,
             modifiers: Modifiers::COMMAND,
         };
+        // The events, and whether the window was told to close.
         let mut pass = |model: &Model, events: Vec<egui::Event>| {
             let input = egui::RawInput {
                 events,
@@ -533,21 +539,26 @@ mod tests {
             let mut out = Vec::new();
             let mut full = ctx.run_ui(input, |ui| out = draw(ui, model, &tx, &mut state));
             full.textures_delta.clear(); // nothing renders them
-            out
+            let commands = &full.viewport_output[&egui::ViewportId::ROOT].commands;
+            let close = commands
+                .iter()
+                .any(|c| matches!(c, egui::ViewportCommand::Close));
+            (out, close)
         };
-        assert!(matches!(
-            pass(&model, vec![ctrl(Key::Q)])[..],
-            [Event::Quit]
-        ));
-        for ev in pass(&model, vec![ctrl(Key::F)]) {
+        let quits = |(events, close): (Vec<Event>, bool), page: &str| {
+            assert!(matches!(events[..], [Event::Quit]), "{page}: {events:?}");
+            assert!(!close, "{page}: a bare close");
+        };
+        assert_eq!(model.route(), &Route::Login);
+        quits(pass(&model, vec![ctrl(Key::Q)]), "login");
+        model.apply(Event::LoggedIn(1));
+        quits(pass(&model, vec![ctrl(Key::Q)]), "logged in");
+        for ev in pass(&model, vec![ctrl(Key::F)]).0 {
             model.apply(ev);
         }
         pass(&model, vec![]); // the search box appears and takes the focus
         assert!(ctx.text_edit_focused());
-        assert!(matches!(
-            pass(&model, vec![ctrl(Key::Q)])[..],
-            [Event::Quit]
-        ));
+        quits(pass(&model, vec![ctrl(Key::Q)]), "typing");
     }
 
     /// As a screen reader finds them: Space and Play send `TogglePlay` (the backend decides),
