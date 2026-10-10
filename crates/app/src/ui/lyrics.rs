@@ -162,12 +162,17 @@ mod tests {
         assert_eq!(sent(&mut rx), ["Seek(10s)"]);
     }
 
-    /// None says so; failed lyrics say that, and Retry asks again.
+    /// None says so, and so does no current track (asking for nothing); failed lyrics say
+    /// that, and Retry asks again.
     #[test]
     fn no_lyrics_says_so() {
         let egui = egui::Context::default();
         egui.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (events, out) = pass(&egui, &tx, &at(Route::Home), view, vec![]);
+        let idle = "Nothing is playing".to_owned();
+        assert!(shown(&out).contains(&idle), "{:?}", shown(&out));
+        assert!(events.is_empty() && sent(&mut rx).is_empty(), "{events:?}");
         let model = playing(Some(Load::Ready(None)));
         let (_, out) = pass(&egui, &tx, &model, view, vec![]);
         let none = "No lyrics for this track".to_owned();

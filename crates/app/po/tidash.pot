@@ -247,6 +247,10 @@ msgstr ""
 msgid "Credits"
 msgstr ""
 
+#: src/ui/mod.rs
+msgid "Nothing is playing"
+msgstr ""
+
 #: src/ui/lyrics.rs
 msgid "Couldn't load lyrics"
 msgstr ""
