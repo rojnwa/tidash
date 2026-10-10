@@ -107,23 +107,24 @@ pub fn activity_for(
     let start = now_ms.saturating_sub(at);
     let artists: Vec<&str> = t.artists.iter().map(|a| a.name.as_str()).collect();
     Some(Rich {
-        details: text(&t.title),
-        state: text(&artists.join(", ")),
+        details: text(&t.title, 128),
+        state: text(&artists.join(", "), 128),
         start_ms: playing.then_some(start),
         end_ms: playing.then(|| start + i64::from(t.duration) * 1000),
         image: t.album.image().map(|i| i.url(image_base, COVER_PX)),
-        album: text(&t.album.title),
+        album: text(&t.album.title, 128),
         url: format!("https://tidal.com/browse/track/{}", t.id),
     })
 }
 
-/// `s` within Discord's 2 to 128: cut on a char boundary at 128 UTF-16 units (at most 128
-/// however Discord counts), padded with zero-width spaces, which do not show.
-fn text(s: &str) -> String {
+/// `s` within Discord's 2 to `max` (128 for a text, 32 for a button): cut on a char boundary at
+/// `max` UTF-16 units (at most `max` however Discord counts), padded with zero-width spaces,
+/// which do not show.
+fn text(s: &str, max: usize) -> String {
     let mut units = 0;
     let fits = |c: &char| {
         units += c.len_utf16();
-        units <= 128
+        units <= max
     };
     let mut t: String = s.chars().take_while(fits).collect();
     while t.chars().count() < 2 {
@@ -185,7 +186,7 @@ fn activity(r: &Rich) -> Activity<'static> {
     if let Some(image) = &r.image {
         assets = assets.large_image(image.clone());
     }
-    let button = Button::new(tr("Open in TIDAL"), r.url.clone());
+    let button = Button::new(text(&tr("Open in TIDAL"), 32), r.url.clone());
     let activity = Activity::new()
         .activity_type(ActivityType::Listening)
         .details(r.details.clone())
@@ -289,6 +290,12 @@ mod tests {
         let got = activity_for(&pb, Duration::ZERO, NOW, &base()).expect("shown");
         assert_eq!(got.details, "🎵".repeat(64));
         assert_eq!(got.state, "\u{200B}\u{200B}");
+    }
+
+    /// A button label takes at most 32 (a translation can run longer).
+    #[test]
+    fn button_label_is_cut_to_32() {
+        assert_eq!(text(&"é".repeat(40), 32), "é".repeat(32));
     }
 
     /// Stopped or without a track there is nothing to show; turned off, the presence clears.

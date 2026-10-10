@@ -47,6 +47,16 @@ pub fn clicks(out: &egui::FullOutput, label: &str) -> impl Iterator<Item = egui:
     })
 }
 
+/// Whether the node labelled `label` in `out` is shown disabled.
+pub fn disabled(out: &egui::FullOutput, label: &str) -> bool {
+    let tree = out.platform_output.accesskit_update.as_ref();
+    let nodes = &tree.expect("AccessKit is on").nodes;
+    let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
+    node.unwrap_or_else(|| panic!("no {label:?} shown"))
+        .1
+        .is_disabled()
+}
+
 /// The text of every node in `out`, as a screen reader finds it.
 pub fn shown(out: &egui::FullOutput) -> Vec<String> {
     let tree = out.platform_output.accesskit_update.as_ref();

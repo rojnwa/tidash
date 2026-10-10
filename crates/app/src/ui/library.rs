@@ -372,7 +372,7 @@ fn field(ui: &mut egui::Ui, label: &str, text: &mut String, focus: bool) -> bool
 mod tests {
     use super::*;
     use crate::model::{Action, Event, Model, Route};
-    use crate::ui::testing::{at, click, middle, pass_with, playlist, right, shown};
+    use crate::ui::testing::{at, click, disabled, middle, pass_with, playlist, right, shown};
     use egui::Key;
     use tidal::FolderItem;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -497,16 +497,6 @@ mod tests {
             "folder: None, tracks: [] })"
         );
         assert_eq!(tree.sent(), [create]);
-    }
-
-    /// Whether the node labelled `label` in `out` is shown disabled.
-    fn disabled(out: &egui::FullOutput, label: &str) -> bool {
-        let tree = out.platform_output.accesskit_update.as_ref();
-        let nodes = &tree.expect("AccessKit is on").nodes;
-        let node = nodes.iter().find(|(_, n)| n.label() == Some(label));
-        node.unwrap_or_else(|| panic!("no {label:?} shown"))
-            .1
-            .is_disabled()
     }
 
     /// A folder's Delete asks first. Only a folder known to be empty offers it, since what

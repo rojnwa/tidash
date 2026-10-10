@@ -199,8 +199,10 @@ struct Backend {
     settings: Settings,
     /// Where `settings` are saved; `None` without a config dir (nothing is saved).
     settings_path: Option<PathBuf>,
-    /// Its calls run on the runtime, outside `tasks`: logging out of TIDAL does not stop them.
+    /// Its calls run in `scrobbles`, outside `tasks`: logging out of TIDAL does not stop them.
     scrobbler: Scrobbler,
+    /// The scrobbler's calls (`scrobbling`); the app's end waits briefly on them (`run`).
+    scrobbles: JoinSet<()>,
     /// When the flush after a failed one runs: failures until then arm no other.
     scrobble_retry_at: Option<tokio::time::Instant>,
     /// The Last.fm connect, waiting for the user (`connect_lastfm`); Cancel aborts it.
@@ -244,6 +246,7 @@ impl Backend {
             settings,
             settings_path: None,
             scrobbler,
+            scrobbles: JoinSet::new(),
             scrobble_retry_at: None,
             lastfm_connect: None,
         };
@@ -251,7 +254,8 @@ impl Backend {
         backend
     }
 
-    /// Until the UI drops its sender (app closing); then the current play is reported.
+    /// Until the UI drops its sender (app closing); then the current play is reported, and the
+    /// scrobbler's tasks get a moment to save.
     async fn run(mut self, mut rx: UnboundedReceiver<Action>, mut msgs: UnboundedReceiver<Msg>) {
         // Samples the position for a resume after a player error, and preloads the next track
         // near the end; only ticks while playing.
@@ -279,6 +283,12 @@ impl Backend {
         if let Some(p) = &mut self.playback {
             p.shutdown(self.client.as_ref()).await;
         }
+        // A play queued just now is saved before it is sent; the next start sends what is
+        // saved. A send still going after this is dropped with the runtime.
+        // ponytail: waits on every scrobbler task, so an armed retry (asleep) costs the whole
+        // 500 ms at quit; wait on the saves alone if that ever shows.
+        let left = async { while self.scrobbles.join_next().await.is_some() {} };
+        let _ = tokio::time::timeout(Duration::from_millis(500), left).await;
     }
 
     async fn on_msg(&mut self, msg: Msg) {
@@ -307,14 +317,15 @@ impl Backend {
         }
     }
 
-    /// Runs `call` on the scrobbler, on the runtime but outside `tasks`; what it left to do
-    /// comes back as `Msg::Scrobbled`.
-    fn scrobbling<F>(&self, call: impl FnOnce(Scrobbler) -> F)
+    /// Runs `call` on the scrobbler, in `scrobbles`; what it left to do comes back as
+    /// `Msg::Scrobbled`.
+    fn scrobbling<F>(&mut self, call: impl FnOnce(Scrobbler) -> F)
     where
         F: Future<Output = Outcome> + Send + 'static,
     {
         let (done, msgs) = (call(self.scrobbler.clone()), self.msgs.clone());
-        tokio::spawn(async move {
+        while self.scrobbles.try_join_next().is_some() {} // drop the finished ones
+        self.scrobbles.spawn(async move {
             let _ = msgs.send(Msg::Scrobbled(done.await)); // backend gone = app closing
         });
     }
@@ -686,7 +697,8 @@ impl Backend {
     }
 
     /// Saves `settings`, sends them back, and works by them: the audio at once; another client
-    /// for the next login, logging out of a session made with the old one.
+    /// for the next login, ending a login begun and logging out of a session made with the old
+    /// one.
     async fn set_settings(&mut self, settings: Settings) {
         self.settings = settings;
         // Awaited, so two quick changes land in order.
@@ -709,6 +721,7 @@ impl Backend {
             return;
         }
         (self.cfg.client_id, self.cfg.redirect_uri) = (new.client_id, new.redirect_uri);
+        self.pkce = None; // a login begun on the old client: its redirect asks to start again
         if self.client.is_some() {
             self.log_out().await;
             let why = tr("Logged out: the client ID changed. Log in again.");

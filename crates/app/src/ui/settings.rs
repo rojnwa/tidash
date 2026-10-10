@@ -72,7 +72,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         audio(ui, &model.devices, &mut new.audio);
         section(ui, tr("Behavior"));
         ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
-        ui.checkbox(&mut new.behavior.start_minimized, tr("Start minimized"));
+        // Without Close to tray there would be no window to come back to (`starts_hidden`).
+        let start_minimized =
+            egui::Checkbox::new(&mut new.behavior.start_minimized, tr("Start minimized"));
+        ui.add_enabled(new.behavior.close_to_tray, start_minimized);
         ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, tr("Integrations"));
         if state.lastfm {
@@ -478,6 +481,26 @@ mod tests {
         on.integrations.discord = true;
         assert_eq!(set_settings(sent), [on]);
         assert!(model.settings.integrations.discord, "shown at once");
+    }
+
+    /// Start minimized needs Close to tray: off, its checkbox shows disabled and a click
+    /// changes nothing.
+    #[test]
+    fn start_minimized_needs_close_to_tray() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Settings);
+        model.settings.behavior.close_to_tray = false; // on by default
+        let start = "Start minimized";
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(testing::disabled(&out, start));
+        let click = vec![testing::click(&out, start)];
+        let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+        assert_eq!(set_settings(sent), []);
+        model.settings.behavior.close_to_tray = true;
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(!testing::disabled(&out, start));
     }
 
     #[test]

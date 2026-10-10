@@ -807,6 +807,45 @@ fn client_id_set_while_logged_out_is_used_by_the_next_login() {
     assert_eq!(query["redirect_uri"], "https://example.test/cb");
 }
 
+/// A login begun on the old client ends with it: a redirect from the old URL asks for a new
+/// login instead of failing generically.
+#[test]
+fn a_client_change_ends_the_login_begun() {
+    let (mut b, events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+    b.begin_login();
+    let mut settings = Settings::default();
+    settings.account.client_id = Some("mine".into());
+    let rt = runtime();
+    rt.block_on(b.handle(Action::SetSettings(settings)));
+    let redirect = Redirect("https://x.test/cb?code=c&state=st".into());
+    rt.block_on(b.handle(Action::FinishLogin(redirect)));
+    let start_first = r#"Login failed: start with "Log in with TIDAL" first"#;
+    assert_eq!(errors(&events), [start_first]);
+}
+
+/// None lost (Review Focus 3): a play queued as the UI closes, its scrobbler task not yet run,
+/// is in the queue file the next start flushes.
+#[test]
+fn a_scrobble_at_quit_is_saved() {
+    let pid = std::process::id();
+    let dir = std::env::temp_dir().join(format!("tidash-backend-quit-{pid}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    let file = dir.join("scrobbles.json");
+    // ListenBrainz connected without a readable token: queued, nothing sent.
+    let store = Arc::new(tidal::MemoryStore::default());
+    let (mut b, _events, msgs) = new_backend(store.clone(), Ok(None));
+    let (queue, on) = (Some(file.clone()), [Service::ListenBrainz]);
+    b.scrobbler = Scrobbler::new(b.http.clone(), store, queue, Apis::default(), &on);
+    let listen = crate::scrobble::tests::listen(7, 1_700_000_100);
+    let _ = b.msgs.send(Msg::Scrobble(listen));
+    let (action_tx, action_rx) = unbounded_channel();
+    drop(action_tx); // the UI closed
+    runtime().block_on(b.run(action_rx, msgs));
+    let saved = std::fs::read_to_string(&file).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(saved.contains("1700000100"), "{saved:?}");
+}
+
 /// The token endpoint refuses the client ID, on the login exchange and on a refresh (which
 /// first ends the session): the error points to the setting.
 #[test]

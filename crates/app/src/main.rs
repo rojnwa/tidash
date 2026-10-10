@@ -319,14 +319,10 @@ impl App {
 
 /// What the shell around `eframe::run_native` does with the app between windows.
 impl Resident for App {
-    /// Quit wins; otherwise a closed window hides to the tray when the tray asked for that or
-    /// the setting says so.
+    /// See `on_close`.
     fn closed(&self) -> Closed {
-        if !self.quit && (self.hide || self.hides_to_tray()) {
-            Closed::Hide
-        } else {
-            Closed::Quit
-        }
+        let to_tray = self.hides_to_tray();
+        on_close(self.quit, self.hide, to_tray, self.model.logged_in)
     }
 
     /// The window's textures go with it.
@@ -377,6 +373,17 @@ impl Resident for App {
 /// Whether a launch starts in the tray: asked for, and with a tray to come back from.
 fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool) -> bool {
     behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray)
+}
+
+/// What closing the window does. Quit wins; otherwise it hides when the tray asked for that
+/// (`hide`) or, logged in, the setting says so (`to_tray`, `hides_to_tray`): a first-run user
+/// closing the login page expects the app to end.
+fn on_close(quit: bool, hide: bool, to_tray: bool, logged_in: bool) -> Closed {
+    if !quit && (hide || (to_tray && logged_in)) {
+        Closed::Hide
+    } else {
+        Closed::Quit
+    }
 }
 
 /// Opens the links that wait, in order, once logged in: a track's album comes from the
@@ -487,8 +494,33 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{Action, Event, Link, Model, Route, Switches, open_links, starts_hidden};
+    use super::{Action, Event, Link, Model, Route, Switches, on_close, open_links, starts_hidden};
     use crate::settings::Behavior;
+    use fastframe_shell::Closed;
+
+    /// Closing the login page quits, Close to tray or not: a first-run user expects the app
+    /// to end. Logged in, the setting hides; Quit and the tray's own hide win either way.
+    #[test]
+    fn closing_the_login_page_quits() {
+        // on_close(quit, hide, to_tray, logged_in)
+        assert_eq!(
+            on_close(false, false, true, false),
+            Closed::Quit,
+            "login page"
+        );
+        assert_eq!(on_close(false, false, true, true), Closed::Hide);
+        assert_eq!(
+            on_close(false, false, false, true),
+            Closed::Quit,
+            "setting off"
+        );
+        assert_eq!(on_close(true, true, true, true), Closed::Quit, "quit asked");
+        assert_eq!(
+            on_close(false, true, false, false),
+            Closed::Hide,
+            "the tray's hide"
+        );
+    }
 
     /// Links that come in before the login open after it, in order: a track's album comes
     /// from the backend.
