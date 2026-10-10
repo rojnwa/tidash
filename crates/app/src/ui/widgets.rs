@@ -126,6 +126,19 @@ pub fn circle_button(
     r.on_hover_text(label)
 }
 
+/// A bare `glyph`-point `icon` in `text` on a `TRANSPORT` square, the player's transport
+/// (rulings 8, 27): no disc, hovered or pressed either. Hover and press scale the glyph;
+/// it is `text` at rest already, as TIDAL's are, so there is no brighter ink to turn.
+pub fn glyph_button(ui: &mut Ui, p: &Palette, icon: Icon, label: &str, glyph: f32) -> Response {
+    let (rect, r) = ui.allocate_exact_size(Vec2::splat(theme::TRANSPORT), Sense::click());
+    r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
+    if ui.is_rect_visible(rect) {
+        paint_icon(ui, icon, rect.center(), glyph * scale(ui, &r), p.text);
+    }
+    focus_ring(ui, &r, rect.width() / 2.0);
+    r.on_hover_text(label)
+}
+
 /// A 40 px pill with `label` (and `icon` before it), padded 20. Primary: `accent`
 /// (`accent_hover` hovered) under `on_accent`; secondary: `surface` (`surface_hover` over it
 /// hovered) under `text`.
@@ -274,11 +287,13 @@ pub fn search_field(
     r
 }
 
+const BADGE_PAD: Vec2 = vec2(12.0, 6.0);
+
 /// A pill of `small()` `text` in `color`, on `color` at 10% with a 1 px stroke of it at 50%,
-/// padded 12 by 6 (spec §4.2: the format badge, tier colours), cut with "…" to the width
+/// padded `BADGE_PAD` (spec §4.2: the format badge, tier colours), cut with "…" to the width
 /// available. It takes the palette like the rest of the kit, but `color` is all it paints.
 pub fn badge(ui: &mut Ui, _p: &Palette, text: &str, color: Color32) -> Response {
-    let pad = vec2(12.0, 6.0);
+    let pad = BADGE_PAD;
     let width = ui.available_width() - 2.0 * pad.x;
     let galley = line(ui, text, theme::small(), color, width);
     let (rect, r) = ui.allocate_exact_size(galley.size() + 2.0 * pad, Sense::hover());
@@ -292,6 +307,15 @@ pub fn badge(ui: &mut Ui, _p: &Palette, text: &str, color: Color32) -> Response 
         painter.galley(rect.min + pad, galley, color);
     }
     r
+}
+
+/// The width a `badge` takes to show `text` whole.
+pub fn badge_width(ui: &Ui, text: &str) -> f32 {
+    let clear = Color32::TRANSPARENT; // measured, not painted
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), theme::small(), clear);
+    galley.size().x + 2.0 * BADGE_PAD.x
 }
 
 /// `rect` filled from `top` at its top edge to `bottom` at its bottom one.
@@ -424,6 +448,47 @@ mod tests {
                 "no {label:?} in {shown:?}"
             );
         }
+    }
+
+    /// A badge cuts its text with "…" to the width it has, and `badge_width` is what it takes
+    /// to show it whole.
+    #[test]
+    fn badges_cut_their_text_to_the_room() {
+        let ctx = context();
+        let p = Palette::dark();
+        let text = "24/176.4 FLAC · Shared 48 kHz";
+        let whole = run(&ctx, vec![], |ui| badge_width(ui, text)).0;
+        for (room, cut) in [(whole - 20.0, true), (whole, false)] {
+            let (r, out) = run(&ctx, vec![], |ui| {
+                let size = vec2(room, theme::PILL);
+                ui.allocate_ui(size, |ui| badge(ui, &p, text, p.text)).inner
+            });
+            assert!(r.rect.width() <= room, "{room}: {:?}", r.rect);
+            let elided = out.shapes.iter().any(|s| match &s.shape {
+                egui::Shape::Text(t) => t.galley.elided,
+                _ => false,
+            });
+            assert_eq!(elided, cut, "{room}");
+        }
+    }
+
+    /// Hovered, a transport glyph paints no disc (ruling 27).
+    #[test]
+    fn glyph_buttons_have_no_disc() {
+        let ctx = context();
+        let p = Palette::dark();
+        let play =
+            |ui: &mut egui::Ui| glyph_button(ui, &p, Icon::PlayFilled, "Play", theme::PLAY_GLYPH);
+        let (_, out) = run(&ctx, vec![], play);
+        let at = egui::Event::PointerMoved(testing::middle(&out, "Play"));
+        let (r, out) = run(&ctx, vec![at], play);
+        assert!(r.hovered());
+        let disc = out.shapes.iter().any(|s| {
+            let shape = &s.shape;
+            matches!(shape, egui::Shape::Circle(_))
+                || matches!(shape, egui::Shape::Rect(r) if r.fill.a() > 0 && r.brush.is_none())
+        });
+        assert!(!disc, "{:?}", out.shapes);
     }
 
     #[test]

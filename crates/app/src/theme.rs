@@ -216,6 +216,9 @@ pub const ICON_BUTTON: f32 = 32.0;
 pub const GLYPH: f32 = 16.0;
 /// Previous, Next and Play/Pause's hit box.
 pub const TRANSPORT: f32 = 40.0;
+/// Previous and Next's glyphs; Play/Pause's is larger (ruling 26).
+pub const SKIP_GLYPH: f32 = 22.0;
+pub const PLAY_GLYPH: f32 = 24.0;
 pub const CARD_CONTROL: f32 = 36.0;
 /// A pill's height.
 pub const PILL: f32 = 40.0;
