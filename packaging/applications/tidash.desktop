@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Tidash
+GenericName=Music Player
+Comment=A native TIDAL client
+Exec=tidash %u
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=tidal;music;player;streaming;
+Icon=tidash
+StartupNotify=true
+StartupWMClass=tidash
+MimeType=x-scheme-handler/tidal;

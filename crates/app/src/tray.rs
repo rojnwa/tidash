@@ -57,7 +57,7 @@ pub fn play_pause_label(playing: bool) -> Cow<'static, str> {
 }
 
 /// A teal disc with a wave cut out below its middle, `size` pixels square, as RGBA.
-// ponytail: drawn mark; the real icon comes with packaging (M5)
+// Tidash's mark, also the app icon: `write_packaging_icons` makes the packaging files from it.
 pub fn icon(size: usize) -> Vec<u8> {
     let half = size as f32 / 2.0;
     let r = half - 1.0;
@@ -139,5 +139,63 @@ mod tests {
             let cut = (3..size - 3).any(|y| alpha(size / 2, y) < 128);
             assert!(cut, "{size}: the wave cuts the disc");
         }
+    }
+
+    const PACKAGING: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../packaging");
+
+    fn png(size: usize) -> Vec<u8> {
+        use image::ImageEncoder;
+        let mut out = Vec::new();
+        let side = size as u32;
+        image::codecs::png::PngEncoder::new(&mut out)
+            .write_image(&icon(size), side, side, image::ExtendedColorType::Rgba8)
+            .expect("encoded");
+        out
+    }
+
+    /// Run after changing the mark: `cargo test -p tidash write_packaging_icons -- --ignored`.
+    #[test]
+    #[ignore = "writes the packaging icons"]
+    fn write_packaging_icons() {
+        let write = |path: &str, bytes: &[u8]| {
+            let path = std::path::Path::new(PACKAGING).join(path);
+            std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
+            std::fs::write(path, bytes).expect("written");
+        };
+        write("macos/icon-1024.png", &png(1024));
+        for n in [32, 48, 64, 128, 256, 512] {
+            write(&format!("icons/hicolor/{n}x{n}/apps/tidash.png"), &png(n));
+        }
+        let pngs = [16, 24, 32, 48, 64, 128, 256].map(|n| (n, png(n)));
+        let mut ico = vec![0, 0, 1, 0];
+        ico.extend((pngs.len() as u16).to_le_bytes());
+        let mut offset = 6 + 16 * pngs.len();
+        for (n, png) in &pngs {
+            // 0 stands for 256.
+            let side = if *n == 256 { 0 } else { *n as u8 };
+            ico.extend([side, side, 0, 0, 1, 0, 32, 0]);
+            ico.extend((png.len() as u32).to_le_bytes());
+            ico.extend((offset as u32).to_le_bytes());
+            offset += png.len();
+        }
+        for (_, png) in &pngs {
+            ico.extend(png);
+        }
+        write("windows/tidash.ico", &ico);
+    }
+
+    #[test]
+    fn committed_icons_match_the_mark() {
+        let bytes = std::fs::read(format!("{PACKAGING}/macos/icon-1024.png")).expect("the icon");
+        let committed = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+            .expect("a PNG")
+            .into_rgba8();
+        assert_eq!(committed.dimensions(), (1024, 1024));
+        // `cos` and `hypot` may differ in the last bit between systems' maths libraries, which
+        // can round an edge pixel's alpha the other way.
+        let off = (committed.as_raw().iter().zip(icon(1024)))
+            .filter(|(a, b)| a.abs_diff(*b) > 1)
+            .count();
+        assert_eq!(off, 0, "stale packaging icons: run write_packaging_icons");
     }
 }

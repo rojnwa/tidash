@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>Tidash</string>
+    <key>CFBundleDisplayName</key><string>Tidash</string>
+    <key>CFBundleIdentifier</key><string>__IDENTIFIER__</string>
+    <key>CFBundleExecutable</key><string>__EXECUTABLE__</string>
+    <key>CFBundleIconFile</key><string>tidash</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+    <key>CFBundleVersion</key><string>__BUILD__</string>
+    <key>LSMinimumSystemVersion</key><string>11.0</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+    <!-- TIDAL links (tidal://album/…) open in Tidash; src/mac_links.rs
+         takes them. Launch Services notes this when the app is first opened. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>TIDAL link</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>tidal</string>
+            </array>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+        </dict>
+    </array>
+    <key>NSHumanReadableCopyright</key><string>© 2026 Roman Wagner. GPL-3.0-or-later. Not affiliated with TIDAL.</string>
+</dict>
+</plist>

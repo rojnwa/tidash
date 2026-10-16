@@ -1,0 +1,78 @@
+schema: 1
+tool:
+  version: 0.9.0
+  nfpm: 2.47.0
+libraries:
+  libasound.so.2:
+    deb: libasound2t64
+    rpm: alsa-lib
+nfpm:
+  name: tidash
+  maintainer: Roman Wagner <rojnwa@users.noreply.github.com>
+  homepage: https://github.com/rojnwa/tidash
+  description: A native TIDAL client
+  license: GPL-3.0-or-later
+  contents:
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/tidash"
+    dst: "/usr/bin/"
+    file_info: { mode: 493 }
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/LICENSE"
+    dst: "/usr/share/licenses/tidash/"
+    file_info: { mode: 420 }
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/Inter-LICENSE.txt"
+    dst: "/usr/share/licenses/tidash/"
+    file_info: { mode: 420 }
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/icons-LICENSE.txt"
+    dst: "/usr/share/licenses/tidash/"
+    file_info: { mode: 420 }
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/README.md"
+    dst: "/usr/share/doc/tidash/"
+    file_info: { mode: 420 }
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/applications/tidash.desktop"
+    dst: "/usr/share/applications/"
+    file_info: { mode: 420 }
+  # Not `type: tree`: nFPM walks a tree's src without globbing it, and gives its folders the
+  # files' mode. A glob on the folder takes the files inside, placed by their paths below it.
+  - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/icons/hicolor"
+    dst: "/usr/share/icons/hicolor"
+    file_info: { mode: 420 }
+  overrides:
+    deb:
+      depends: ["libc6 (>= 2.39)", libgl1, libegl1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libwayland-cursor0, libwayland-egl1, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2, libasound2t64, libgcc-s1, libstdc++6]
+    rpm:
+      depends: [glibc >= 2.39, libglvnd-glx, libglvnd-egl, libxkbcommon, libxkbcommon-x11, libwayland-client, libwayland-cursor, libwayland-egl, libX11, libX11-xcb, libXcursor, libXi, libXrandr, alsa-lib, libgcc, libstdc++]
+  rpm:
+    buildhost: github-actions
+targets:
+  macos-universal:
+    platform: macos
+    arch: universal
+    formats: [dmg]
+    input: { kind: directory, local: dist/macos-input }
+    native:
+      command: [ruby, packaging/macos/dmg.rb, '@PAYLOAD@', '@PACKAGE@']
+      output: 'tidash-@TAG@-macos-universal.dmg'
+  linux-amd64:
+    platform: linux
+    arch: amd64
+    libc: glibc
+    compiler_target: x86_64-unknown-linux-gnu
+    formats: [deb, rpm, appimage]
+    input:
+      local: dist/tidash-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+      release_asset: tidash-v@VERSION@-x86_64-unknown-linux-gnu.tar.gz
+  linux-arm64:
+    platform: linux
+    arch: arm64
+    libc: glibc
+    compiler_target: aarch64-unknown-linux-gnu
+    formats: [deb, rpm, appimage]
+    input:
+      local: dist/tidash-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+      release_asset: tidash-v@VERSION@-aarch64-unknown-linux-gnu.tar.gz
+release:
+  repository: rojnwa/tidash
+  prereleases: true
+  checksums: checksums.txt
+version_file: Cargo.toml
+version_section: workspace.package
