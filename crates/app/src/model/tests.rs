@@ -73,6 +73,17 @@ fn settings_and_devices_survive_logout() {
     }
 }
 
+/// Where an update stands is the app's too.
+#[test]
+fn update_state_survives_logout_and_expiry() {
+    for out in [Event::LoggedOut, Event::SessionExpired] {
+        let mut m = logged_in();
+        m.apply(Event::Update(UpdateState::UpToDate));
+        m.apply(out);
+        assert_eq!(m.update, Some(UpdateState::UpToDate));
+    }
+}
+
 #[test]
 fn an_expired_session_keeps_the_queue() {
     let mut m = logged_in();

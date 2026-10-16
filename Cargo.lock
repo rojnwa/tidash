@@ -255,6 +255,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "apple-native-keyring-store"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1718,6 +1724,20 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "tray-icon",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "fastframe-update"
+version = "0.6.0"
+source = "git+https://github.com/crmne/fastframe?tag=v0.6.0#0d65ca99eb6d00f10ff556bf985249658feed469"
+dependencies = [
+ "anyhow",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha2",
+ "url",
  "windows-sys 0.60.2",
 ]
 
@@ -4988,6 +5008,7 @@ dependencies = [
 name = "tidash"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "directories",
  "discord-rich-presence",
  "eframe",
@@ -5005,6 +5026,7 @@ dependencies = [
  "fastframe-text",
  "fastframe-theme",
  "fastframe-tray",
+ "fastframe-update",
  "image",
  "log",
  "md5",

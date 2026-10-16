@@ -34,6 +34,10 @@ fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
 fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
 fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
 fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
+# Self-update (`update`), over our reqwest: its `reqwest` feature would add reqwest 0.12.
+fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
+# `fastframe_update::Transport::get` returns `anyhow::Result`.
+anyhow = "1"
 directories = "6"
 md5 = "0.8"
 serde.workspace = true

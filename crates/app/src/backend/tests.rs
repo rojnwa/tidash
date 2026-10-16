@@ -512,6 +512,26 @@ fn runtime() -> tokio::runtime::Runtime {
         .expect("a runtime")
 }
 
+/// Check and Install go to the update thread, and so does a change to Automatic updates; other
+/// settings do not.
+#[test]
+fn update_actions_reach_the_update_thread() {
+    let (mut b, _events, _msgs) = new_backend(Arc::new(NoReads), Ok(None));
+    let (tx, commands) = channel();
+    b.updates = Some(tx);
+    let rt = runtime();
+    rt.block_on(b.handle(Action::CheckForUpdates));
+    rt.block_on(b.handle(Action::InstallUpdate));
+    let mut settings = Settings::default();
+    settings.updates.automatic = false;
+    rt.block_on(b.handle(Action::SetSettings(settings.clone())));
+    settings.theme = crate::settings::Theme::Light;
+    rt.block_on(b.handle(Action::SetSettings(settings)));
+    let sent: Vec<_> = commands.try_iter().collect();
+    let want = [Command::Check, Command::Install, Command::Automatic(false)];
+    assert_eq!(sent, want);
+}
+
 fn errors(events: &Receiver<Event>) -> Vec<String> {
     let error = |e| match e {
         Event::Error(e) => Some(e),

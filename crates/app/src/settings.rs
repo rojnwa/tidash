@@ -16,6 +16,7 @@ pub struct Settings {
     pub account: Account,
     pub integrations: Integrations,
     pub behavior: Behavior,
+    pub updates: Updates,
     /// A palette file in `themes_dir` by name, over `theme`.
     pub custom_theme: Option<String>,
     /// The last palette read for `custom_theme`, kept when the file goes; a damaged one loads
@@ -38,6 +39,7 @@ impl Default for Settings {
             account: Account::default(),
             integrations: Integrations::default(),
             behavior: Behavior::default(),
+            updates: Updates::default(),
             custom_theme: None,
             custom_theme_cache: None,
             accent_from_art: true,
@@ -63,6 +65,21 @@ impl Default for Behavior {
             close_to_tray: true,
             start_minimized: false,
         }
+    }
+}
+
+/// Self-update (`update`). Installing always waits for the user, and "Check now" works either
+/// way.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Updates {
+    /// Check at start and every day, and download what this copy can install.
+    pub automatic: bool,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self { automatic: true }
     }
 }
 
@@ -339,6 +356,7 @@ mod tests {
                 close_to_tray: false,
                 start_minimized: true,
             },
+            updates: Updates { automatic: false },
             custom_theme: Some("Nord.json".into()),
             custom_theme_cache: fastframe_theme::presets::themes().nth(2),
             accent_from_art: false,
@@ -384,6 +402,18 @@ mod tests {
         assert_eq!(old.behavior, b);
         let one: Behavior = serde_json::from_str(r#"{"start_minimized":true}"#).expect("parsed");
         assert!(one.close_to_tray && one.start_minimized, "{one:?}");
+    }
+
+    /// Automatic updates on, also for settings saved before the setting existed.
+    #[test]
+    fn updates_default_on_for_old_files() {
+        for old in [
+            "{}",
+            r#"{"theme":"Light","behavior":{"close_to_tray":false}}"#,
+        ] {
+            let settings: Settings = serde_json::from_str(old).expect("parsed");
+            assert!(settings.updates.automatic, "{old}");
+        }
     }
 
     #[test]

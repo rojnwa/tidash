@@ -96,6 +96,51 @@ pub enum Action {
     DisconnectLastfm,
     /// Creates the themes folder if need be and opens it in the file manager.
     OpenThemesFolder,
+    /// Checks for a newer release now and downloads it (`Event::Update`), whatever the
+    /// Automatic updates setting says.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Settings › Updates sends it (Task 4)")
+    )]
+    CheckForUpdates,
+    /// Hands the downloaded update to the helper, then quits (`Event::Quit`).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Settings › Updates sends it (Task 4)")
+    )]
+    InstallUpdate,
+}
+
+/// Where an update stands, for Settings › Updates (`Model::update`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum UpdateState {
+    /// A check the user asked for.
+    Checking,
+    /// The check the user asked for found nothing newer.
+    UpToDate,
+    Downloading {
+        version: String,
+        percent: u8,
+    },
+    /// Downloaded and verified: `Action::InstallUpdate` installs it.
+    Ready {
+        version: String,
+    },
+    /// A newer release this copy cannot install itself; `reason` says how to get it instead.
+    Unsupported {
+        version: String,
+        reason: fastframe_update::Unsupported,
+    },
+    /// A failed check is reported only when the user asked for it.
+    Failed(UpdateStep),
+}
+
+/// What an update was doing when it failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateStep {
+    Check,
+    Download,
+    Install,
 }
 
 /// A change to the user's playlists or folders. `folder` and `parent` are folder ids, `None`
@@ -230,6 +275,8 @@ pub enum Event {
     PlaylistDeleted(String),
     /// A Last.fm connect waits for the user to allow Tidash, or no longer.
     LastfmWaiting(bool),
+    /// From the update thread (`update`).
+    Update(UpdateState),
     /// What the theme picker lists (the catalog's palette files, by filename) and what to say
     /// under it; `main` applies it whenever either changes.
     Themes {

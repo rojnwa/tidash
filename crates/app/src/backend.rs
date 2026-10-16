@@ -7,6 +7,7 @@ use crate::model::{Action, Event, Load, Redirect};
 use crate::playback::{Msg, Playback};
 use crate::scrobble::{Apis, Outcome, Scrobbler, Service};
 use crate::settings::Settings;
+use crate::update::{self, Command};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -48,7 +49,7 @@ pub fn start(
             };
             // The store blocks: read it before the runtime runs on this thread. Logging in
             // first lets the UI leave the login page before the device is open.
-            let audio = settings.audio.clone();
+            let (audio, automatic) = (settings.audio.clone(), settings.updates.automatic);
             let (msg_tx, msg_rx) = unbounded_channel();
             let mut backend = Backend::new(
                 Arc::clone(&emit),
@@ -57,6 +58,7 @@ pub fn start(
                 tidal::default_store(),
                 open_api_cache(),
             );
+            backend.updates = Some(update::start(Arc::clone(&emit), automatic));
             backend.artwork = Artwork::new(crate::images::open_cache(&images));
             let (http, store) = (backend.http.clone(), Arc::clone(&backend.store));
             let on = backend.settings.integrations.connected();
@@ -207,6 +209,8 @@ struct Backend {
     scrobble_retry_at: Option<tokio::time::Instant>,
     /// The Last.fm connect, waiting for the user (`connect_lastfm`); Cancel aborts it.
     lastfm_connect: Option<JoinHandle<()>>,
+    /// The update thread's; `start` spawns it.
+    updates: Option<Sender<Command>>,
 }
 
 impl Backend {
@@ -249,6 +253,7 @@ impl Backend {
             scrobbles: JoinSet::new(),
             scrobble_retry_at: None,
             lastfm_connect: None,
+            updates: None,
         };
         backend.resume(stored);
         backend
@@ -610,6 +615,8 @@ impl Backend {
                 let fetch = move |c: Arc<Client>| async move { c.track_credits(id).await };
                 self.load_for_panel(id, Event::Credits, fetch);
             }
+            Action::CheckForUpdates => self.to_updates(Command::Check),
+            Action::InstallUpdate => self.to_updates(Command::Install),
             Action::LoadImage { image, px } => {
                 let (base, emit) = (&self.cfg.image_base, self.emit.clone());
                 self.artwork.load(&self.http, base, &image, px, emit);
@@ -713,6 +720,9 @@ impl Backend {
     /// for the next login, ending a login begun and logging out of a session made with the old
     /// one.
     async fn set_settings(&mut self, settings: Settings) {
+        if settings.updates.automatic != self.settings.updates.automatic {
+            self.to_updates(Command::Automatic(settings.updates.automatic));
+        }
         self.settings = settings;
         // Awaited, so two quick changes land in order.
         if let Some(path) = self.settings_path.clone() {
@@ -771,6 +781,12 @@ impl Backend {
             Err(e) => self
                 .emit
                 .send(Event::Error(format!("{}: {e}", tr("Login failed")))),
+        }
+    }
+
+    fn to_updates(&self, command: Command) {
+        if let Some(tx) = &self.updates {
+            let _ = tx.send(command); // no update thread: nothing to do
         }
     }
 

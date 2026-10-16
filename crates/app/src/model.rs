@@ -2,7 +2,7 @@
 //! re-exported here.
 
 use crate::i18n::tr;
-pub use crate::messages::{Action, Event, PlaylistEdit, Redirect};
+pub use crate::messages::{Action, Event, PlaylistEdit, Redirect, UpdateState};
 use crate::queue::Repeat;
 use crate::settings::Settings;
 use std::collections::{HashMap, HashSet};
@@ -166,6 +166,9 @@ pub struct Model {
     /// kept across logout, as the settings are.
     pub themes: Vec<String>,
     pub theme_status: Option<fastframe_theme::Status>,
+    /// Where an update stands; `None` until a check is asked for or finds one. Kept across
+    /// logout, as the settings are.
+    pub update: Option<UpdateState>,
 }
 
 impl Default for Model {
@@ -197,6 +200,7 @@ impl Default for Model {
             lastfm_waiting: false,
             themes: Vec::new(),
             theme_status: None,
+            update: None,
         }
     }
 }
@@ -244,6 +248,7 @@ impl Model {
                     lastfm_waiting: self.lastfm_waiting,
                     themes: std::mem::take(&mut self.themes),
                     theme_status: self.theme_status,
+                    update: self.update.take(),
                     ..Self::default()
                 };
             }
@@ -258,6 +263,7 @@ impl Model {
                     lastfm_waiting: self.lastfm_waiting,
                     themes: std::mem::take(&mut self.themes),
                     theme_status: self.theme_status,
+                    update: self.update.take(),
                     ..Self::default()
                 };
                 self.error(tr("Your TIDAL session has expired; please log in again").into_owned());
@@ -351,6 +357,7 @@ impl Model {
             Event::Settings(s) => self.settings = s,
             Event::Devices(d) => self.devices = d,
             Event::LastfmWaiting(w) => self.lastfm_waiting = w,
+            Event::Update(s) => self.update = Some(s),
             Event::Themes { names, status } => (self.themes, self.theme_status) = (names, status),
             Event::RescanThemes => {} // the app's (main.rs)
             Event::Error(e) => self.error(e),

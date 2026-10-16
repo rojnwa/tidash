@@ -735,3 +735,7 @@ msgstr ""
 #: src/ui/settings.rs
 msgid "Only where the desktop shows a tray icon."
 msgstr ""
+
+#: src/update.rs
+msgid "Tidash {version} is ready. Restart to update it in Settings › Updates."
+msgstr ""

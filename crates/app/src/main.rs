@@ -37,6 +37,7 @@ mod settings;
 mod theme;
 mod tray;
 mod ui;
+mod update;
 
 use fastframe_shell::{Closed, Headless, Held, Resident, Waker};
 use link::Link;
