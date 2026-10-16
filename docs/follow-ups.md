@@ -127,9 +127,9 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Between tracks the player bar dips toward `panel` until the new cover's 16 px image loads: keep the
   last tint (one `Option` in `UiState`). The bar's tint also fades on a theme change while everything
   else switches at once (`ui/mod.rs`).
-- `ui/mod.rs` is ~980 lines, `main.rs` 865 and `ui/settings.rs` 832 (soft limit ~800): move the tint
-  (`tint`, `bar_fill`, their test) to `ui/tint.rs` and the behind-the-bar helpers (`bar_id`,
-  `behind_bar`) to `top_bar.rs`; `pick` and its tests to `theme.rs`.
+- `ui/mod.rs` is ~980 lines and `ui/settings.rs` 832 (soft limit ~800): move the tint (`tint`,
+  `bar_fill`, their test) to `ui/tint.rs` and the behind-the-bar helpers (`bar_id`, `behind_bar`) to
+  `top_bar.rs`.
 - Theme changes: a change and a change back within 0.25 s leave the `Transition` capturing, so the next
   change skips the reveal (`ui/mod.rs`); "Loading themes…" blinks and shifts Settings on each visit
   (reserve its line, `ui/settings.rs`); `widgets.noninteractive`'s `fg_stroke` and `bg_fill` keep

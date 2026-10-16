@@ -405,7 +405,7 @@ impl App {
         let dark = system.unwrap_or_else(|| ctx.theme()) == egui::Theme::Dark;
         let catalog = &self.catalog;
         let find = |file: &str| Some(catalog.find(file)?.palette);
-        let wanted = pick(&self.model.settings, dark, switch, find);
+        let wanted = theme::pick(&self.model.settings, dark, switch, find);
         self.ui.set_palette(ctx, wanted);
         // The root took egui's style as this pass began: a palette applied just now draws in
         // this pass too, not only the next (which nothing may ask for).
@@ -573,33 +573,6 @@ impl eframe::App for Window {
     }
 }
 
-/// The palette to show (spec §3.4, ruling 4): `TIDASH_THEME` (`switch`) when it names a
-/// built-in or a file `find` knows; else the selected file, as the catalog has it or else as
-/// last cached; else Dark or Light as egui's theme is (`ctx_dark`).
-fn pick(
-    settings: &settings::Settings,
-    ctx_dark: bool,
-    switch: Option<&str>,
-    find: impl Fn(&str) -> Option<Palette>,
-) -> Palette {
-    let by_ctx = if ctx_dark {
-        Palette::dark()
-    } else {
-        Palette::light()
-    };
-    let switched = switch.and_then(|s| match s {
-        "dark" => Some(Palette::dark()),
-        "light" => Some(Palette::light()),
-        "system" => Some(by_ctx),
-        file => find(file),
-    });
-    let custom = || {
-        let file = settings.custom_theme.as_deref()?;
-        find(file).or_else(|| Some(settings.custom_theme_cache.as_ref()?.palette))
-    };
-    switched.or_else(custom).unwrap_or(by_ctx)
-}
-
 /// Fonts and text rendering, as fastframe's getting-started guide shows (`theme::apply` gives
 /// the colours, sizes and scroll bars). Ctrl+Q is the app's (`ui::draw`): egui's own closes the
 /// window bare, which hides it to the tray.
@@ -675,77 +648,10 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Action, Event, Link, Model, Route, Switches, on_close, open_links, pick, starts_hidden,
-    };
-    use crate::settings::{Behavior, Settings, Theme};
-    use crate::theme::Palette;
+    use super::{Action, Event, Link, Model, Route, Switches, on_close, open_links, starts_hidden};
+    use crate::settings::Behavior;
     use fastframe_shell::Closed;
-    use fastframe_theme::{CustomTheme, Status};
     use std::path::PathBuf;
-
-    fn nord() -> CustomTheme<Palette> {
-        let mut presets = fastframe_theme::presets::themes::<Palette>();
-        presets
-            .find(|t| t.filename == "Nord.json")
-            .expect("Nord ships")
-    }
-
-    /// The switch, then the selected file (the catalog's copy, else the cache), then Dark or
-    /// Light as egui's theme is (ruling 4).
-    #[test]
-    fn pick_order() {
-        let nord = nord();
-        let cached = Settings {
-            custom_theme: Some("Nord.json".into()),
-            custom_theme_cache: Some(nord.clone()),
-            ..Settings::default()
-        };
-        let none = |_: &str| None;
-        assert_eq!(pick(&cached, true, Some("light"), none), Palette::light());
-        assert_eq!(pick(&cached, false, None, none), nord.palette, "the cache");
-        let fresh = |f: &str| (f == "Nord.json").then_some(Palette::light());
-        assert_eq!(
-            pick(&cached, true, None, fresh),
-            Palette::light(),
-            "the file"
-        );
-        let stale = Settings {
-            custom_theme: None,
-            ..cached.clone()
-        };
-        assert_eq!(pick(&stale, true, None, none), Palette::dark(), "stale");
-        let system = Settings {
-            theme: Theme::System,
-            ..Settings::default()
-        };
-        assert_eq!(pick(&system, false, None, none), Palette::light());
-        let missing = pick(&cached, true, Some("missing.json"), none);
-        assert_eq!(missing, nord.palette, "falls through");
-        let mine = |f: &str| (f == "Mine.json").then_some(nord.palette);
-        let switched = pick(&Settings::default(), true, Some("Mine.json"), mine);
-        assert_eq!(switched, nord.palette);
-        assert_eq!(pick(&cached, false, Some("system"), none), Palette::light());
-        assert_eq!(pick(&stale, false, Some("dark"), none), Palette::dark());
-    }
-
-    /// Spec §3.5: a selected file the catalog no longer lists keeps its last colours, and
-    /// Settings says why.
-    #[test]
-    fn a_selected_theme_that_vanishes_keeps_its_colours() {
-        let palette = nord().palette;
-        let settings = Settings {
-            custom_theme: Some("Gone.json".into()),
-            custom_theme_cache: Some(CustomTheme {
-                filename: "Gone.json".into(),
-                palette,
-            }),
-            ..Settings::default()
-        };
-        assert_eq!(pick(&settings, true, None, |_| None), palette);
-        let said = crate::ui::settings::status_text(&Status::SelectedUnavailable, "Gone.json");
-        assert_eq!(said, "Gone can't be read; its last colours stay.");
-    }
 
     /// Closing the login page quits, Close to tray or not: a first-run user expects the app
     /// to end. Logged in, the setting hides; Quit and the tray's own hide win either way.

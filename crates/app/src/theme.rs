@@ -2,6 +2,7 @@
 //! radii and durations, the quality tiers' colours, and the album-art tint.
 
 use crate::model::OutputInfo;
+use crate::settings::Settings;
 use egui::epaint::Shadow;
 use egui::style::{HandleShape, ScrollStyle};
 use egui::{Color32, CornerRadius, FontId, Stroke, TextStyle, vec2};
@@ -303,6 +304,33 @@ pub fn rendering() -> fastframe_text::TextRendering {
     })
 }
 
+/// The palette to show (spec §3.4, ruling 4): `TIDASH_THEME` (`switch`) when it names a
+/// built-in or a file `find` knows; else the selected file, as the catalog has it or else as
+/// last cached; else Dark or Light as egui's theme is (`ctx_dark`).
+pub fn pick(
+    settings: &Settings,
+    ctx_dark: bool,
+    switch: Option<&str>,
+    find: impl Fn(&str) -> Option<Palette>,
+) -> Palette {
+    let by_ctx = if ctx_dark {
+        Palette::dark()
+    } else {
+        Palette::light()
+    };
+    let switched = switch.and_then(|s| match s {
+        "dark" => Some(Palette::dark()),
+        "light" => Some(Palette::light()),
+        "system" => Some(by_ctx),
+        file => find(file),
+    });
+    let custom = || {
+        let file = settings.custom_theme.as_deref()?;
+        find(file).or_else(|| Some(settings.custom_theme_cache.as_ref()?.palette))
+    };
+    switched.or_else(custom).unwrap_or(by_ctx)
+}
+
 /// `style` on both of egui's themes, then the text rendering again: new visuals reset it.
 pub fn apply(ctx: &egui::Context, p: &Palette) {
     ctx.all_styles_mut(|s| {
@@ -477,8 +505,9 @@ fastframe_icons::icons! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::Theme;
     use egui::ColorImage;
-    use fastframe_theme::{BASE_COLORS, parse_palette};
+    use fastframe_theme::{BASE_COLORS, CustomTheme, Status, parse_palette};
 
     /// Each name sets its own colour; any other name fails the file. A file restating a
     /// built-in's colour gives the built-in.
@@ -606,5 +635,68 @@ mod tests {
         assert_eq!(card_columns(5000.0).0, CARDS_MAX);
         assert_eq!(card_columns(-5.0), (1, 0.0));
         assert_eq!(card_columns(f32::NAN), (1, 0.0));
+    }
+
+    fn nord() -> CustomTheme<Palette> {
+        let mut presets = fastframe_theme::presets::themes::<Palette>();
+        presets
+            .find(|t| t.filename == "Nord.json")
+            .expect("Nord ships")
+    }
+
+    /// The switch, then the selected file (the catalog's copy, else the cache), then Dark or
+    /// Light as egui's theme is (ruling 4).
+    #[test]
+    fn pick_order() {
+        let nord = nord();
+        let cached = Settings {
+            custom_theme: Some("Nord.json".into()),
+            custom_theme_cache: Some(nord.clone()),
+            ..Settings::default()
+        };
+        let none = |_: &str| None;
+        assert_eq!(pick(&cached, true, Some("light"), none), Palette::light());
+        assert_eq!(pick(&cached, false, None, none), nord.palette, "the cache");
+        let fresh = |f: &str| (f == "Nord.json").then_some(Palette::light());
+        assert_eq!(
+            pick(&cached, true, None, fresh),
+            Palette::light(),
+            "the file"
+        );
+        let stale = Settings {
+            custom_theme: None,
+            ..cached.clone()
+        };
+        assert_eq!(pick(&stale, true, None, none), Palette::dark(), "stale");
+        let system = Settings {
+            theme: Theme::System,
+            ..Settings::default()
+        };
+        assert_eq!(pick(&system, false, None, none), Palette::light());
+        let missing = pick(&cached, true, Some("missing.json"), none);
+        assert_eq!(missing, nord.palette, "falls through");
+        let mine = |f: &str| (f == "Mine.json").then_some(nord.palette);
+        let switched = pick(&Settings::default(), true, Some("Mine.json"), mine);
+        assert_eq!(switched, nord.palette);
+        assert_eq!(pick(&cached, false, Some("system"), none), Palette::light());
+        assert_eq!(pick(&stale, false, Some("dark"), none), Palette::dark());
+    }
+
+    /// Spec §3.5: a selected file the catalog no longer lists keeps its last colours, and
+    /// Settings says why.
+    #[test]
+    fn a_selected_theme_that_vanishes_keeps_its_colours() {
+        let palette = nord().palette;
+        let settings = Settings {
+            custom_theme: Some("Gone.json".into()),
+            custom_theme_cache: Some(CustomTheme {
+                filename: "Gone.json".into(),
+                palette,
+            }),
+            ..Settings::default()
+        };
+        assert_eq!(pick(&settings, true, None, |_| None), palette);
+        let said = crate::ui::settings::status_text(&Status::SelectedUnavailable, "Gone.json");
+        assert_eq!(said, "Gone can't be read; its last colours stay.");
     }
 }
