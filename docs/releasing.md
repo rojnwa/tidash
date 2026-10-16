@@ -86,9 +86,13 @@ download once.
 
 ## A dry run
 
-Actions › Release › Run workflow, on a branch (or `gh workflow run release.yml --ref <branch>`).
-Every target is built, checked and packaged, and uploaded as a workflow artifact. Nothing is
-signed or published.
+A pull request (a draft is fine) that changes `.github/workflows/release.yml`,
+`.github/workflows/packaging.yml`, `packaging/**`, `native-packages.yaml`, `crates/app/build.rs` or
+`.cargo/config.toml` runs the release workflow as a dry run. Every target is built, checked and
+packaged, and uploaded as a workflow artifact. Nothing is signed or published.
+
+Any other branch: Actions › Release › Run workflow, or `gh workflow run release.yml --ref <branch>`.
+This only works once `release.yml` is on `main`.
 
 ## Unsigned builds, for users
 

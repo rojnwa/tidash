@@ -3,7 +3,16 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch: # a dry run: every package is built and uploaded as a workflow artifact
+  # Both are dry runs: every package is built and uploaded as a workflow artifact.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .github/workflows/packaging.yml
+      - packaging/**
+      - native-packages.yaml
+      - crates/app/build.rs
+      - .cargo/config.toml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,9 +24,6 @@ jobs:
   build:
     name: build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
     env:
       BIN: target/${{ matrix.target }}/release/tidash${{ matrix.exe }}
     strategy:
@@ -54,15 +60,20 @@ jobs:
         with:
           arch: ${{ matrix.msvc-arch }}
       - name: Version
+        shell: bash
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "tidash") | .version')
+          # -j: Windows' native jq ends -r output with \r\n, and $(…) strips only the \n.
+          version=$(cargo metadata --no-deps --format-version 1 | jq -j '.packages[] | select(.name == "tidash") | .version')
+          [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "unexpected version: $version"; exit 1; }
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "tag $GITHUB_REF_NAME is not v$version"; exit 1; }
             [[ -f "packaging/release-notes/$GITHUB_REF_NAME.md" ]] || { echo "no packaging/release-notes/$GITHUB_REF_NAME.md"; exit 1; }
           fi
           echo "TAG=v$version" >> "$GITHUB_ENV"
+      # The default shell (pwsh on Windows): bash puts GNU link ahead of MSVC's link.exe.
       - run: cargo build --release --locked -p tidash --target ${{ matrix.target }}
       - name: Check
+        shell: bash
         run: |
           printed=$("$BIN" --version)
           [[ "$printed" == "tidash ${TAG#v}" ]] || { echo "--version printed: $printed"; exit 1; }
@@ -84,6 +95,7 @@ jobs:
           if (-not $headers.Contains('${{ matrix.pe-machine }}')) { throw "$binary is not built for ${{ matrix.target }}:`n$headers" }
 
       - name: Package
+        shell: bash
         run: |
           name="tidash-$TAG-${{ matrix.target }}"
           mkdir -p "dist/$name"
@@ -115,6 +127,7 @@ jobs:
 
       # Spec §10: the installer stays under 20 MB.
       - name: Budget
+        shell: bash
         run: |
           shopt -s nullglob
           over=0
@@ -137,14 +150,6 @@ jobs:
   macos:
     name: macOS universal app
     runs-on: macos-latest
-    env:
-      # All six notarize the DMG (a partial set fails the build); none means ad-hoc signing.
-      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       # No cache, as in the build job above.
@@ -153,7 +158,8 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - name: Version
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "tidash") | .version')
+          version=$(cargo metadata --no-deps --format-version 1 | jq -j '.packages[] | select(.name == "tidash") | .version')
+          [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "unexpected version: $version"; exit 1; }
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "tag $GITHUB_REF_NAME is not v$version"; exit 1; }
             [[ -f "packaging/release-notes/$GITHUB_REF_NAME.md" ]] || { echo "no packaging/release-notes/$GITHUB_REF_NAME.md"; exit 1; }
@@ -183,6 +189,15 @@ jobs:
           ruby-version: '4.0'
       - run: gem install native-packages --version 0.9.0 --no-document
       - name: DMG
+        # Only this step gets them: pull_request runs from this repository receive its secrets.
+        # All six notarize the DMG (a partial set fails the build); none means ad-hoc signing.
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           native-packages build --version "${TAG#v}" --target macos-universal --defer-recipes --output "$RUNNER_TEMP/macos-packages"
           cp "$RUNNER_TEMP/macos-packages/packages/macos-universal/dmg/"*.dmg dist/
@@ -207,7 +222,7 @@ jobs:
   publish:
     name: GitHub release
     needs: [build, macos]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     # Waits for the maintainer's approval; the only job that can read the signing key.
     environment: release-signing
