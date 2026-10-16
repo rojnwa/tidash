@@ -29,7 +29,7 @@ egui = { version = "0.36", default-features = false }
 eframe = { version = "0.36", default-features = false, features = ["glow", "accesskit", "wayland", "x11", "default_fonts"] }
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 
-# egui and winit forks required by fastframe (fastframe v0.4.1 getting-started guide)
+# egui and winit forks required by fastframe (fastframe v0.6.0 getting-started guide)
 [patch.crates-io]
 ecolor = { git = "https://github.com/crmne/egui", rev = "ba6790fe7cf46e58e8d27ce1524cbfdee745e938" }
 eframe = { git = "https://github.com/crmne/egui", rev = "ba6790fe7cf46e58e8d27ce1524cbfdee745e938" }

@@ -15,12 +15,12 @@ thiserror.workspace = true
 tempfile = "3"
 rubato = "5.0.1"
 rtrb = "0.4"
-fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.4.1" }
+fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
 log = "0.4"
 cpal = "0.18"
 
 [target.'cfg(windows)'.dependencies]
-wasapi = "0.25"
+wasapi = "0.26"
 
 # Hog mode (`audio_unit::macos_helpers`); the features cpal already builds it with.
 [target.'cfg(target_os = "macos")'.dependencies]

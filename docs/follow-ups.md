@@ -265,12 +265,12 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 ## CI and dependencies
 
 - Add an MSRV 1.98 job (CI runs stable only).
-- `fastframe-fonts` is pinned to the unmerged crmne/fastframe#17; return to a release tag once it
-  ships.
-- fastframe-audio v0.4.1 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
+- fastframe-audio v0.6.0 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
   issue is drafted (M3 Task 11) and waits for the human's go-ahead to file.
-- Lockfile churn from the tray, shell and instance crates (M4 Tasks 12–13): ~8 crates moved from
-  windows-sys 0.61/0.60 to 0.52/0.59, and `dpi` is in twice (0.1.1, 0.1.2) (`Cargo.lock`).
+- Duplicates `cargo update` cannot settle: windows-sys 0.52/0.59 beside 0.60/0.61 (the winit fork,
+  glutin, glutin_egl_sys and ring ask for 0.52, rustix 0.38 for 0.59), and `dpi` twice (the winit
+  fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`).
+- egui, eframe and egui_extras 0.37 are out; Tidash stays on 0.36 until fastframe's egui fork moves.
 
 ## M5 and later
 

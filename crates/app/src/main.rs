@@ -640,35 +640,36 @@ fn main() -> eframe::Result {
     let screenshot = switches.screenshot.is_some();
     let hidden = settings.behavior.start_minimized && !screenshot;
     let app = App::new(&waker, settings, inbox, started, switches);
-    fastframe_shell::Shell::new(app, &waker)
-        .idle(fastframe_tray::idle)
-        .start_hidden(hidden)
-        .run(|lease| {
-            // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
-            let mut viewport = eframe::egui::ViewportBuilder::default()
-                .with_app_id("tidash")
-                .with_min_inner_size(theme::MIN_WINDOW);
-            if screenshot {
-                viewport = viewport.with_inner_size([1440.0, 900.0]); // as TIDAL's references
-            }
-            // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu
-            // whenever anything in the graph turns on its `wgpu` feature.
-            let options = eframe::NativeOptions {
-                renderer: eframe::Renderer::Glow,
-                viewport,
-                ..Default::default()
-            };
-            eframe::run_native(
-                "Tidash",
-                options,
-                Box::new(move |cc| {
-                    log_renderer(cc);
-                    let mut app = lease.take(&cc.egui_ctx);
-                    app.attach(&cc.egui_ctx);
-                    Ok(Box::new(Window(app)))
-                }),
-            )
-        })
+    let shell = fastframe_shell::Shell::new(app, &waker);
+    // A status item answers only while AppKit's loop runs; elsewhere the shell sleeps on the waker.
+    #[cfg(target_os = "macos")]
+    let shell = shell.idle(fastframe_tray::idle);
+    shell.start_hidden(hidden).run(|lease| {
+        // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
+        let mut viewport = eframe::egui::ViewportBuilder::default()
+            .with_app_id("tidash")
+            .with_min_inner_size(theme::MIN_WINDOW);
+        if screenshot {
+            viewport = viewport.with_inner_size([1440.0, 900.0]); // as TIDAL's references
+        }
+        // Glow, chosen by measurement (spec §14); explicit, as eframe defaults to wgpu
+        // whenever anything in the graph turns on its `wgpu` feature.
+        let options = eframe::NativeOptions {
+            renderer: eframe::Renderer::Glow,
+            viewport,
+            ..Default::default()
+        };
+        eframe::run_native(
+            "Tidash",
+            options,
+            Box::new(move |cc| {
+                log_renderer(cc);
+                let mut app = lease.take(&cc.egui_ctx);
+                app.attach(&cc.egui_ctx);
+                Ok(Box::new(Window(app)))
+            }),
+        )
+    })
 }
 
 #[cfg(test)]
