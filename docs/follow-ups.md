@@ -204,9 +204,7 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   trying the next; hog mode leaks if `toggle_hog_mode` fails reading it back after setting it (heals
   on the next open).
 - Windows: an init finishing after the 2 s open timeout holds the device briefly before its thread
-  drops it; a device unplugged while paused is noticed only on resume, after one period; `wasapi`'s
-  `trace!` in `write_to_device` runs in the render loop (set `log`'s `release_max_level_debug` in the
-  app so it compiles out).
+  drops it; a device unplugged while paused is noticed only on resume, after one period.
 - Engine races at the track boundary (rare): a superseded seek in the preload-error arm undoes the
   switch without a flush (B's leftover frames are heard until the next flush); the drain path has a
   theoretical race when B is shorter than a device period and `Preload(C)` lands in the window; a

@@ -20,7 +20,8 @@ tokio = { workspace = true, features = ["sync", "time"] }
 reqwest = { workspace = true, features = ["blocking"] }
 open = "5"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
-log = "0.4"
+# Compiles every crate's `trace!` out of release builds, wasapi's in its render loop among them.
+log = { version = "0.4", features = ["release_max_level_debug"] }
 rand = "0.10"
 fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
 fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }

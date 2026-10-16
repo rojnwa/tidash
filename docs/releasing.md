@@ -62,7 +62,7 @@ download once.
 
 1. Bump `[workspace.package] version` in `Cargo.toml`, run `cargo check` (it updates `Cargo.lock`),
    and write `packaging/release-notes/vX.Y.Z.md`. The release workflow fails without it.
-2. Run the budget on each OS at hand and paste the numbers into the notes:
+2. Run the budget on each OS at hand, logged in, and paste the numbers into the notes:
    `bash packaging/budget.sh target/release/tidash` (macOS, Linux) or
    `pwsh packaging/budget.ps1 target\release\tidash.exe` (Windows), after
    `cargo build --release -p tidash`. Still by hand: CPU paused with the window hidden (0 %), CPU
