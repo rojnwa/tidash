@@ -407,8 +407,9 @@ As built in M5; building and releasing step by step: `docs/releasing.md`.
 - **Dry run:** a pull request that touches the packaging paths (the two release workflows, `packaging/**`,
   `native-packages.yaml`, `crates/app/build.rs`, `.cargo/config.toml`), or Run workflow once `release.yml` is
   on `main`, builds, checks and packages every target and uploads them as workflow artifacts (not the deb, rpm
-  and AppImage, which need a published release); nothing is signed or published, which only a pushed `v*` tag
-  does.
+  and AppImage, which need a published release); it publishes nothing and does not sign the checksums, which
+  only a pushed `v*` tag does (the DMG is ad-hoc signed, or notarized once the `APPLE_*` secrets exist, except
+  on a pull request from a fork).
 - **Signing** (amended in M5, R4): builds are unsigned until accounts exist. macOS: the DMG is signed with a
   Developer ID and notarized by native-packages when all six `APPLE_*` secrets are set (only the DMG step gets
   them); a partial set fails the build, none means ad-hoc signing. Windows code signing is not wired (no

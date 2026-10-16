@@ -14,7 +14,7 @@
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
-    <!-- TIDAL links (tidal://album/…) open in Tidash; src/mac_links.rs
+    <!-- TIDAL links (tidal://album/…) open in Tidash; crates/app/src/mac_links.rs
          takes them. Launch Services notes this when the app is first opened. -->
     <key>CFBundleURLTypes</key>
     <array>

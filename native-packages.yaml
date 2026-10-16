@@ -33,6 +33,8 @@ nfpm:
     file_info: { mode: 420 }
   # Not `type: tree`: nFPM walks a tree's src without globbing it, and gives its folders the
   # files' mode. A glob on the folder takes the files inside, placed by their paths below it.
+  # Keep two sizes or more: nFPM places several matches relative to their common prefix, so a
+  # single match would land at hicolor/tidash.png.
   - src: "@PAYLOAD@/*-v@VERSION@-@TARGET@/packaging/icons/hicolor"
     dst: "/usr/share/icons/hicolor"
     file_info: { mode: 420 }

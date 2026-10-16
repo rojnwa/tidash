@@ -89,7 +89,9 @@ download once.
 A pull request (a draft is fine) that changes `.github/workflows/release.yml`,
 `.github/workflows/packaging.yml`, `packaging/**`, `native-packages.yaml`, `crates/app/build.rs` or
 `.cargo/config.toml` runs the release workflow as a dry run. Every target is built, checked and
-packaged, and uploaded as a workflow artifact. Nothing is signed or published.
+packaged, and uploaded as a workflow artifact. Nothing is published and the checksums are not
+signed; the DMG is ad-hoc signed, or notarized once the `APPLE_*` secrets exist (a pull request from a
+fork never gets them).
 
 Any other branch: Actions › Release › Run workflow, or `gh workflow run release.yml --ref <branch>`.
 This only works once `release.yml` is on `main`.
