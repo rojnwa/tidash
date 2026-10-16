@@ -95,10 +95,8 @@ Parked in M4:
   session).
 - The current track's own in-flight load keeps the old quality when the settings change (documented,
   `playback.rs`).
-- `backend/tests.rs` is 896 lines (over ~800): move the scrobbling tests to
-  `backend/tests/scrobble.rs`; `ui/testing.rs`' `every_state` shadows `shown` (closure, module fn,
-  local); the `too_many_arguments` reason in `ui/header.rs` ("each part named at the call") reads
-  oddly.
+- `ui/testing.rs`' `every_state` shadows `shown` (closure, module fn, local); the
+  `too_many_arguments` reason in `ui/header.rs` ("each part named at the call") reads oddly.
 - Untested in M4: Cancel/OK in the name and playlist dialogs, and an edit's Auth path (no error, no
   reload) (`ui/library.rs`, `library.rs`); the row-menu reload test changes track and ETag at once (a
   one-field guard would pass); the album header's "Add to playlist" sending every track id; a dialog
