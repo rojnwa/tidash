@@ -1,0 +1,256 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: # a dry run: every package is built and uploaded as a workflow artifact
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      BIN: target/${{ matrix.target }}/release/tidash${{ matrix.exe }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: .exe
+            msvc-arch: x64
+            pe-machine: 8664 machine (x64)
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            exe: .exe
+            msvc-arch: arm64
+            pe-machine: AA64 machine (ARM64)
+    steps:
+      - uses: actions/checkout@v7
+      # No cache: published binaries never build from restored outputs.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+      # dumpbin below needs it; the action sets up x64 tools unless told otherwise.
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc-arch }}
+      - name: Version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "tidash") | .version')
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "tag $GITHUB_REF_NAME is not v$version"; exit 1; }
+            [[ -f "packaging/release-notes/$GITHUB_REF_NAME.md" ]] || { echo "no packaging/release-notes/$GITHUB_REF_NAME.md"; exit 1; }
+          fi
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+      - run: cargo build --release --locked -p tidash --target ${{ matrix.target }}
+      - name: Check
+        run: |
+          printed=$("$BIN" --version)
+          [[ "$printed" == "tidash ${TAG#v}" ]] || { echo "--version printed: $printed"; exit 1; }
+
+      # The zip and installer must run on a clean Windows machine without a
+      # separately installed Visual C++ redistributable.
+      - name: Verify standalone Windows runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = "target\${{ matrix.target }}\release\tidash.exe"
+          $imports = & dumpbin /dependents $binary | Out-String
+          $runtime = $imports | Select-String -Pattern 'MSVCP[0-9_]*\.dll|VCRUNTIME[0-9_]*\.dll'
+          if ($runtime) { throw "tidash imports an MSVC runtime:`n$runtime" }
+          # The updater picks its download by the running executable's
+          # architecture, so a binary of the wrong one under this name would
+          # keep every copy installed from it on the wrong architecture.
+          $headers = & dumpbin /headers $binary | Out-String
+          if (-not $headers.Contains('${{ matrix.pe-machine }}')) { throw "$binary is not built for ${{ matrix.target }}:`n$headers" }
+
+      - name: Package
+        run: |
+          name="tidash-$TAG-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp "$BIN" README.md LICENSE packaging/tidash-portable.txt packaging/licenses/Inter-LICENSE.txt "dist/$name/"
+          cp crates/app/assets/icons/LICENSE.txt "dist/$name/icons-LICENSE.txt"
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            cp -r --parents packaging/applications/tidash.desktop packaging/icons/hicolor "dist/$name/"
+          fi
+          cd dist
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            7z a "$name.zip" "$name"
+          else
+            tar czf "$name.tar.gz" "$name"
+          fi
+
+      # PowerShell, because bash on Windows rewrites /D... arguments as paths.
+      - name: Installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = $env:TAG.TrimStart("v")
+          $arch = "${{ matrix.target }}".Split("-")[0]
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=$version" "/DArch=$arch" `
+            "/DBinary=$PWD\target\${{ matrix.target }}\release\tidash.exe" `
+            "/DOutputDir=$PWD\dist" packaging\windows\tidash.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Spec §10: the installer stays under 20 MB.
+      - name: Budget
+        run: |
+          shopt -s nullglob
+          over=0
+          for file in dist/*.zip dist/*.tar.gz dist/*-setup.exe; do
+            size=$(wc -c < "$file")
+            echo "$file: $((size)) bytes"
+            (( size < 20000000 )) || { echo "$file is 20 MB or more"; over=1; }
+          done
+          exit "$over"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*-setup.exe
+          if-no-files-found: error
+
+  macos:
+    name: macOS universal app
+    runs-on: macos-latest
+    env:
+      # All six notarize the DMG (a partial set fails the build); none means ad-hoc signing.
+      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      # No cache, as in the build job above.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "tidash") | .version')
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "tag $GITHUB_REF_NAME is not v$version"; exit 1; }
+            [[ -f "packaging/release-notes/$GITHUB_REF_NAME.md" ]] || { echo "no packaging/release-notes/$GITHUB_REF_NAME.md"; exit 1; }
+          fi
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+      - name: Universal binary
+        run: |
+          cargo build --release --locked -p tidash --target aarch64-apple-darwin
+          cargo build --release --locked -p tidash --target x86_64-apple-darwin
+          mkdir -p universal
+          lipo -create \
+            target/aarch64-apple-darwin/release/tidash \
+            target/x86_64-apple-darwin/release/tidash \
+            -output universal/tidash
+      - name: App bundle
+        run: |
+          bash packaging/macos/bundle.sh universal/tidash dist/macos-input/Tidash.app "${TAG#v}"
+          cp README.md LICENSE packaging/licenses/Inter-LICENSE.txt dist/macos-input/
+          cp crates/app/assets/icons/LICENSE.txt dist/macos-input/icons-LICENSE.txt
+      - name: Check
+        run: |
+          printed=$(dist/macos-input/Tidash.app/Contents/MacOS/tidash --version)
+          [[ "$printed" == "tidash ${TAG#v}" ]] || { echo "--version printed: $printed"; exit 1; }
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+      - run: gem install native-packages --version 0.9.0 --no-document
+      - name: DMG
+        run: |
+          native-packages build --version "${TAG#v}" --target macos-universal --defer-recipes --output "$RUNNER_TEMP/macos-packages"
+          cp "$RUNNER_TEMP/macos-packages/packages/macos-universal/dmg/"*.dmg dist/
+
+      - name: Budget
+        run: |
+          shopt -s nullglob
+          over=0
+          for file in dist/*.dmg; do
+            size=$(wc -c < "$file")
+            echo "$file: $((size)) bytes"
+            (( size < 20000000 )) || { echo "$file is 20 MB or more"; over=1; }
+          done
+          exit "$over"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-universal
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: [build, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    # Waits for the maintainer's approval; the only job that can read the signing key.
+    environment: release-signing
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Source archive
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz" \
+            -o "dist/tidash-$GITHUB_REF_NAME-source.tar.gz"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+      # Writes dist/checksums.txt and its .sig, then verifies both against the committed key.
+      - uses: crmne/native-packages/.github/actions/sign-release@83bd46c245488c2b8f1b9d74569e16cf6a449e8f # v0.9.0
+        env:
+          TIDASH_UPDATE_SIGNING_KEY: ${{ secrets.TIDASH_UPDATE_SIGNING_KEY }}
+        with:
+          directory: dist
+          public-key: crates/app/assets/update-public-key.hex
+          key-env: TIDASH_UPDATE_SIGNING_KEY
+      # Not a draft: the packaging job downloads the published tar.gz.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          name: Tidash ${{ github.ref_name }}
+          body_path: packaging/release-notes/${{ github.ref_name }}.md
+          generate_release_notes: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  packaging:
+    needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/packaging.yml
+    with:
+      version: ${{ github.ref_name }}

@@ -261,7 +261,6 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 
 ## CI and dependencies
 
-- Add an MSRV 1.98 job (CI runs stable only).
 - fastframe-audio v0.6.0 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
   issue is drafted (M3 Task 11) and waits for the human's go-ahead to file.
 - Duplicates `cargo update` cannot settle: windows-sys 0.52/0.59 beside 0.60/0.61 (the winit fork,

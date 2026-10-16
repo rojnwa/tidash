@@ -1,0 +1,66 @@
+name: Packaging
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      publish:
+        type: boolean
+        default: true
+  # Rebuilds a published release's deb, rpm and AppImage.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published release tag, such as v1.0.0
+        required: true
+        type: string
+      publish:
+        description: Attach the packages to that release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    permissions:
+      contents: write
+    uses: crmne/native-packages/.github/workflows/package.yml@83bd46c245488c2b8f1b9d74569e16cf6a449e8f # v0.9.0
+    with:
+      targets: linux-amd64,linux-arm64
+      version: ${{ inputs.version }}
+      publish: ${{ inputs.publish }}
+
+  # The dependencies resolve and the binary loads its linked libraries.
+  install:
+    name: install (${{ matrix.os }}, ${{ matrix.image }})
+    needs: packages
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        image: ['ubuntu:24.04', 'fedora:latest']
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-packages
+          path: dist/native-packages
+      - name: Install in a clean container
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm --volume "$PWD/dist/native-packages/packages:/packages:ro" --workdir /packages \
+            --env DEBIAN_FRONTEND=noninteractive "$IMAGE" sh -ec '
+              if command -v apt-get >/dev/null; then
+                apt-get update && apt-get install -y ./*/deb/tidash_*_$(dpkg --print-architecture).deb
+              else
+                dnf install -y ./*/rpm/tidash-*.$(uname -m).rpm
+              fi
+              tidash --version | grep -Ex "tidash [0-9]+\.[0-9]+\.[0-9]+.*"
+              test -f /usr/share/applications/tidash.desktop
+              test -f /usr/share/icons/hicolor/512x512/apps/tidash.png
+            '
