@@ -290,8 +290,14 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
 - The Windows media overlay showed "Unknown app": the exe now has a version resource naming Tidash
   (R8); if acceptance still shows "Unknown app", set an explicit AUMID.
-- macOS RAM with the fallback faces mapped (fastframe 0.6.0, the pin gone): the first
-  `packaging/budget.sh` run on macOS measures it (M5 plan, Task 8 Step 3).
+- Release builds have no Last.fm or Discord keys: `release.yml` sets none of `TIDASH_LASTFM_API_KEY`,
+  `TIDASH_LASTFM_SECRET` and `TIDASH_DISCORD_APP_ID`, so both integrations are hidden. Pass them from
+  repository secrets once the accounts exist, and treat an empty value as unset in the app
+  (`option_env!` gives `Some("")` for a variable set to nothing, as an unset secret is).
+- The macOS link check (M5 plan, Task 6 Step 5) proved only the cold start: `open -a Tidash.app
+  'tidal://album/<id>'` started the bundle, which showed the login page (likely the keychain holding back
+  the stored session from the bundle's new code identity). Check in the acceptance session that the album
+  opens once logged in, both cold and with Tidash running.
 - The budget scripts: `budget.sh` ends without a message if Tidash dies during the 10 s measurement
   (not the documented exit 2), and `budget.ps1` throws; an empty `footprint` reading prints 0.0 MB
   and passes; `budget.ps1` leaves `TIDASH_REPAINT_LOG` and `RUST_LOG` set in an open session, and

@@ -326,7 +326,14 @@ From M5 the budget is measured before each release with `packaging/budget.sh` (m
 `packaging/budget.ps1` (Windows), as `docs/releasing.md` describes: first frame, RAM after Home, idle passes
 and CPU over 10 s, and the binary's size, exiting non-zero on a missed target; CPU paused with the window
 hidden, CPU playing minimized and the Windows scroll pacing stay by hand, and the release workflow fails on
-an archive, installer or DMG of 20 MB or more (§11). The M5 numbers follow from the first run.
+an archive, installer or DMG of 20 MB or more (§11).
+
+M5 on macOS (2026-10-16, M2 Pro, release build `ab5e9e6`, logged in, `packaging/budget.sh`, three
+launches): first frame after 271–272 ms (662 ms on the first launch of a new build); a physical footprint of
+127.6–130.5 MB on Home, inside the budget (M1's 158 MB predated the memory-mapped fallback fonts); 0 idle
+passes and 0.1–0.3% of one core over the 10 s; a 17.2 MB binary. The one other launch had the pointer moving
+over the window: hover effects drew 569 passes and the footprint was 215 MB, so it does not count as idle. Windows and
+Linux follow in the acceptance session.
 
 M1 on macOS (M2 Pro, release build, idle at the start screen; the app's `first frame` log line and
 `footprint`): first frame after 179–213 ms (368 ms on the first launch of a new build), 0% CPU, a
