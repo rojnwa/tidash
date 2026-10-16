@@ -156,9 +156,14 @@ struct Inner {
     tokens: Mutex<HashMap<Service, Option<String>>>,
 }
 
-/// `scrobbles.json` in the per-user data dir; `None` without a home directory.
+/// The per-user data dir; `None` without a home directory.
+pub fn data_dir() -> Option<PathBuf> {
+    directories::ProjectDirs::from("", "", "tidash").map(|p| p.data_dir().to_path_buf())
+}
+
+/// `scrobbles.json` in the data dir.
 pub fn path() -> Option<PathBuf> {
-    directories::ProjectDirs::from("", "", "tidash").map(|p| p.data_dir().join("scrobbles.json"))
+    Some(data_dir()?.join("scrobbles.json"))
 }
 
 /// The queue saved at `path`; empty when there is none or it cannot be read. Blocks.

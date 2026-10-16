@@ -739,3 +739,7 @@ msgstr ""
 #: src/update.rs
 msgid "Tidash {version} is ready. Restart to update it in Settings › Updates."
 msgstr ""
+
+#: src/main.rs
+msgid "The update could not start. The previous version has been restored."
+msgstr ""

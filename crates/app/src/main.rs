@@ -1,8 +1,13 @@
+// A release exe on Windows opens no console window.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! Tidash desktop app.
 //!
 //! The app outlives its window (fastframe-shell): with Close to tray on, closing the window
 //! leaves playback, the media controls and the tray item running headless until the tray asks
 //! for a new window.
+//!
+//! `--version` prints `tidash <version>` and exits: the updater (fastframe-update) asks a
+//! downloaded copy before it installs it.
 //!
 //! Debug switches for measuring frame pacing (spec §10, §14), read once at start:
 //! - `TIDASH_AUTOSCROLL=<pt/s>`: scrolls the current page this many points a second, every
@@ -40,6 +45,7 @@ mod ui;
 mod update;
 
 use fastframe_shell::{Closed, Headless, Held, Resident, Waker};
+use i18n::tr;
 use link::Link;
 use model::{Action, Event, Model, Route};
 use std::path::PathBuf;
@@ -107,6 +113,8 @@ struct App {
     quit: bool,
     /// When `main` began, until the first frame logs the cold-start time (spec §10).
     started: Option<Instant>,
+    /// When the update helper started this launch, until the first frame acknowledges it.
+    receipt: Option<fastframe_update::Receipt>,
     /// With `TIDASH_SCREENSHOT`, when `main` began, until the screenshot is asked for.
     shot_since: Option<Instant>,
     switches: Switches,
@@ -136,13 +144,15 @@ fn log_renderer(cc: &eframe::CreationContext<'_>) {
 
 impl App {
     /// Starts the backend, the media controls, the Discord status and the tray, all waking
-    /// whichever window exists through `waker`.
+    /// whichever window exists through `waker`. `launch` brings the update helper's receipt or
+    /// its rollback.
     fn new(
         waker: &Waker,
         settings: settings::Settings,
         inbox: instance::Inbox,
         started: Instant,
         switches: Switches,
+        launch: fastframe_update::Launch,
     ) -> Self {
         let wake = |w: &Waker| {
             let w = w.clone();
@@ -157,6 +167,12 @@ impl App {
         let tray = fastframe_tray::Tray::spawn(tray::config(), wake(waker));
         let mut model = Model::default();
         model.apply(Event::Settings(settings));
+        // The helper's only message is `Launch::RESTORED`, in English.
+        if launch.error.is_some() {
+            let restored =
+                tr("The update could not start. The previous version has been restored.");
+            model.apply(Event::Error(restored.into_owned()));
+        }
         let mut catalog = fastframe_theme::Catalog::default();
         catalog.enable_desktop_themes(fastframe_theme::DesktopThemes {
             slug: "tidash",
@@ -180,6 +196,7 @@ impl App {
             show: false,
             quit: false,
             started: Some(started),
+            receipt: launch.receipt,
             shot_since: switches.screenshot.as_ref().map(|_| started),
             switches,
             catalog,
@@ -388,6 +405,14 @@ impl App {
         if let Some(t) = self.started.take() {
             log::info!("first frame {} ms after start", t.elapsed().as_millis());
         }
+        if let Some(receipt) = self.receipt.take() {
+            // The helper rolls back unless the new version says it started, off the UI thread.
+            std::thread::spawn(move || {
+                if let Err(e) = receipt.acknowledge() {
+                    log::error!("could not confirm the update: {e:#}");
+                }
+            });
+        }
         if self.switches.repaint_log {
             let ctx = ui.ctx();
             let (pass, causes) = (ctx.cumulative_pass_nr(), ctx.repaint_causes());
@@ -498,7 +523,8 @@ impl Resident for App {
 
     /// Nothing waits for a first frame: the backend started with the app.
     fn start_hidden(&mut self) -> bool {
-        if !starts_hidden(&self.model.settings.behavior, self.tray_shown()) {
+        let updated = self.receipt.is_some();
+        if !starts_hidden(&self.model.settings.behavior, self.tray_shown(), updated) {
             return false;
         }
         self.started = None; // no first frame to time
@@ -522,9 +548,10 @@ impl Resident for App {
     }
 }
 
-/// Whether a launch starts in the tray: asked for, and with a tray to come back from.
-fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool) -> bool {
-    behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray)
+/// Whether a launch starts in the tray: asked for, with a tray to come back from, and not the
+/// first start of an update (`updated`), which the helper rolls back without a first frame.
+fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool, updated: bool) -> bool {
+    behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray) && !updated
 }
 
 /// What closing the window does. Quit wins; otherwise it hides when the tray asked for that
@@ -586,42 +613,76 @@ fn setup_look(ctx: &egui::Context) {
     ctx.options_mut(|o| o.quit_shortcuts.clear());
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "the updater reads the version from standard output"
+)]
+fn print_version() {
+    println!("tidash {}", env!("CARGO_PKG_VERSION"));
+}
+
 fn main() -> eframe::Result {
     let started = Instant::now();
+    // First: `--apply-update <job>` makes this process the update helper, which installs and exits.
+    let launch = fastframe_update::intercept(&update::CONFIG);
+    // The updater asks a downloaded copy for its version while this one may run: answer before
+    // the single-instance claim, and log nothing.
+    if launch.arguments.get(1).is_some_and(|a| a == "--version") {
+        print_version();
+        return Ok(());
+    }
     // A desktop hands a link over as an argument: the first that parses is this launch's.
-    let link = std::env::args_os()
+    let link = launch
+        .arguments
+        .iter()
         .skip(1)
         .find_map(|a| link::parse(a.to_str()?));
     let waker = Waker::default();
     let inbox = Arc::new(Mutex::new(Vec::from_iter(
         link.clone().map(TrayAction::Open),
     )));
-    // Before logging (a fresh file each run), the tray and the backend: a later launch only
-    // hands its request to the running one, and ends.
+    // Before logging, which replaces the log file each run, and before the tray and the backend:
+    // a later launch only hands its request to the running one, and ends.
     let Some(_instance) = instance::claim(link.as_ref(), &waker, Arc::clone(&inbox)) else {
         return Ok(());
     };
-    let _ = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
+    let mut logging = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
         // symphonia's MP4 probe matches `ftyp` and reports every file's leading box size as
         // "4 bytes of junk".
-        .filter("warn,tidash=info,symphonia_core::formats::probe=error")
-        .init();
+        .filter("warn,tidash=info,symphonia_core::formats::probe=error");
+    if let Some(dir) = scrobble::data_dir() {
+        logging = logging
+            .file(dir.join("tidash.log"))
+            .panic_log(dir.join("panic.log"));
+    }
+    let _ = logging.init();
     let switches = Switches::parse(|k| std::env::var(k).ok());
     // Before any window: whether one opens at start depends on them. Blocks briefly.
     let settings = settings::path().as_deref().map(settings::Settings::load);
     let settings = settings.unwrap_or_default();
-    // A screenshot needs a window.
+    // A screenshot needs a window, and so does an update's first start (`starts_hidden`).
     let screenshot = switches.screenshot.is_some();
-    let hidden = settings.behavior.start_minimized && !screenshot;
-    let app = App::new(&waker, settings, inbox, started, switches);
+    let hidden = settings.behavior.start_minimized && !screenshot && launch.receipt.is_none();
+    let app = App::new(&waker, settings, inbox, started, switches, launch);
     let shell = fastframe_shell::Shell::new(app, &waker);
     // A status item answers only while AppKit's loop runs; elsewhere the shell sleeps on the waker.
     #[cfg(target_os = "macos")]
     let shell = shell.idle(fastframe_tray::idle);
     shell.start_hidden(hidden).run(|lease| {
+        // macOS draws the bundle's icon in the Dock; a window icon would replace it.
+        let icon = if cfg!(target_os = "macos") {
+            egui::IconData::default()
+        } else {
+            egui::IconData {
+                rgba: tray::icon(256),
+                width: 256,
+                height: 256,
+            }
+        };
         // The app ID names the Linux desktop entry and MPRIS bus, as in `now_playing`.
         let mut viewport = eframe::egui::ViewportBuilder::default()
             .with_app_id("tidash")
+            .with_icon(icon)
             .with_min_inner_size(theme::MIN_WINDOW);
         if screenshot {
             viewport = viewport.with_inner_size([1440.0, 900.0]); // as TIDAL's references
@@ -715,13 +776,30 @@ mod tests {
             close_to_tray,
             start_minimized,
         };
-        assert!(starts_hidden(&behavior(true, true), true));
-        assert!(!starts_hidden(&behavior(true, true), false), "no tray host");
+        assert!(starts_hidden(&behavior(true, true), true, false));
         assert!(
-            !starts_hidden(&behavior(false, true), true),
+            !starts_hidden(&behavior(true, true), false, false),
+            "no tray host"
+        );
+        assert!(
+            !starts_hidden(&behavior(false, true), true, false),
             "closing quits"
         );
-        assert!(!starts_hidden(&behavior(true, false), true), "not asked");
+        assert!(
+            !starts_hidden(&behavior(true, false), true, false),
+            "not asked"
+        );
+    }
+
+    /// The update helper rolls back unless the new version draws a first frame.
+    #[test]
+    fn an_updated_launch_never_starts_hidden() {
+        let behavior = Behavior {
+            close_to_tray: true,
+            start_minimized: true,
+        };
+        assert!(starts_hidden(&behavior, true, false));
+        assert!(!starts_hidden(&behavior, true, true));
     }
 
     #[test]
