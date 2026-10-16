@@ -338,8 +338,8 @@ fn settings_tab_order_reads_left_to_right() {
 }
 
 /// Review focus 4, ruling 30: at the 960 px minimum with the side panel open at its
-/// default, every control lies between the sidebar and the side panel, and a label does
-/// not run into its field.
+/// default, every control lies between the sidebar and the side panel, Check now also after
+/// an update's sentence, and a label does not run into its field.
 #[test]
 fn settings_fit_at_960_with_the_side_panel() {
     use crate::theme::{SIDE_PANEL, SIDEBAR};
@@ -401,6 +401,17 @@ fn settings_fit_at_960_with_the_side_panel() {
         );
         let inside = centre.contains(&field_rect.left()) && centre.contains(&field_rect.right());
         assert!(inside, "{label}'s field: {field_rect:?} outside {centre:?}");
+    }
+    let long = UpdateState::Unsupported {
+        version: "1.0.1".into(),
+        reason: Unsupported::SystemDirectory,
+    };
+    for update in [UpdateState::Failed(UpdateStep::Check), long] {
+        model.update = Some(update);
+        let (_, out) = pass_at(&ctx, &mut state, &mut model, vec![], 960.0);
+        let r = testing::bounds(&out, "Check now");
+        let inside = centre.contains(&r.left()) && centre.contains(&r.right());
+        assert!(inside, "{:?}: {r:?} outside {centre:?}", model.update);
     }
 }
 

@@ -381,10 +381,13 @@ fn updates(
             update,
             Some(UpdateState::Checking | UpdateState::Downloading { .. })
         );
-        let check = ui.add_enabled_ui(!busy, |ui| {
-            pill_button(ui, p, None, &tr("Check now"), false)
-        });
-        check.inner.clicked().then_some(Action::CheckForUpdates)
+        // Not `add_enabled_ui`: its child area cannot wrap, so the pill would stay on the
+        // sentence's last line even past the edge. This `ui` is the row's, and the pill its last.
+        if busy {
+            ui.disable();
+        }
+        let check = pill_button(ui, p, None, &tr("Check now"), false);
+        check.clicked().then_some(Action::CheckForUpdates)
     });
     clicked
 }
