@@ -150,6 +150,10 @@ jobs:
   macos:
     name: macOS universal app
     runs-on: macos-latest
+    # bash with pipefail, as the build job's `shell: bash` steps; the default omits pipefail.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       # No cache, as in the build job above.
