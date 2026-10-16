@@ -1,4 +1,4 @@
-# Follow-ups carried out of M0–M4 and the design system
+# Follow-ups carried out of M0–M5 and the design system
 
 Parked by task reviews and the final reviews. Pick each up in the milestone that touches its code.
 
@@ -109,6 +109,19 @@ Parked in M4:
   `Action::OpenTrack` arm; `set_audio`'s abort of an unsent preload and a normalization-only change
   (`playback/tests.rs`).
 
+Parked in M5:
+
+- `main.rs` is ~850 lines again (soft limit ~800): `Switches` and its test are the next to move out.
+- A rolled-back update launch (`--update-error`, no receipt) with Start minimized and Close to tray
+  still starts hidden, so the "previous version has been restored" notice waits unseen until the
+  window opens (`main.rs`' `hidden`, `Resident::start_hidden`).
+- Updates: a failed check at start waits the full 24 h for the next one (no earlier retry), and
+  `Instant` may not count system sleep, so a laptop that sleeps checks less than daily (`update.rs`).
+- Restart to update shows nothing between the click and the quit: an "Installing…" state. The
+  ready notice only names Settings › Updates; an action button on notices would install from there.
+- Settings › Updates: the status row's empty label is an empty AccessKit node (`row(ui, "", …)`,
+  `ui/settings.rs`).
+
 ## Design system
 
 Parked in the design-system milestone (2026-10-11; its rulings are summarized in the plan's Outcome).
@@ -116,9 +129,6 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
 - Not built: play and favourite buttons on cards (playing an album or playlist by id needs a backend
   action that does not exist yet); the track row's "…" button (the context menu covers it); Shuffle on
   page headers, beside Play, as TIDAL 2.43 has it.
-- Ship Inter's licence (`Inter-LICENSE.txt`, in fastframe-fonts' `fonts/` folder) and the icons'
-  Lucide (ISC) and Spotifast (MIT) notices (`crates/app/assets/icons/LICENSE.txt`) in every package
-  (M5).
 - With Exclusive on, a window at the 960×540 minimum leaves the player's title column ~31 px: the
   right column is sized from its measured controls and the widest short pill ("24/176.4 FLAC ·
   Exclusive") so Play never moves (Rulings 25, 28; this replaced M4's estimated 420 pt); a longer
@@ -265,18 +275,32 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   glutin, glutin_egl_sys and ring ask for 0.52, rustix 0.38 for 0.59), and `dpi` twice (the winit
   fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`).
 - egui, eframe and egui_extras 0.37 are out; Tidash stays on 0.36 until fastframe's egui fork moves.
+- `block` v0.1.6 draws a future-incompatibility warning from rustc: souvlaki 0.8.3
+  (fastframe-now-playing's macOS backend) depends on it directly and through `cocoa` 0.24; upstream's
+  to replace.
 
 ## M5 and later
 
-- Links: register the `tidal://` scheme and handle macOS Apple Events at packaging; an autostart
-  argument then pings instead of showing the window (R21, `instance.rs`).
+- Start at login is not in v1 (M5 plan, R5): with it, the autostart launch would send
+  fastframe-instance's `ping` (answered, nothing shown) instead of `show` (R21, `instance.rs`).
+- Windows code signing is not wired (R4): no account yet (SignPath Foundation for OSS, or Azure
+  Trusted Signing); with one, sign the exe and the installer in `release.yml`.
+- Not built: Flatpak, AUR and Homebrew packages (spec §11).
+- Third-party crate notices are not shipped, only Tidash's, Inter's and the icons' licences; generate
+  them with `cargo-about` if wanted.
 - Linux Flatpak: `discord-rich-presence`'s Unix transport commits to the first socket path that
   exists, so a stale Flatpak socket refuses every connect (SONE replaced the transport; `discord.rs`).
 - Re-test "first WM_CLOSE ignored after minimize → restore" on a desktop without GlazeWM (M5).
-- The Windows media overlay shows "Unknown app" (exe version resource / AUMID at packaging, M5).
-- macOS RAM with the fonts pin (M5 performance-budget pass).
+- The Windows media overlay showed "Unknown app": the exe now has a version resource naming Tidash
+  (R8); if acceptance still shows "Unknown app", set an explicit AUMID.
+- macOS RAM with the fallback faces mapped (fastframe 0.6.0, the pin gone): the first
+  `packaging/budget.sh` run on macOS measures it (M5 plan, Task 8 Step 3).
+- The budget scripts: `budget.sh` ends without a message if Tidash dies during the 10 s measurement
+  (not the documented exit 2), and `budget.ps1` throws; an empty `footprint` reading prints 0.0 MB
+  and passes; `budget.ps1` leaves `TIDASH_REPAINT_LOG` and `RUST_LOG` set in an open session, and
+  has not run yet (Windows acceptance).
 - glow presents through `Composed: Copy with GPU GDI` (~20 ms to display, 0–4 dropped frames per
   20 s scroll); revisit if users report judder (flip model needs wgpu, whose idle spin would need a
   fix first).
-- Before the repo goes public: the test fixtures keep the account's personal mix ids and artist-based
-  mix subtitles (listening taste); replace them if that matters.
+- The repo is public: the test fixtures keep the account's personal mix ids and artist-based mix
+  subtitles (listening taste); replace them if that matters.

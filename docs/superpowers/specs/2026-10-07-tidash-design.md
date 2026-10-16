@@ -114,7 +114,7 @@ byte 0 of the download (cost measured in §10, M3).
 | Mode | Backend | Processing |
 |---|---|---|
 | Shared (default) | cpal 0.18 via fastframe-audio | rubato resample when rates differ, software volume, ReplayGain with peak-based clip prevention |
-| Exclusive (Windows) | `wasapi` 0.25, exclusive, event-driven; the smallest container the device accepts that holds the source (16, packed 24, 24-in-32, 32) | none |
+| Exclusive (Windows) | `wasapi` 0.26, exclusive, event-driven; the smallest container the device accepts that holds the source (16, packed 24, 24-in-32, 32) | none |
 | Exclusive (macOS) | cpal 0.18 at the track's rate plus `coreaudio-rs` 0.14 hog mode; the device's physical format is set to one that holds the source exactly (16/24/32-bit int, f32 for ≤ 24-bit), else the open is refused | none |
 | Exclusive (Linux) | cpal 0.18 ALSA on a `hw:` device, I32/I24/I16; DACs that take only S24_3LE fall back to shared | none |
 
@@ -225,17 +225,21 @@ official desktop client's payloads (see `docs/spikes/s1-auth-manifests.md` § Pl
   client ID and redirect URL, empty for the built-in client, Apply logs out), Appearance (the theme, Colour from
   album art), Audio (output device, exclusive off by default, Hi-Res on by default, normalization Off/Track/Album,
   Off by default), Behavior (Close to tray, on by default; Start minimized), Integrations (Last.fm, ListenBrainz,
-  the Discord toggle; §8), Keyboard shortcuts. Updates (check, pre-release channel) come with the updater (M5).
-  Stored as `settings.json` in the config dir; secrets in the credential store.
+  the Discord toggle; §8), Keyboard shortcuts, and Updates (M5): the version running, Automatic updates (on by
+  default; §8), Check now (with the setting off too) and, once an update is downloaded, Restart to update in its
+  place; a sentence beside them says where an update stands (checking, up to date, downloading with its
+  percentage, ready, failed, or a newer release this copy cannot install and how to get it). No pre-release
+  toggle (M5 plan, R2): a release candidate is offered the next candidate and the release, a release never a
+  candidate. Stored as `settings.json` in the config dir; secrets in the credential store.
 
 ## 8. Integrations
 
-As built in M4, except self-update (M5).
+As built in M4; the link registrations and self-update as built in M5.
 
 - **Now playing + media keys:** fastframe-now-playing; MPRIS Raise and Quit act as the tray's Show and Quit, and
   `OpenUri` opens a link.
-- **Tray and close to tray:** fastframe-tray (Show or hide, Play/Pause, Next, Previous, Quit; a drawn icon until
-  packaging). The app runs on fastframe-shell and outlives its window: with Close to tray on (the default) and a tray
+- **Tray and close to tray:** fastframe-tray (Show or hide, Play/Pause, Next, Previous, Quit; a drawn icon, also
+  the app's). The app runs on fastframe-shell and outlives its window: with Close to tray on (the default) and a tray
   the desktop shows, closing the window leaves playback, the media controls, Discord and the tray running headless,
   and Show makes a new window. Without a tray host (stock GNOME) closing quits. Start minimized opens no window at
   launch, again only with Close to tray and a tray. Ctrl+Q, the tray's Quit and MPRIS Quit quit.
@@ -245,7 +249,13 @@ As built in M4, except self-update (M5).
   `listen.tidal.com` (with or without `browse/`), from the command line, a later launch or MPRIS `OpenUri`. Parsed
   strictly in both processes (at most 2048 bytes; decimal ids, a 36-character playlist uuid, a mix id of 1–64
   letters and digits), so no escape reaches an API path. A link opens once logged in; a track opens its album.
-  Registering the `tidal://` scheme and macOS Apple Events come with packaging (M5).
+  The `tidal://` scheme is registered (M5) by the Windows installer (`tidal` under `HKCU\Software\Classes`, for
+  this user, plus the ProgId `Tidash.tidal` and its capabilities, so Default apps lists Tidash; uninstalling
+  removes the scheme only while it still names this copy), the Linux desktop entry (`x-scheme-handler/tidal`,
+  installed by the deb and rpm) and the macOS bundle (`CFBundleURLTypes`); the zip and the tar.gz register
+  nothing. macOS hands a bundled app its links as Apple Events, never as arguments, at launch and while it runs:
+  a `GURL` handler (`mac_links`, objc2) puts each in the inbox a later launch hands its link to, parsed the same
+  way.
 - **Scrobbling:** one `Scrobbler` on the backend sends to each connected service. Rule: track > 30 s, a listen once
   the time played (pauses excluded) reaches half its length or 4 min, whichever comes first; one per play, a repeat
   counts again; "now playing" on start. Last.fm: the desktop auth flow (`auth.getToken`, the browser page where the
@@ -263,8 +273,24 @@ As built in M4, except self-update (M5).
   `TIDASH_LASTFM_API_KEY` and `TIDASH_LASTFM_SECRET` (a Last.fm API account), `TIDASH_DISCORD_APP_ID` (a
   Discord application named `Tidash`, whose name is the "Listening to …"). ListenBrainz needs none. Nothing is
   sent until the user connects a service or turns Discord on.
-- **Self-update:** fastframe-update with Ed25519-signed `checksums.txt` (publisher key set), using its `Transport`
-  trait implemented over our reqwest 0.13 client (no second HTTP stack).
+- **Self-update** (as built in M5): fastframe-update from the GitHub releases of `rojnwa/tidash`, with an
+  Ed25519-signed `checksums.txt` checked against the committed publisher key
+  (`crates/app/assets/update-public-key.hex`), using its `Transport` trait implemented over our reqwest 0.13
+  blocking client (no second HTTP stack; redirects are the updater's, which follows them only to GitHub's
+  release hosts). Every updater call blocks, so it runs on an `updates` thread of its own, driven by the backend.
+  One setting, Automatic updates, on by default (M5 plan, R3): on, it checks at start and every 24 h (a timer in
+  memory) and downloads a release this copy can install; Check now checks either way. A copy that cannot update
+  itself (a deb, rpm or other package-manager install, cargo, a system folder, a macOS app outside
+  Applications) says how to get the release instead. A downloaded update is announced once, in the notice
+  strip, and the timer stops; installing always waits for Restart to update, and quitting never installs. The
+  click hands the update to fastframe-update's helper and the app quits through its normal shutdown; the
+  helper installs and relaunches it without arguments. At launch `main` first lets the helper take over
+  (`--apply-update`), then answers `--version` with `tidash <version>` before the single-instance claim and
+  before logging. An updated launch always opens its window (Start minimized or not) and acknowledges the
+  helper's receipt at its first frame; a version that does not is rolled back by the helper, and the restored
+  copy says so in a notice. Pre-releases only reach a pre-release (`Prereleases::WhenRunningPrerelease`, R2).
+- **Log file** (M5 plan, R10): fastframe-log writes to stderr and to `<data dir>/tidash.log`, replaced each run,
+  and panics to `<data dir>/panic.log`; a Windows release exe has no console.
 
 ## 9. Error handling
 
@@ -295,6 +321,12 @@ As built in M4, except self-update (M5).
 | Scrolling a 10 000-track playlist | no dropped frames at display refresh rate |
 
 Release profile: thin LTO, `codegen-units = 1`, `strip`.
+
+From M5 the budget is measured before each release with `packaging/budget.sh` (macOS, Linux) and
+`packaging/budget.ps1` (Windows), as `docs/releasing.md` describes: first frame, RAM after Home, idle passes
+and CPU over 10 s, and the binary's size, exiting non-zero on a missed target; CPU paused with the window
+hidden, CPU playing minimized and the Windows scroll pacing stay by hand, and the release workflow fails on
+an archive, installer or DMG of 20 MB or more (§11). The M5 numbers follow from the first run.
 
 M1 on macOS (M2 Pro, release build, idle at the start screen; the app's `first frame` log line and
 `footprint`): first frame after 179–213 ms (368 ms on the first launch of a new build), 0% CPU, a
@@ -353,13 +385,34 @@ Task 4 for the SVG loader, resvg, +0.2 MB since; 16.8 MB at M1).
 
 ## 11. Shipping
 
+As built in M5; building and releasing step by step: `docs/releasing.md`.
+
 - **CI (GitHub Actions):** matrix Windows / macOS / Linux: `cargo fmt --check`, `cargo clippy -- -D warnings`,
-  `cargo test`, release build.
-- **Release on tag:** Windows x64 + ARM64 installer and zip, macOS universal DMG, Linux AppImage / deb / rpm / tar.gz,
-  `checksums.txt` + Ed25519 signature. Packaging follows Spotifast's setup so fastframe-update works unchanged.
-  Flatpak and AUR after v1.
-- **Signing:** macOS notarization (Apple Developer account) and Windows signing (SignPath Foundation for OSS, or Azure
-  Trusted Signing) wired as optional CI secrets; unsigned builds until accounts exist.
+  `cargo test`, release build; an MSRV job (`cargo check` on Rust 1.98, Linux).
+- **Release on tag** (`release.yml`): a pushed `v*` tag equal to the workspace version, with its notes in
+  `packaging/release-notes/<tag>.md`, builds Windows x64 + ARM64 installer and zip, the macOS universal DMG
+  (lipo, `packaging/macos/bundle.sh`, native-packages) and Linux x64 + ARM64 tar.gz; each binary must answer
+  `--version`, and the Windows ones must import no MSVC runtime (static CRT, `.cargo/config.toml`). The
+  installer is Inno Setup only, per user, no MSI (M5 plan, R1); the exe carries a version resource naming it
+  Tidash and the icon (`winresource`, `build.rs`; R8). Every package ships `LICENSE`, `README.md`,
+  `Inter-LICENSE.txt` and `icons-LICENSE.txt`; the archives carry `tidash-portable.txt` and the installed
+  copy `tidash-installer.txt`, which tell fastframe-update how the copy was installed. The budget check: an
+  archive, installer or DMG of 20 MB or more fails the build (§10). The publish job waits for approval in the `release-signing`
+  environment, the only job that can read the signing key, signs `checksums.txt` (Ed25519,
+  `checksums.txt.sig`), and publishes the release with the source archive, as a pre-release when the tag has a
+  `-`. Then `packaging.yml` builds the deb, rpm and AppImage (amd64, arm64) from the published tar.gz with
+  native-packages, for release candidates too, with their own unsigned `packaging-checksums.txt`, and installs
+  the deb and rpm in clean Ubuntu and Fedora containers. They are not updater payloads: the updater refuses
+  package-manager copies, and an AppImage does not update itself (R9). Flatpak, AUR and Homebrew after v1.
+- **Dry run:** a pull request that touches the packaging paths (the two release workflows, `packaging/**`,
+  `native-packages.yaml`, `crates/app/build.rs`, `.cargo/config.toml`), or Run workflow once `release.yml` is
+  on `main`, builds, checks and packages every target and uploads them as workflow artifacts (not the deb, rpm
+  and AppImage, which need a published release); nothing is signed or published, which only a pushed `v*` tag
+  does.
+- **Signing** (amended in M5, R4): builds are unsigned until accounts exist. macOS: the DMG is signed with a
+  Developer ID and notarized by native-packages when all six `APPLE_*` secrets are set (only the DMG step gets
+  them); a partial set fails the build, none means ad-hoc signing. Windows code signing is not wired (no
+  account). The README tells users how to open an unsigned build.
 
 ## 12. Testing
 
@@ -421,6 +474,26 @@ bar tinted from the playing cover. The measured budgets hold (first frame, idle 
 §10); scroll pacing and CPU while paused or minimized were not re-measured. Details, rulings and the acceptance
 checklist: the design system plan's Outcome (`docs/superpowers/plans/2026-10-10-design-system.md`).
 
+M5 outcome (2026-10-16, built; release and acceptance pending): self-update on fastframe-update (Automatic
+updates, Check now, Restart to update in Settings › Updates; the helper's receipt acknowledged at the first
+frame, a rollback announced; §7, §8); `--version` for the updater; a log file; `tidal://` links registered by
+the Windows installer, the Linux desktop entry and the macOS bundle (the app takes them as Apple Events); the
+packaging (Windows installer and zip, the macOS universal DMG, Linux tar.gz, deb, rpm and AppImage, the drawn
+mark as the app icon, the exe's version resource) and the release workflow, dry-run on pull requests and
+published from a `v*` tag after approval with a signed `checksums.txt` (§11); the budget scripts (§10). Also
+fastframe 0.6.0 (the fonts pin gone, wasapi 0.26), an MSRV job, and `trace!` compiled out of release builds.
+Workspace tests green on macOS (499 at `106dbaf`). Key rulings (the M5 plan's Rulings): an Inno Setup
+installer and no MSI (R1); no pre-release toggle, as only a pre-release is offered pre-releases (R2); one
+setting, Automatic updates, on by default, and installing always waits for the click (R3); unsigned builds
+until accounts exist, macOS notarized once the Apple secrets are set, Windows signing not wired (R4); no start
+at login (R5); the drawn mark is the app icon (R6); bundle id `io.github.rojnwa.Tidash`, executable `tidash`
+everywhere (R7); the version resource first, an AUMID only if the media overlay still says "Unknown app" (R8);
+the Linux packages built from the published tar.gz, for release candidates too, and never updater payloads
+(R9); `tidash.log` and `panic.log` in the data dir (R10). CI on Windows and Linux and the release dry run
+await the branch push (M5 plan, Task 7 Step 8). The exit criterion, v1.0.0 released, awaits the release
+candidates, the updater tested end to end and the acceptance session (M5 plan, Task 9 Steps 6–9), with the
+M3, M4 and design-system sessions still owed.
+
 ## 14. Spikes
 
 | Spike | Question | Done when |
@@ -454,10 +527,13 @@ checklist: the design system plan's Outcome (`docs/superpowers/plans/2026-10-10-
 | Crate | Version | Use |
 |---|---|---|
 | eframe / egui / egui_extras | 0.36.2 | UI (glow renderer, accesskit); egui_extras' `svg` loader for the icons (design system) |
-| fastframe-* | git tag v0.4.1 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (fonts pinned to crmne/fastframe#17 until it ships; tray, shell, instance added in M4; theme, icons in the design system) |
+| fastframe-* | git tag v0.6.0 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (tray, shell, instance added in M4; theme, icons in the design system; update in M5, without its `reqwest` feature, which would add reqwest 0.12) |
+| anyhow | 1.0.104 | `fastframe_update::Transport::get` returns `anyhow::Result` (M5) |
+| objc2 / objc2-foundation | 0.6.5 / 0.3.2 | macOS only: the Apple Event handler for `tidal://` links (M5; already in the lock through winit) |
+| winresource | 0.1.34 | Windows build only: the exe's version resource and icon (M5) |
 | symphonia | 0.6.1 | FLAC decode, MP4 demux |
 | cpal | 0.18.2 | shared output (via fastframe-audio); exclusive on macOS and Linux (`hw:`) |
-| wasapi | 0.25.0 | Windows exclusive |
+| wasapi | 0.26.0 | Windows exclusive |
 | coreaudio-rs | 0.14.2 | macOS hog mode and physical format only (cpal runs the stream) |
 | rubato | 5.0.1 | resampling (shared mode) |
 | rtrb | 0.4.0 | lock-free ring buffer |
