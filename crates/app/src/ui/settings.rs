@@ -17,7 +17,7 @@ use egui::{
     vec2,
 };
 use fastframe_theme::Status;
-use fastframe_update::{PackageManager, Unsupported};
+use fastframe_update::Unsupported;
 use std::borrow::Cow;
 
 pub struct State {
@@ -428,14 +428,13 @@ fn reason(reason: &Unsupported) -> Cow<'static, str> {
         Unsupported::Snap => "Snap",
         Unsupported::Nix => "Nix",
         Unsupported::Homebrew => "Homebrew",
-        Unsupported::SystemPackage(PackageManager::Apt) => "apt",
-        Unsupported::SystemPackage(PackageManager::Dnf) => "dnf",
-        Unsupported::SystemPackage(PackageManager::Pacman) => "pacman",
+        Unsupported::SystemPackage(_) => {
+            return tr(
+                "This copy was installed as a package; install the new one from the releases page.",
+            );
+        }
         Unsupported::Cargo => {
             return tr("This copy was installed with cargo; run cargo install again to update it.");
-        }
-        Unsupported::SystemDirectory => {
-            return tr("This copy is in a system folder; the system's package manager updates it.");
         }
         Unsupported::MoveToApplications => return tr("Move Tidash to Applications to update it."),
         _ => return tr("This copy cannot update itself; download the new version from GitHub."),

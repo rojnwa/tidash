@@ -111,10 +111,7 @@ Parked in M4:
 
 Parked in M5:
 
-- `main.rs` is ~850 lines again (soft limit ~800): `Switches` and its test are the next to move out.
-- A rolled-back update launch (`--update-error`, no receipt) with Start minimized and Close to tray
-  still starts hidden, so the "previous version has been restored" notice waits unseen until the
-  window opens (`main.rs`' `hidden`, `Resident::start_hidden`).
+- `main.rs` is ~890 lines again (soft limit ~800): `Switches` and its test are the next to move out.
 - Updates: a failed check at start waits the full 24 h for the next one (no earlier retry), and
   `Instant` may not count system sleep, so a laptop that sleeps checks less than daily (`update.rs`).
 - Restart to update shows nothing between the click and the quit: an "Installing…" state. The

@@ -12,7 +12,7 @@ Download a release from [the releases page](https://github.com/rojnwa/tidash/rel
 
 - **Windows** (x64 or ARM64): the installer (`…-setup.exe`) installs Tidash for your user, with a Start menu entry and `tidal://` links; the zip is portable, so unpack it anywhere and run `tidash.exe`. SmartScreen warns about an unsigned program: More info › Run anyway.
 - **macOS** (11 or later, Apple silicon or Intel): open the DMG and drag Tidash to Applications, where it can update itself. macOS refuses the first open of an unsigned app: open it once anyway in System Settings › Privacy & Security › Open Anyway.
-- **Linux** (x64 or ARM64, glibc 2.39 or later): the deb, the rpm, the AppImage, or the tar.gz (unpack it anywhere and run `tidash`).
+- **Linux** (x64 or ARM64, glibc 2.39 or later): the deb, the rpm, the AppImage, or the tar.gz (unpack it anywhere outside `/usr`, `/bin` and `/sbin`, where a copy cannot update itself, and run `tidash`).
 
 ## Updates
 

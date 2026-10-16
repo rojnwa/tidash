@@ -48,8 +48,8 @@ pub fn open_link(inbox: &Inbox, waker: &Waker, text: &str) -> bool {
 
 fn claim_in(slot: &Slot, link: Option<&Link>, waker: &Waker, inbox: Inbox) -> Option<Guard> {
     // Every launch without a link is the user asking for the window, even with Start
-    // minimized on. `ping` (answered, nothing shown) is for an autostart argument, which
-    // packaging (M5) may add.
+    // minimized on. `ping` is answered (nothing shown) but nothing sends it: start at login
+    // is not built (docs/follow-ups.md).
     let request = link.map_or("show".into(), |link| format!("open {}", link::to_uri(link)));
     match slot.claim(&request, handler(waker.clone(), inbox)) {
         Claim::First(guard) => Some(guard),

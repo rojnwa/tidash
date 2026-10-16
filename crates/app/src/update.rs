@@ -83,6 +83,7 @@ fn run(
             }
             Ok(Command::Check) => {
                 if prepared.is_none() {
+                    next = Instant::now() + every;
                     prepared = check(updater, true, emit);
                 }
             }
@@ -349,12 +350,26 @@ mod tests {
         let n = calls_once(&calls, Duration::from_secs(1), |n| n >= 2);
         assert!(n >= 2, "on: {n}");
         tx.send(Command::Automatic(false)).expect("sent");
-        std::thread::sleep(Duration::from_millis(50));
+        std::thread::sleep(Duration::from_millis(200));
         let n = calls.load(Ordering::SeqCst);
         std::thread::sleep(Duration::from_millis(150));
         assert_eq!(calls.load(Ordering::SeqCst), n, "off again");
         let ev = events.try_recv();
         assert!(ev.is_err(), "unasked and up to date: {ev:?}");
+    }
+
+    /// A check the user asked for also restarts the timer: the due automatic check does not
+    /// follow it.
+    #[test]
+    fn a_manual_check_puts_off_the_automatic_one() {
+        let (feed, calls) = feed(Some("v1.0.0"));
+        let (tx, events) = spawn(feed, false, Duration::from_secs(60 * 60));
+        tx.send(Command::Check).expect("sent");
+        tx.send(Command::Automatic(true)).expect("sent");
+        let want = [UpdateState::Checking, UpdateState::UpToDate];
+        assert_eq!(states(&events, 2), want);
+        let n = calls_once(&calls, Duration::from_millis(200), |n| n > 1);
+        assert_eq!(n, 1, "only the asked check");
     }
 
     /// With a downloaded update the timer neither checks nor downloads again, so only

@@ -589,6 +589,8 @@ fn every_unsupported_reason_is_a_sentence() {
     let idle = buttons(&out);
     assert!(idle.contains(&"Check now"), "{idle:?}");
     let github = "This copy cannot update itself; download the new version from GitHub.";
+    let package =
+        "This copy was installed as a package; install the new one from the releases page.";
     let reasons = [
         (Unsupported::Flatpak, "Flatpak updates this copy."),
         (Unsupported::Snap, "Snap updates this copy."),
@@ -598,22 +600,10 @@ fn every_unsupported_reason_is_a_sentence() {
         ),
         (Unsupported::Nix, "Nix updates this copy."),
         (Unsupported::Homebrew, "Homebrew updates this copy."),
-        (
-            Unsupported::SystemPackage(PackageManager::Apt),
-            "apt updates this copy.",
-        ),
-        (
-            Unsupported::SystemPackage(PackageManager::Dnf),
-            "dnf updates this copy.",
-        ),
-        (
-            Unsupported::SystemPackage(PackageManager::Pacman),
-            "pacman updates this copy.",
-        ),
-        (
-            Unsupported::SystemDirectory,
-            "This copy is in a system folder; the system's package manager updates it.",
-        ),
+        (Unsupported::SystemPackage(PackageManager::Apt), package),
+        (Unsupported::SystemPackage(PackageManager::Dnf), package),
+        (Unsupported::SystemPackage(PackageManager::Pacman), package),
+        (Unsupported::SystemDirectory, github),
         (Unsupported::NotPortable, github),
         (
             Unsupported::MoveToApplications,

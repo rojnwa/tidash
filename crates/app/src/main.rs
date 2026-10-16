@@ -117,6 +117,8 @@ struct App {
     started: Option<Instant>,
     /// When the update helper started this launch, until the first frame acknowledges it.
     receipt: Option<fastframe_update::Receipt>,
+    /// The update helper started this launch (`relaunched`), so a window opens.
+    relaunched: bool,
     /// With `TIDASH_SCREENSHOT`, when `main` began, until the screenshot is asked for.
     shot_since: Option<Instant>,
     switches: Switches,
@@ -198,6 +200,7 @@ impl App {
             show: false,
             quit: false,
             started: Some(started),
+            relaunched: relaunched(&launch),
             receipt: launch.receipt,
             shot_since: switches.screenshot.as_ref().map(|_| started),
             switches,
@@ -525,8 +528,11 @@ impl Resident for App {
 
     /// Nothing waits for a first frame: the backend started with the app.
     fn start_hidden(&mut self) -> bool {
-        let updated = self.receipt.is_some();
-        if !starts_hidden(&self.model.settings.behavior, self.tray_shown(), updated) {
+        if !starts_hidden(
+            &self.model.settings.behavior,
+            self.tray_shown(),
+            self.relaunched,
+        ) {
             return false;
         }
         self.started = None; // no first frame to time
@@ -550,10 +556,18 @@ impl Resident for App {
     }
 }
 
-/// Whether a launch starts in the tray: asked for, with a tray to come back from, and not the
-/// first start of an update (`updated`), which the helper rolls back without a first frame.
-fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool, updated: bool) -> bool {
-    behavior.start_minimized && tray::hides_to_tray(tray_shown, behavior.close_to_tray) && !updated
+/// Whether a launch starts in the tray: asked for, with a tray to come back from, and not
+/// started by the update helper (`relaunched`).
+fn starts_hidden(behavior: &settings::Behavior, tray_shown: bool, relaunched: bool) -> bool {
+    behavior.start_minimized
+        && tray::hides_to_tray(tray_shown, behavior.close_to_tray)
+        && !relaunched
+}
+
+/// Whether the update helper started this launch: an update's first start, which the helper
+/// rolls back without a first frame, or a rollback, whose notice would wait unseen.
+fn relaunched(launch: &fastframe_update::Launch) -> bool {
+    launch.receipt.is_some() || launch.error.is_some()
 }
 
 /// What closing the window does. Quit wins; otherwise it hides when the tray asked for that
@@ -665,9 +679,9 @@ fn main() -> eframe::Result {
     // Before any window: whether one opens at start depends on them. Blocks briefly.
     let settings = settings::path().as_deref().map(settings::Settings::load);
     let settings = settings.unwrap_or_default();
-    // A screenshot needs a window, and so does an update's first start (`starts_hidden`).
+    // A screenshot needs a window, and so does a launch by the update helper (`relaunched`).
     let screenshot = switches.screenshot.is_some();
-    let hidden = settings.behavior.start_minimized && !screenshot && launch.receipt.is_none();
+    let hidden = settings.behavior.start_minimized && !screenshot && !relaunched(&launch);
     let app = App::new(&waker, settings, inbox, started, switches, launch);
     let shell = fastframe_shell::Shell::new(app, &waker);
     // A status item answers only while AppKit's loop runs; elsewhere the shell sleeps on the waker.
@@ -714,7 +728,10 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{Action, Event, Link, Model, Route, Switches, on_close, open_links, starts_hidden};
+    use super::{
+        Action, Event, Link, Model, Route, Switches, on_close, open_links, relaunched,
+        starts_hidden,
+    };
     use crate::settings::Behavior;
     use fastframe_shell::Closed;
     use std::path::PathBuf;
@@ -805,6 +822,24 @@ mod tests {
         };
         assert!(starts_hidden(&behavior, true, false));
         assert!(!starts_hidden(&behavior, true, true));
+    }
+
+    /// A rollback relaunches the previous version with `--update-error` and no receipt; its
+    /// notice needs the window.
+    #[test]
+    fn a_rolled_back_launch_never_starts_hidden() {
+        let behavior = Behavior {
+            close_to_tray: true,
+            start_minimized: true,
+        };
+        let launch = |error: Option<&str>| fastframe_update::Launch {
+            arguments: Vec::new(),
+            receipt: None,
+            error: error.map(String::from),
+        };
+        assert!(starts_hidden(&behavior, true, relaunched(&launch(None))));
+        let restored = launch(Some(fastframe_update::Launch::RESTORED));
+        assert!(!starts_hidden(&behavior, true, relaunched(&restored)));
     }
 
     #[test]

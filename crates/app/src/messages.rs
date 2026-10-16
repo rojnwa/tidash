@@ -110,20 +110,17 @@ pub enum UpdateState {
     Checking,
     /// The check the user asked for found nothing newer.
     UpToDate,
-    Downloading {
-        version: String,
-        percent: u8,
-    },
+    /// A newer release downloading, `percent` of it so far.
+    Downloading { version: String, percent: u8 },
     /// Downloaded and verified: `Action::InstallUpdate` installs it.
-    Ready {
-        version: String,
-    },
+    Ready { version: String },
     /// A newer release this copy cannot install itself; `reason` says how to get it instead.
     Unsupported {
         version: String,
         reason: fastframe_update::Unsupported,
     },
-    /// A failed check is reported only when the user asked for it.
+    /// A failed check is reported only when the user asked for it; a failed download (an
+    /// automatic one too) or install always is.
     Failed(UpdateStep),
 }
 
