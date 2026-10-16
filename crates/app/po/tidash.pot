@@ -743,3 +743,83 @@ msgstr ""
 #: src/main.rs
 msgid "The update could not start. The previous version has been restored."
 msgstr ""
+
+#: src/ui/settings.rs
+msgid "Updates"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Version"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash {version}"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Automatic updates"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Check daily and download new versions"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Check now"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Restart to update"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Checking for updates…"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash is up to date."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Downloading Tidash {version} ({percent}%)…"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash {version} is ready."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash {version} is available."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash could not check for updates."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash could not download the update."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Tidash could not start the update."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "{manager} updates this copy."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "This copy was installed with cargo; run cargo install again to update it."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "This copy is in a system folder; the system's package manager updates it."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Move Tidash to Applications to update it."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "This copy cannot update itself; download the new version from GitHub."
+msgstr ""

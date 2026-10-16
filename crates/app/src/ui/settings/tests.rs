@@ -1,6 +1,8 @@
 use super::super::{UiState, draw, testing};
-use crate::model::{Action, Event, Model, Route};
+use crate::messages::UpdateStep;
+use crate::model::{Action, Event, Model, Route, UpdateState};
 use crate::settings::{Audio, Normalization, Settings, Theme};
+use fastframe_update::{PackageManager, Unsupported};
 
 /// One pass of the whole UI, its events applied to `model`: the actions it sent, and its
 /// output.
@@ -369,6 +371,8 @@ fn settings_fit_at_960_with_the_side_panel() {
         "Close to tray",
         "Start minimized",
         "Connect",
+        "Check daily and download new versions",
+        "Check now",
     ];
     for label in controls {
         let r = testing::bounds(&out, label);
@@ -439,4 +443,183 @@ fn shortcut_list_names_every_shortcut() {
     }
     assert_eq!(list.len(), want.len(), "{keys:?}");
     assert!(list.iter().all(|(_, what)| !what.is_empty()), "{list:?}");
+}
+
+/// Updates: the version running, and Automatic updates, on by default; unticking it is a
+/// setting like the others.
+#[test]
+fn updates_show_the_version_and_the_setting() {
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    let version = format!("Tidash {}", env!("CARGO_PKG_VERSION"));
+    assert!(labels(&out).contains(&version), "{:?}", labels(&out));
+    let automatic = "Check daily and download new versions";
+    let node = nodes(&out)
+        .iter()
+        .find(|(_, n)| n.label() == Some(automatic));
+    let (_, node) = node.expect(automatic);
+    assert_eq!(node.toggled(), Some(egui::accesskit::Toggled::True));
+    let click = vec![testing::click(&out, automatic)];
+    let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+    let mut off = Settings::default();
+    off.updates.automatic = false;
+    assert_eq!(set_settings(sent), [off]);
+}
+
+/// Check now asks for a check, then waits, disabled, while it or a download runs.
+#[test]
+fn check_now_asks_and_waits() {
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    let check = "Check now";
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    assert!(!testing::disabled(&out, check));
+    let click = vec![testing::click(&out, check)];
+    let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+    assert!(matches!(sent[..], [Action::CheckForUpdates]), "{sent:?}");
+    let downloading = UpdateState::Downloading {
+        version: "1.0.1".into(),
+        percent: 45,
+    };
+    for (update, sentence) in [
+        (UpdateState::Checking, "Checking for updates…"),
+        (downloading, "Downloading Tidash 1.0.1 (45%)…"),
+    ] {
+        model.update = Some(update);
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        assert!(testing::disabled(&out, check), "{sentence}");
+        let shown = labels(&out);
+        assert!(
+            shown.iter().any(|l| l == sentence),
+            "no {sentence:?} in {shown:?}"
+        );
+    }
+}
+
+/// A downloaded update waits for Restart to update, which installs it; Check now is gone.
+#[test]
+fn a_ready_update_restarts_on_click() {
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    model.update = Some(UpdateState::Ready {
+        version: "1.0.1".into(),
+    });
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    let shown = labels(&out);
+    assert!(
+        shown.iter().any(|l| l == "Tidash 1.0.1 is ready."),
+        "{shown:?}"
+    );
+    assert!(!shown.iter().any(|l| l == "Check now"), "{shown:?}");
+    let click = vec![testing::click(&out, "Restart to update")];
+    let (sent, _) = pass(&ctx, &mut state, &mut model, click);
+    assert!(matches!(sent[..], [Action::InstallUpdate]), "{sent:?}");
+}
+
+/// The last check's result, and a failed download or install, each a sentence beside Check
+/// now.
+#[test]
+fn every_state_is_a_sentence() {
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    for (update, sentence) in [
+        (UpdateState::UpToDate, "Tidash is up to date."),
+        (
+            UpdateState::Failed(UpdateStep::Check),
+            "Tidash could not check for updates.",
+        ),
+        (
+            UpdateState::Failed(UpdateStep::Download),
+            "Tidash could not download the update.",
+        ),
+        (
+            UpdateState::Failed(UpdateStep::Install),
+            "Tidash could not start the update.",
+        ),
+    ] {
+        model.update = Some(update);
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let shown = labels(&out);
+        assert!(
+            shown.iter().any(|l| l == sentence),
+            "no {sentence:?} in {shown:?}"
+        );
+        assert!(!testing::disabled(&out, "Check now"), "{sentence}");
+    }
+}
+
+/// The buttons `out` shows a screen reader, sorted.
+fn buttons(out: &egui::FullOutput) -> Vec<&str> {
+    let button = |n: &&egui::accesskit::Node| n.role() == egui::accesskit::Role::Button;
+    let nodes = nodes(out).iter().map(|(_, n)| n).filter(button);
+    let mut labels: Vec<&str> = nodes.filter_map(|n| n.label()).collect();
+    labels.sort_unstable();
+    labels
+}
+
+/// A release this copy cannot install: the version found, then how to get it, a sentence of
+/// its own. The one button stays Check now.
+#[test]
+fn every_unsupported_reason_is_a_sentence() {
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    let idle = buttons(&out);
+    assert!(idle.contains(&"Check now"), "{idle:?}");
+    let github = "This copy cannot update itself; download the new version from GitHub.";
+    let reasons = [
+        (Unsupported::Flatpak, "Flatpak updates this copy."),
+        (Unsupported::Snap, "Snap updates this copy."),
+        (
+            Unsupported::Cargo,
+            "This copy was installed with cargo; run cargo install again to update it.",
+        ),
+        (Unsupported::Nix, "Nix updates this copy."),
+        (Unsupported::Homebrew, "Homebrew updates this copy."),
+        (
+            Unsupported::SystemPackage(PackageManager::Apt),
+            "apt updates this copy.",
+        ),
+        (
+            Unsupported::SystemPackage(PackageManager::Dnf),
+            "dnf updates this copy.",
+        ),
+        (
+            Unsupported::SystemPackage(PackageManager::Pacman),
+            "pacman updates this copy.",
+        ),
+        (
+            Unsupported::SystemDirectory,
+            "This copy is in a system folder; the system's package manager updates it.",
+        ),
+        (Unsupported::NotPortable, github),
+        (
+            Unsupported::MoveToApplications,
+            "Move Tidash to Applications to update it.",
+        ),
+        (Unsupported::ForeignBundle, github),
+        (Unsupported::Platform, github),
+        (Unsupported::Unavailable("x".into()), github),
+    ];
+    for (reason, sentence) in reasons {
+        let version = "1.0.1".into();
+        model.update = Some(UpdateState::Unsupported { version, reason });
+        let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+        let shown = labels(&out);
+        for want in ["Tidash 1.0.1 is available.", sentence] {
+            assert!(shown.iter().any(|l| l == want), "no {want:?} in {shown:?}");
+        }
+        assert_eq!(buttons(&out), idle, "{sentence}");
+    }
 }

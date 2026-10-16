@@ -1,5 +1,5 @@
-//! Settings view: account, appearance, audio, behavior, integrations, and the keyboard
-//! shortcuts; the login page leads here too, logged out. A change shows at once
+//! Settings view: account, appearance, audio, behavior, integrations, the keyboard shortcuts,
+//! and updates; the login page leads here too, logged out. A change shows at once
 //! (`Event::Settings`) and goes to the backend (`Action::SetSettings`), which saves it and sends
 //! the settings back. The scrobbling services are the backend's to set: Connect and Disconnect
 //! are actions. The Discord toggle and the behavior are settings like the others.
@@ -7,16 +7,17 @@
 use super::Ctx;
 use super::widgets::{heading, pill_button};
 use crate::i18n::tr;
-use crate::messages::Secret;
-use crate::model::{Action, Event, Model, Route};
+use crate::messages::{Secret, UpdateStep};
+use crate::model::{Action, Event, Model, Route, UpdateState};
 use crate::scrobble::Keys;
-use crate::settings::{Account, Audio, Normalization, Settings, Theme, nonblank};
+use crate::settings::{Account, Audio, Normalization, Settings, Theme, Updates, nonblank};
 use crate::theme::{self, Palette};
 use egui::{
     Align, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText, WidgetType,
     vec2,
 };
 use fastframe_theme::Status;
+use fastframe_update::{PackageManager, Unsupported};
 use std::borrow::Cow;
 
 pub struct State {
@@ -102,6 +103,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         section(ui, &p, tr("Keyboard shortcuts"));
         for (keys, what) in shortcuts() {
             row(ui, what, |ui| ui.weak(keys));
+        }
+        section(ui, &p, tr("Updates"));
+        if let Some(action) = updates(ui, &p, model.update.as_ref(), &mut new.updates) {
+            ctx.send(action);
         }
     });
     if logout {
@@ -347,6 +352,94 @@ fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action>
         state.listenbrainz_token.clear();
         Action::ConnectListenBrainz(Secret(token))
     })
+}
+
+/// The version running, Automatic updates, then where an update stands: Restart to update
+/// once one is ready, else Check now, disabled while a check or a download runs. What was
+/// clicked, to send.
+fn updates(
+    ui: &mut Ui,
+    p: &Palette,
+    update: Option<&UpdateState>,
+    updates: &mut Updates,
+) -> Option<Action> {
+    let version = tr("Tidash {version}").replace("{version}", env!("CARGO_PKG_VERSION"));
+    row(ui, tr("Version"), |ui| ui.label(version));
+    row(ui, tr("Automatic updates"), |ui| {
+        let automatic = tr("Check daily and download new versions");
+        ui.checkbox(&mut updates.automatic, automatic)
+    });
+    let (_, clicked) = row(ui, "", |ui| {
+        if let Some(update) = update {
+            update_status(ui, update);
+        }
+        if let Some(UpdateState::Ready { .. }) = update {
+            let restart = pill_button(ui, p, None, &tr("Restart to update"), true);
+            return restart.clicked().then_some(Action::InstallUpdate);
+        }
+        let busy = matches!(
+            update,
+            Some(UpdateState::Checking | UpdateState::Downloading { .. })
+        );
+        let check = ui.add_enabled_ui(!busy, |ui| {
+            pill_button(ui, p, None, &tr("Check now"), false)
+        });
+        check.inner.clicked().then_some(Action::CheckForUpdates)
+    });
+    clicked
+}
+
+/// Where `update` stands, in a sentence; for a release this copy cannot install, a second
+/// says how to get it.
+fn update_status(ui: &mut Ui, update: &UpdateState) {
+    let text = match update {
+        UpdateState::Checking => tr("Checking for updates…"),
+        UpdateState::UpToDate => tr("Tidash is up to date."),
+        UpdateState::Downloading { version, percent } => {
+            tr("Downloading Tidash {version} ({percent}%)…")
+                .replace("{version}", version)
+                .replace("{percent}", &percent.to_string())
+                .into()
+        }
+        UpdateState::Ready { version } => tr("Tidash {version} is ready.")
+            .replace("{version}", version)
+            .into(),
+        UpdateState::Unsupported {
+            version,
+            reason: why,
+        } => {
+            ui.label(tr("Tidash {version} is available.").replace("{version}", version));
+            reason(why)
+        }
+        UpdateState::Failed(UpdateStep::Check) => tr("Tidash could not check for updates."),
+        UpdateState::Failed(UpdateStep::Download) => tr("Tidash could not download the update."),
+        UpdateState::Failed(UpdateStep::Install) => tr("Tidash could not start the update."),
+    };
+    ui.label(text);
+}
+
+/// How a copy that cannot update itself gets a new release.
+fn reason(reason: &Unsupported) -> Cow<'static, str> {
+    let manager = match reason {
+        Unsupported::Flatpak => "Flatpak",
+        Unsupported::Snap => "Snap",
+        Unsupported::Nix => "Nix",
+        Unsupported::Homebrew => "Homebrew",
+        Unsupported::SystemPackage(PackageManager::Apt) => "apt",
+        Unsupported::SystemPackage(PackageManager::Dnf) => "dnf",
+        Unsupported::SystemPackage(PackageManager::Pacman) => "pacman",
+        Unsupported::Cargo => {
+            return tr("This copy was installed with cargo; run cargo install again to update it.");
+        }
+        Unsupported::SystemDirectory => {
+            return tr("This copy is in a system folder; the system's package manager updates it.");
+        }
+        Unsupported::MoveToApplications => return tr("Move Tidash to Applications to update it."),
+        _ => return tr("This copy cannot update itself; download the new version from GitHub."),
+    };
+    tr("{manager} updates this copy.")
+        .replace("{manager}", manager)
+        .into()
 }
 
 /// The output device and the stream choices.

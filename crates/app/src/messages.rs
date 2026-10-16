@@ -98,16 +98,8 @@ pub enum Action {
     OpenThemesFolder,
     /// Checks for a newer release now and downloads it (`Event::Update`), whatever the
     /// Automatic updates setting says.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Settings › Updates sends it (Task 4)")
-    )]
     CheckForUpdates,
     /// Hands the downloaded update to the helper, then quits (`Event::Quit`).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Settings › Updates sends it (Task 4)")
-    )]
     InstallUpdate,
 }
 
