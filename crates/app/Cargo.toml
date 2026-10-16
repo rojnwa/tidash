@@ -44,6 +44,11 @@ serde.workspace = true
 serde_json.workspace = true
 discord-rich-presence = "1.1"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# The Apple Event handler that takes tidal:// links (`mac_links`); in the lock through winit.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSString"] }
+
 [dev-dependencies]
 wiremock = "0.6"
 # Paused time: the Last.fm connect's poll.

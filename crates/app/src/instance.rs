@@ -18,6 +18,34 @@ pub fn claim(link: Option<&Link>, waker: &Waker, inbox: Inbox) -> Option<Guard> 
     claim_in(&Slot::new("tidash"), link, waker, inbox)
 }
 
+/// Queues `asked` for the app and wakes it.
+pub fn hand_over(inbox: &Inbox, waker: &Waker, asked: TrayAction) {
+    inbox
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(asked);
+    waker.wake();
+}
+
+/// Hands `text` over as a link if it parses as one; `false` for anything else.
+#[cfg_attr(
+    not(any(target_os = "macos", test)),
+    expect(
+        dead_code,
+        reason = "only macOS's Apple Events (`mac_links`) hand links over here"
+    )
+)]
+pub fn open_link(inbox: &Inbox, waker: &Waker, text: &str) -> bool {
+    let opened = link::parse(text)
+        .map(|l| hand_over(inbox, waker, TrayAction::Open(l)))
+        .is_some();
+    if !opened {
+        // Not the text: it comes from outside and may be long.
+        log::warn!("declined a link that is not a TIDAL link");
+    }
+    opened
+}
+
 fn claim_in(slot: &Slot, link: Option<&Link>, waker: &Waker, inbox: Inbox) -> Option<Guard> {
     // Every launch without a link is the user asking for the window, even with Start
     // minimized on. `ping` (answered, nothing shown) is for an autostart argument, which
@@ -51,11 +79,7 @@ fn handler(waker: Waker, inbox: Inbox) -> impl FnMut(&str) -> Option<String> + S
             "show" => TrayAction::Show,
             _ => TrayAction::Open(link::parse(request.strip_prefix("open ")?)?),
         };
-        inbox
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(asked);
-        waker.wake();
+        hand_over(&inbox, &waker, asked);
         Some("ok".into())
     }
 }
@@ -91,6 +115,23 @@ mod tests {
             "[Open(Album(1)), Show]",
             "ping asks for nothing"
         );
+    }
+
+    #[test]
+    fn open_link_takes_only_links() {
+        let (waker, inbox) = (Waker::default(), Inbox::default());
+        assert!(open_link(&inbox, &waker, "tidal://album/123"));
+        assert_eq!(asked(&inbox), "[Open(Album(123))]");
+        let long = format!("tidal://album/{}", "1".repeat(20_000));
+        for declined in [
+            "tidal://track/1%2F..%2Fusers",
+            "spotify:track:1",
+            "https://evil.example/album/1",
+            &long,
+        ] {
+            assert!(!open_link(&inbox, &waker, declined), "{declined}");
+        }
+        assert_eq!(asked(&inbox), "[Open(Album(123))]", "nothing more queued");
     }
 
     /// A slot of its own in a throwaway directory: a Tidash running on this machine is

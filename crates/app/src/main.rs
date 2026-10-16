@@ -31,6 +31,8 @@ mod images;
 mod instance;
 mod library;
 mod link;
+#[cfg(target_os = "macos")]
+mod mac_links;
 mod messages;
 mod model;
 mod now_playing;
@@ -646,6 +648,9 @@ fn main() -> eframe::Result {
     let Some(_instance) = instance::claim(link.as_ref(), &waker, Arc::clone(&inbox)) else {
         return Ok(());
     };
+    // Launch Services hands a bundled app its links as Apple Events, never as arguments.
+    #[cfg(target_os = "macos")]
+    mac_links::install(Arc::clone(&inbox), waker.clone());
     let mut logging = fastframe_log::Logging::new("tidash", env!("CARGO_PKG_VERSION"))
         // symphonia's MP4 probe matches `ftyp` and reports every file's leading box size as
         // "4 bytes of junk".
