@@ -37,7 +37,7 @@ cargo run -p tidash
 On Linux, install the build dependencies first:
 
 ```sh
-sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+sudo apt-get install -y libasound2-dev libpipewire-0.3-dev clang libclang-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
 ```
 
 Packages, signing, the performance budget and each release: [docs/releasing.md](docs/releasing.md).

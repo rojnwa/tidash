@@ -23,20 +23,20 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 # Compiles every crate's `trace!` out of release builds, wasapi's in its render loop among them.
 log = { version = "0.4", features = ["release_max_level_debug"] }
 rand = "0.10"
-fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
-fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
+fastframe-text = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-fonts = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-log = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-now-playing = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-scroll = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-tray = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-shell = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-instance = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-theme = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
+fastframe-icons = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
 # Self-update (`update`), over our reqwest: its `reqwest` feature would add reqwest 0.12.
-fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
+fastframe-update = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
 # `fastframe_update::Transport::get` returns `anyhow::Result`.
 anyhow = "1"
 directories = "6"
@@ -56,7 +56,7 @@ wiremock = "0.6"
 tokio = { workspace = true, features = ["test-util"] }
 
 [build-dependencies]
-fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0", features = ["build"] }
+fastframe-i18n = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0", features = ["build"] }
 
 # The exe's version resource and icon, which Windows names the app by (`build.rs`).
 [target.'cfg(windows)'.build-dependencies]

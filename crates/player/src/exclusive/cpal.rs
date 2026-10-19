@@ -224,6 +224,8 @@ fn find(wanted: &Device) -> Result<(cpal::Device, String), String> {
             .map_err(|e| e.to_string())?
             .name()
             .to_owned(),
+        // Settings save names; nothing makes an id yet.
+        Device::Id(_) => return Err("exclusive output opens devices by name".into()),
     };
     let named: Vec<_> = host
         .output_devices()

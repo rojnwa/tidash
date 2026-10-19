@@ -171,6 +171,8 @@ impl Opened {
                 .get_device_collection(&Direction::Render)
                 .and_then(|all| all.get_device_with_name(n))
                 .map_err(|_| format!("device {n} not found"))?,
+            // Settings save names; nothing makes an id yet.
+            Device::Id(_) => return Err("exclusive output opens devices by name".into()),
         };
         let probe = dev.get_iaudioclient()?;
         let (container, wf) = candidates(bits)

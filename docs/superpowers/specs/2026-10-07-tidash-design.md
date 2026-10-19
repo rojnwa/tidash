@@ -116,7 +116,7 @@ byte 0 of the download (cost measured in §10, M3).
 | Shared (default) | cpal 0.18 via fastframe-audio | rubato resample when rates differ, software volume, ReplayGain with peak-based clip prevention |
 | Exclusive (Windows) | `wasapi` 0.26, exclusive, event-driven; the smallest container the device accepts that holds the source (16, packed 24, 24-in-32, 32) | none |
 | Exclusive (macOS) | cpal 0.18 at the track's rate plus `coreaudio-rs` 0.14 hog mode; the device's physical format is set to one that holds the source exactly (16/24/32-bit int, f32 for ≤ 24-bit), else the open is refused | none |
-| Exclusive (Linux) | cpal 0.18 ALSA on a `hw:` device, I32/I24/I16; DACs that take only S24_3LE fall back to shared | none |
+| Exclusive (Linux) | cpal 0.18 ALSA on a `hw:` device, I32/I24/I16; DACs that take only S24_3LE fall back to shared. Only where no sound server runs: since fastframe 0.11 cpal's default host is PipeWire or PulseAudio when one does, and exclusive then always plays shared (follow-up) | none |
 
 Exclusive = device opened at the track's rate, bit depth and channels; no resampling, no software volume, no
 ReplayGain; volume fixed at 100% (the slider is disabled; hardware volume is a follow-up). The device stays held while
@@ -535,7 +535,7 @@ M3, M4 and design-system sessions still owed.
 | Crate | Version | Use |
 |---|---|---|
 | eframe / egui / egui_extras | 0.36.2 | UI (glow renderer, accesskit); egui_extras' `svg` loader for the icons (design system) |
-| fastframe-* | git tag v0.6.0 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (tray, shell, instance added in M4; theme, icons in the design system; update in M5, without its `reqwest` feature, which would add reqwest 0.12) |
+| fastframe-* | git tag v0.13.0 | text, fonts, icons, theme, i18n, log, tray, shell, instance, now-playing, update, audio, scroll (tray, shell, instance added in M4; theme, icons in the design system; update in M5, without its `reqwest` feature, which would add reqwest 0.12) |
 | anyhow | 1.0.104 | `fastframe_update::Transport::get` returns `anyhow::Result` (M5) |
 | objc2 / objc2-foundation | 0.6.5 / 0.3.2 | macOS only: the Apple Event handler for `tidal://` links (M5; already in the lock through winit) |
 | winresource | 0.1.34 | Windows build only: the exe's version resource and icon (M5) |

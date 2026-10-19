@@ -601,8 +601,10 @@ impl Backend {
             Action::ListDevices => {
                 let emit = self.emit.clone();
                 tokio::task::spawn_blocking(move || {
-                    let names = fastframe_audio::output_device_names()
+                    // Not `output_device_names`: on PipeWire it lists other apps' streams too.
+                    let names = fastframe_audio::output_devices()
                         .inspect_err(|e| log::warn!("could not list the output devices: {e}"))
+                        .map(|all| all.into_iter().map(|d| d.name).collect())
                         .unwrap_or_default();
                     emit.send(Event::Devices(names));
                 });

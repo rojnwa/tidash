@@ -6,6 +6,9 @@ libraries:
   libasound.so.2:
     deb: libasound2t64
     rpm: alsa-lib
+  libpipewire-0.3.so.0:
+    deb: libpipewire-0.3-0t64
+    rpm: pipewire-libs
 nfpm:
   name: tidash
   maintainer: Roman Wagner <rojnwa@users.noreply.github.com>
@@ -40,9 +43,9 @@ nfpm:
     file_info: { mode: 420 }
   overrides:
     deb:
-      depends: ["libc6 (>= 2.39)", libgl1, libegl1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libwayland-cursor0, libwayland-egl1, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2, libasound2t64, libgcc-s1, libstdc++6]
+      depends: ["libc6 (>= 2.39)", libgl1, libegl1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libwayland-cursor0, libwayland-egl1, libx11-6, libx11-xcb1, libxcursor1, libxi6, libxrandr2, libasound2t64, libpipewire-0.3-0t64, libgcc-s1, libstdc++6]
     rpm:
-      depends: [glibc >= 2.39, libglvnd-glx, libglvnd-egl, libxkbcommon, libxkbcommon-x11, libwayland-client, libwayland-cursor, libwayland-egl, libX11, libX11-xcb, libXcursor, libXi, libXrandr, alsa-lib, libgcc, libstdc++]
+      depends: [glibc >= 2.39, libglvnd-glx, libglvnd-egl, libxkbcommon, libxkbcommon-x11, libwayland-client, libwayland-cursor, libwayland-egl, libX11, libX11-xcb, libXcursor, libXi, libXrandr, alsa-lib, pipewire-libs, libgcc, libstdc++]
   rpm:
     buildhost: github-actions
 targets:
