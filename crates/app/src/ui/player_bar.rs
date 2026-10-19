@@ -138,16 +138,21 @@ fn now_playing(
     let top = rect.center().y - (title.size().y + gap + line) / 2.0;
     let y = top + title.size().y + gap;
     let to = Route::Album(t.album.id);
-    text_link(ui, title, pos2(x, top), p.text, &album, to, events);
+    let cut = title.elided;
+    let r = text_link(ui, title, pos2(x, top), p.text, &album, to, events);
+    if cut {
+        r.on_hover_text(t.title.as_str()); // as a cut label shows it
+    }
     // One galley per name, ", " between; the column's end cuts the last one shown with "…".
-    let mut left = x;
+    let (mut left, mut cut) = (x, false);
     for (i, a) in t.artists.iter().enumerate() {
         let small = |text: &str, left: f32| {
             widgets::line(ui, text, theme::small(), p.secondary, right - left)
         };
         if i > 0 {
             let sep = small(", ", left);
-            let (width, cut) = (sep.size().x, sep.elided);
+            let width = sep.size().x;
+            cut = sep.elided;
             ui.painter().galley(pos2(left, y), sep, p.secondary);
             left += width;
             if cut {
@@ -155,7 +160,8 @@ fn now_playing(
             }
         }
         let text = small(&a.name, left);
-        let (width, cut) = (text.size().x, text.elided);
+        let width = text.size().x;
+        cut = text.elided;
         // Cut to "…" alone, no part of the name shows: no link.
         if cut && text.rows.iter().all(|r| r.glyphs.len() <= 1) {
             ui.painter().galley(pos2(left, y), text, p.secondary);
@@ -168,6 +174,15 @@ fn now_playing(
         if cut {
             break;
         }
+    }
+    // Over the names, as a label: screen readers read the whole list, names past the cut too,
+    // and cut, the line shows it on hover, over the links as well. No Tab stop.
+    let all = tracks::artists(t);
+    let row = Rect::from_min_max(pos2(x, y), pos2(left, y + line));
+    let row = ui.allocate_rect(row, Sense::hover());
+    row.widget_info(|| WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &all));
+    if cut {
+        row.on_hover_text(all);
     }
 }
 
@@ -191,7 +206,7 @@ fn link(
 }
 
 /// `text` in `color` at `at`, a `link`, underlined while hovered: 1 px of `color` along its
-/// foot. As a label's, its text is its node's value, and cut, it shows whole on hover.
+/// foot. As a label's, its text is its node's value.
 fn text_link(
     ui: &mut Ui,
     text: Arc<Galley>,
@@ -200,7 +215,7 @@ fn text_link(
     name: &str,
     to: Route,
     events: &mut Vec<Event>,
-) {
+) -> Response {
     let rect = Rect::from_min_size(at, text.size());
     let r = link(ui, rect, name, theme::R_BADGE, to, events);
     ui.ctx()
@@ -210,10 +225,8 @@ fn text_link(
         ui.painter()
             .hline(rect.x_range(), foot, Stroke::new(1.0, color));
     }
-    if text.elided {
-        r.on_hover_text(text.text());
-    }
     ui.painter().galley(at, text, color);
+    r
 }
 
 /// Shuffle, Previous, Play/Pause, Next and Repeat, centred over the seek row: the slider
@@ -939,8 +952,9 @@ mod tests {
     }
 
     /// The column's end cuts the artists with "…": a name partly shown is still a link, one
-    /// past the cut is not shown, and nothing reaches into the centre column. At 800 px the
-    /// column fits "…" alone of the first name: no link.
+    /// past the cut is not shown, and nothing reaches into the centre column; screen readers
+    /// and the line's hover still give the whole list. At 800 px the column fits "…" alone of
+    /// the first name: no link.
     #[test]
     fn artists_are_cut_at_the_column() {
         let ctx = testing::context();
@@ -963,6 +977,9 @@ mod tests {
         let (start, _) = centre(&out, 1280.0);
         let cut = testing::bounds(&out, &format!("Go to artist {long}"));
         assert!(cut.right() <= start, "{cut:?} past {start}");
+        // Screen readers still read every name.
+        let all = format!("Artist 1, {long}, Artist 3");
+        assert!(shown.contains(&all), "no whole list in {shown:?}");
         let out = bar(&ctx, &model, 800.0);
         let first = painted(&out, "Artist 1");
         assert!(matches!(first[..], [t] if t.galley.elided), "cut");
@@ -971,6 +988,12 @@ mod tests {
             !shown.iter().any(|s| s.starts_with("Go to artist")),
             "{shown:?}"
         );
+        // Resting on the cut name, the line's tooltip gives the whole list.
+        let moved = vec![egui::Event::PointerMoved(cut.center())];
+        bar_at(&ctx, &model, 1280.0, 1.0, moved);
+        bar_at(&ctx, &model, 1280.0, 2.0, vec![]); // still now: the tooltip's next pass
+        let out = bar_at(&ctx, &model, 1280.0, 3.0, vec![]);
+        assert!(!painted(&out, &all).is_empty(), "no whole list on hover");
     }
 
     #[test]
