@@ -28,7 +28,8 @@ pub struct Queue {
     current: Option<usize>,
     shuffle: bool,
     repeat: Repeat,
-    /// Where the tracks were played from (`Action::PlayTracks`); edits keep it.
+    /// Where the tracks were played from (`Action::PlayTracks`); edits keep it, but for
+    /// emptying the queue.
     pub source: Option<Source>,
 }
 
@@ -121,12 +122,15 @@ impl Queue {
     }
 
     /// Removes the track at `i`; true if it was current. Then the next playable track (as
-    /// `next` picks it) is current, or none.
+    /// `next` picks it) is current, or none. The last one gone, the source goes too.
     pub fn remove(&mut self, i: usize) -> bool {
         if i >= self.entries.len() {
             return false;
         }
         self.entries.remove(i);
+        if self.entries.is_empty() {
+            self.source = None; // tracks added later come from no page
+        }
         match self.current {
             Some(c) if c == i => {
                 self.current = self.following(i);
@@ -323,6 +327,21 @@ mod tests {
         q.replace(tracks(&[true, true]), 1);
         assert!(q.remove(1));
         assert_eq!(id(q.current()), Some(0), "repeat all wraps, as next does");
+    }
+
+    /// Emptied, the queue drops its source: what is added to it later comes from no page.
+    #[test]
+    fn an_emptied_queue_drops_its_source() {
+        let mut q = Queue::default();
+        q.replace(tracks(&[true, true]), 0);
+        q.source = Some(Source {
+            route: crate::model::Route::Album(9),
+            name: "a".into(),
+        });
+        q.remove(0);
+        assert!(q.snapshot().source.is_some(), "a track left");
+        q.remove(0);
+        assert_eq!(q.snapshot().source, None);
     }
 
     #[test]

@@ -552,6 +552,7 @@ pub fn draw(
             &mut state.side,
             &palette,
             bar_fill(ui.ctx(), &palette, tint),
+            &mut events,
         );
         let mut ctx = Ctx {
             model,

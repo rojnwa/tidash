@@ -214,11 +214,24 @@ msgid "Artist"
 msgstr ""
 
 #: src/ui/tracks.rs
+#: src/ui/player_bar.rs
 msgid "Go to album"
 msgstr ""
 
 #: src/ui/tracks.rs
 msgid "Go to artist"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Playing from {name}"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Go to album {title}"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Go to artist {name}"
 msgstr ""
 
 #: src/ui/tracks.rs

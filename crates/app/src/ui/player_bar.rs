@@ -6,16 +6,18 @@ use super::widgets::{self, glyph_button, icon_button};
 use super::{Side, cover, tracks};
 use crate::i18n::tr;
 use crate::images::TextureCache;
-use crate::model::{Action, Model, OutputInfo};
+use crate::model::{Action, Event, Model, OutputInfo, Route};
 use crate::queue::Repeat;
 use crate::theme::{self, ICON_BUTTON, Icon, PLAY_GLYPH, Palette, SKIP_GLYPH, TRANSPORT, Tier};
 use egui::style::HandleShape;
 use egui::{
-    Align, Color32, CursorIcon, Frame, Label, Layout, Panel, Rect, Response, RichText, Slider,
-    Stroke, Ui, UiBuilder, Vec2, lerp, pos2, remap_clamp, vec2,
+    Align, Color32, CursorIcon, Frame, Galley, Layout, Panel, Pos2, Rect, Response, RichText,
+    Sense, Slider, Stroke, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType, lerp, pos2, remap_clamp,
+    vec2,
 };
 use player::{PlayState, Player};
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -41,6 +43,7 @@ pub fn show(
     side: &mut Option<Side>,
     p: &Palette,
     fill: Color32,
+    events: &mut Vec<Event>,
 ) {
     let pb = &model.playback;
     // The position only moves while playing; nothing to repaint for otherwise, or when hidden.
@@ -60,7 +63,7 @@ pub fn show(
         let pill = widgets::badge_width(ui, &widest_pill(model.settings.audio.exclusive));
         let right = controls_width(ui) + ui.spacing().item_spacing.x + pill;
         let [left, centre, right] = columns(ui.max_rect(), right);
-        now_playing(ui, p, images, tx, pb.track.as_ref(), left);
+        now_playing(ui, p, images, tx, model, left, events);
         transport(ui, p, model, tx, player, state, centre);
         extras(ui, p, model, tx, side, right);
     });
@@ -92,31 +95,125 @@ fn child(ui: &mut Ui, rect: Rect, layout: Layout) -> Ui {
 }
 
 /// The cover, and beside it the title in `label()` over the artists in `small()`
-/// `secondary`, each cut to the column. Nothing without a track.
+/// `secondary`, each cut to the column. All links (spec §3.8): the cover to where playback
+/// started (the album without a source), the title to the album, each artist to theirs.
+/// Nothing without a track.
 fn now_playing(
     ui: &mut Ui,
     p: &Palette,
     images: &mut TextureCache,
     tx: &UnboundedSender<Action>,
-    track: Option<&tidal::Track>,
+    model: &Model,
     rect: Rect,
+    events: &mut Vec<Event>,
 ) {
-    let Some(t) = track else { return };
+    let Some(t) = &model.playback.track else {
+        return;
+    };
     let size = Vec2::splat(theme::PLAYER_COVER);
     let art = Rect::from_min_size(pos2(rect.left(), rect.center().y - size.y / 2.0), size);
     cover(ui, images, tx, t.album.image().as_ref(), art, theme::R_ART);
-    let x = art.right() + theme::COL_GAP;
-    let width = rect.right() - x;
-    let title = widgets::line(ui, &t.title, theme::label(), p.text, width);
-    let artists = tracks::artists(t);
-    let artists = widgets::line(ui, &artists, theme::small(), p.secondary, width);
-    let gap = ui.spacing().item_spacing.y;
-    let mut y = rect.center().y - (title.size().y + gap + artists.size().y) / 2.0;
-    for galley in [title, artists] {
-        let at = Rect::from_min_size(pos2(x, y), galley.size());
-        y = at.bottom() + gap;
-        ui.put(at, Label::new(galley));
+    let album = tr("Go to album {title}").replace("{title}", &t.album.title);
+    let (name, tip, to) = match &model.queue.source {
+        Some(s) => {
+            let name = tr("Playing from {name}").replace("{name}", &s.name);
+            (name.clone(), name, s.route.clone())
+        }
+        None => {
+            let tip = tr("Go to album").into_owned();
+            (album.clone(), tip, Route::Album(t.album.id))
+        }
+    };
+    let r = link(ui, art, &name, theme::R_ART, to, events);
+    if r.hovered() {
+        let scrim = theme::SCRIM.gamma_multiply(0.3); // a card's, lighter
+        ui.painter().rect_filled(art, theme::R_ART, scrim);
     }
+    r.on_hover_text(tip);
+
+    let (x, right) = (art.right() + theme::COL_GAP, rect.right());
+    let title = widgets::line(ui, &t.title, theme::label(), p.text, right - x);
+    let line = ui.fonts_mut(|f| f.row_height(&theme::small()));
+    let gap = ui.spacing().item_spacing.y;
+    let top = rect.center().y - (title.size().y + gap + line) / 2.0;
+    let y = top + title.size().y + gap;
+    let to = Route::Album(t.album.id);
+    text_link(ui, title, pos2(x, top), p.text, &album, to, events);
+    // One galley per name, ", " between; the column's end cuts the last one shown with "…".
+    let mut left = x;
+    for (i, a) in t.artists.iter().enumerate() {
+        let small = |text: &str, left: f32| {
+            widgets::line(ui, text, theme::small(), p.secondary, right - left)
+        };
+        if i > 0 {
+            let sep = small(", ", left);
+            let (width, cut) = (sep.size().x, sep.elided);
+            ui.painter().galley(pos2(left, y), sep, p.secondary);
+            left += width;
+            if cut {
+                break;
+            }
+        }
+        let text = small(&a.name, left);
+        let (width, cut) = (text.size().x, text.elided);
+        // Cut to "…" alone, no part of the name shows: no link.
+        if cut && text.rows.iter().all(|r| r.glyphs.len() <= 1) {
+            ui.painter().galley(pos2(left, y), text, p.secondary);
+        } else {
+            let name = tr("Go to artist {name}").replace("{name}", &a.name);
+            let to = Route::Artist(a.id);
+            text_link(ui, text, pos2(left, y), p.secondary, &name, to, events);
+        }
+        left += width;
+        if cut {
+            break;
+        }
+    }
+}
+
+/// A link over `rect` (spec §3.8): `name` to screen readers, the hand, the focus ring with
+/// corners of `radius`; clicked, it opens `to`.
+fn link(
+    ui: &mut Ui,
+    rect: Rect,
+    name: &str,
+    radius: f32,
+    to: Route,
+    events: &mut Vec<Event>,
+) -> Response {
+    let r = ui.allocate_rect(rect, Sense::click());
+    r.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), name));
+    widgets::focus_ring(ui, &r, radius);
+    if r.clicked() {
+        events.push(Event::Navigate(to));
+    }
+    r.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// `text` in `color` at `at`, a `link`, underlined while hovered: 1 px of `color` along its
+/// foot. As a label's, its text is its node's value, and cut, it shows whole on hover.
+fn text_link(
+    ui: &mut Ui,
+    text: Arc<Galley>,
+    at: Pos2,
+    color: Color32,
+    name: &str,
+    to: Route,
+    events: &mut Vec<Event>,
+) {
+    let rect = Rect::from_min_size(at, text.size());
+    let r = link(ui, rect, name, theme::R_BADGE, to, events);
+    ui.ctx()
+        .accesskit_node_builder(r.id, |node| node.set_value(text.text()));
+    if r.hovered() {
+        let foot = rect.bottom() - 0.5;
+        ui.painter()
+            .hline(rect.x_range(), foot, Stroke::new(1.0, color));
+    }
+    if text.elided {
+        r.on_hover_text(text.text());
+    }
+    ui.painter().galley(at, text, color);
 }
 
 /// Shuffle, Previous, Play/Pause, Next and Repeat, centred over the seek row: the slider
@@ -389,6 +486,7 @@ fn badge_hover(o: &OutputInfo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Source;
     use crate::ui::testing;
 
     fn output(rate: u32, bits: u16, exclusive: bool, device_rate: u32) -> OutputInfo {
@@ -458,9 +556,20 @@ mod tests {
         time: f64,
         events: Vec<egui::Event>,
     ) -> egui::FullOutput {
+        pass(ctx, model, width, time, events).1
+    }
+
+    /// `bar_at`: the events it gave, and its output.
+    fn pass(
+        ctx: &egui::Context,
+        model: &Model,
+        width: f32,
+        time: f64,
+        events: Vec<egui::Event>,
+    ) -> (Vec<Event>, egui::FullOutput) {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let p = Palette::dark();
-        let (mut state, mut side) = (State::default(), None);
+        let (mut state, mut side, mut gave) = (State::default(), None, Vec::new());
         let mut images = TextureCache::new(1 << 20);
         let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 600.0));
         let input = egui::RawInput {
@@ -470,11 +579,13 @@ mod tests {
             ..Default::default()
         };
         let mut out = ctx.run_ui(input, |ui| {
-            let (images, side) = (&mut images, &mut side);
-            show(ui, model, &tx, None, &mut state, images, side, &p, p.panel);
+            let (images, side, gave) = (&mut images, &mut side, &mut gave);
+            show(
+                ui, model, &tx, None, &mut state, images, side, &p, p.panel, gave,
+            );
         });
         out.textures_delta.clear(); // nothing renders them
-        out
+        (gave, out)
     }
 
     /// The text shapes in `out` reading `text`.
@@ -731,6 +842,135 @@ mod tests {
             _ => false,
         });
         assert!(!placeholder);
+    }
+
+    /// The label of the node with the keyboard focus in `out`.
+    fn focused(out: &egui::FullOutput) -> Option<String> {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let tree = tree.expect("AccessKit is on");
+        let node = tree.nodes.iter().find(|(id, _)| *id == tree.focus)?;
+        node.1.label().map(str::to_owned)
+    }
+
+    /// Spec §3.8: the cover opens where playback started (the album without a source), the
+    /// title the album, each artist theirs. Hovered, a link shows the hand and an underline,
+    /// the cover a light scrim; Tab reaches them before the transport.
+    #[test]
+    fn the_now_playing_column_links_out() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let p = Palette::dark();
+        theme::apply(&ctx, &p);
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        let from = Route::Playlist("p-1".into());
+        let source = Source {
+            route: from.clone(),
+            name: "Playlist".into(),
+        };
+        model.queue.source = Some(source.clone());
+        let tab = || vec![testing::key(egui::Key::Tab)];
+        let order: Vec<_> = (0..4)
+            .map(|_| focused(&bar_at(&ctx, &model, 1000.0, 0.0, tab())))
+            .collect();
+        let want = [
+            "Playing from Playlist",
+            "Go to album Album 1",
+            "Go to artist Artist 1",
+            "Shuffle",
+        ];
+        assert_eq!(order, want.map(|l| Some(l.to_owned())));
+
+        // Where the `n`th node labelled `label` leads, clicked by a screen reader.
+        let opens = |model: &Model, label: &str, n: usize| {
+            let out = bar(&ctx, model, 1000.0);
+            let click = testing::clicks(&out, label).nth(n);
+            let click = click.unwrap_or_else(|| panic!("no {label:?} #{n}"));
+            match &pass(&ctx, model, 1000.0, 0.0, vec![click]).0[..] {
+                [Event::Navigate(to)] => to.clone(),
+                gave => panic!("{label} #{n}: {gave:?}"),
+            }
+        };
+        assert_eq!(opens(&model, "Playing from Playlist", 0), from);
+        assert_eq!(opens(&model, "Go to album Album 1", 0), Route::Album(1));
+        assert_eq!(opens(&model, "Go to artist Artist 1", 0), Route::Artist(1));
+        model.queue.source = None;
+        let out = bar(&ctx, &model, 1000.0);
+        let albums = testing::clicks(&out, "Go to album Album 1").count();
+        assert_eq!(albums, 2, "the cover and the title");
+        for n in 0..2 {
+            assert_eq!(opens(&model, "Go to album Album 1", n), Route::Album(1));
+        }
+
+        // The underline: 1 px `text` along the foot of `title`.
+        let underlined = |out: &egui::FullOutput, title: Rect| {
+            out.shapes.iter().any(|s| match &s.shape {
+                egui::Shape::LineSegment {
+                    points: [a, b],
+                    stroke,
+                } => {
+                    stroke.color == p.text
+                        && stroke.width == 1.0
+                        && (a.y - title.bottom()).abs() <= 1.0
+                        && a.x.min(b.x) <= title.left() + 0.5
+                        && a.x.max(b.x) >= title.right() - 0.5
+                }
+                _ => false,
+            })
+        };
+        let scrim = theme::SCRIM.gamma_multiply(0.3);
+        let scrimmed = |out: &egui::FullOutput| {
+            (out.shapes.iter()).any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == scrim))
+        };
+        model.queue.source = Some(source);
+        let out = bar(&ctx, &model, 1000.0);
+        let title = testing::bounds(&out, "Go to album Album 1");
+        assert!(!underlined(&out, title) && !scrimmed(&out), "at rest");
+        let out = hover(&ctx, &model, title.center(), 0.0);
+        assert_eq!(out.platform_output.cursor_icon, CursorIcon::PointingHand);
+        assert!(underlined(&out, title), "no underline under {title:?}");
+        let art = testing::bounds(&out, "Playing from Playlist");
+        let out = hover(&ctx, &model, art.center(), 0.4);
+        assert_eq!(out.platform_output.cursor_icon, CursorIcon::PointingHand);
+        assert!(
+            scrimmed(&out) && !underlined(&out, title),
+            "the cover hovered"
+        );
+    }
+
+    /// The column's end cuts the artists with "…": a name partly shown is still a link, one
+    /// past the cut is not shown, and nothing reaches into the centre column. At 800 px the
+    /// column fits "…" alone of the first name: no link.
+    #[test]
+    fn artists_are_cut_at_the_column() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let long = "W".repeat(100);
+        let wide = tidal::Artist {
+            name: long.clone(),
+            ..testing::artist(2)
+        };
+        let mut model = Model::default();
+        model.playback.track = Some(tidal::Track {
+            artists: vec![testing::artist(1), wide, testing::artist(3)],
+            ..testing::track(1)
+        });
+        let out = bar(&ctx, &model, 1280.0);
+        let shown = testing::shown(&out);
+        let link = |name: &str| shown.contains(&format!("Go to artist {name}"));
+        assert!(link("Artist 1") && link(&long), "{shown:?}");
+        assert!(!link("Artist 3") && painted(&out, "Artist 3").is_empty());
+        let (start, _) = centre(&out, 1280.0);
+        let cut = testing::bounds(&out, &format!("Go to artist {long}"));
+        assert!(cut.right() <= start, "{cut:?} past {start}");
+        let out = bar(&ctx, &model, 800.0);
+        let first = painted(&out, "Artist 1");
+        assert!(matches!(first[..], [t] if t.galley.elided), "cut");
+        let shown = testing::shown(&out);
+        assert!(
+            !shown.iter().any(|s| s.starts_with("Go to artist")),
+            "{shown:?}"
+        );
     }
 
     #[test]

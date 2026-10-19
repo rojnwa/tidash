@@ -101,10 +101,6 @@ pub struct QueueSnapshot {
     pub current: Option<usize>,
     pub shuffle: bool,
     pub repeat: Repeat,
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the player bar's cover is to read it (spec §3.8)")
-    )]
     pub source: Option<Source>,
 }
 
