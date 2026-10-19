@@ -276,6 +276,9 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
   glutin, glutin_egl_sys and ring ask for 0.52, rustix 0.38 for 0.59), and `dpi` twice (the winit
   fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`).
 - egui, eframe and egui_extras 0.37 are out; Tidash stays on 0.36 until fastframe's egui fork moves.
+- The `winit` patch points at rojnwa/winit `0149e5d` (crmne's `ed7caa9` plus the window-minimum fix
+  for programmatic resizes). Repoint it at crmne's rev once https://github.com/crmne/winit/pull/4
+  merges, and drop the fork. Upstream: https://github.com/rust-windowing/winit/pull/4781.
 - `block` v0.1.6 draws a future-incompatibility warning from rustc: souvlaki 0.8.3
   (fastframe-now-playing's macOS backend) depends on it directly and through `cocoa` 0.24; upstream's
   to replace.
