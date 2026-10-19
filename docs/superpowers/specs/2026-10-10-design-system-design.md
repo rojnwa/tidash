@@ -188,7 +188,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Hover colour on rows, nav rows, icons | 150 ms (`ctx.animate_bool_with_time`) |
 | Card cover overlay | 300 ms fade |
 | Slider hover (player bar) | 120 ms (`theme::SLIDER_HOVER`) |
-| Page fade-in | 150 ms |
+| Page fade-in | 150 ms (`theme::PAGE_FADE`) |
 | Discs and icon buttons | hover scale 1.1, press 0.9 |
 | egui `animation_time` | 0.15 s (also the sidebar's slide) |
 | Theme change | fastframe `Reveal::Band`, 0.42 s |

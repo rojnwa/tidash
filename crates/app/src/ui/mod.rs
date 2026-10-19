@@ -167,8 +167,8 @@ impl Ctx<'_> {
 /// A route's one vertical scroll; each route keeps its own offset, and the ids inside (a
 /// shelf's sideways offset, say) are the route's own: egui does not salt them by the scroll's.
 /// Right under the top bar, with nothing between (`draw`), its header paints up behind the bar
-/// (`behind_bar`); nothing else on it goes there (ruling 31). It fades in (`fade_in`) and ends
-/// `MODULE_GAP` below its content, clear of the player bar.
+/// (`behind_bar`); nothing else on it goes there (ruling 31). It ends `MODULE_GAP` below its
+/// content, clear of the player bar.
 pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let bar = ui.data(|d| d.get_temp::<Option<egui::Rect>>(bar_id()).flatten());
     let bar = bar.filter(|b| ui.cursor().top() <= b.bottom());
@@ -179,7 +179,6 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
         .id_salt(("page", route))
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            fade_in(ui, route);
             if let Some(step) = step {
                 let animation = egui::style::ScrollAnimation::none();
                 ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
@@ -201,19 +200,19 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
     out.inner
 }
 
-/// Fades `ui` in over `PAGE_FADE` (spec §3.11) when `route` was not drawn the pass before: a
-/// new route, or its data just in after the spinner (`page_data`). The first page a context
-/// draws shows at once, so launch does not fade. Painting only: input works throughout.
-fn fade_in(ui: &mut egui::Ui, route: &Route) {
-    let id = egui::Id::new("page fade");
-    let (pass, now) = (ui.ctx().cumulative_pass_nr(), ui.input(|i| i.time));
-    let last = ui.data(|d| d.get_temp::<(Route, u64, f64)>(id));
+/// Fades `ui` in over `PAGE_FADE` (spec §3.11) from the pass `route`, or whether its data is
+/// in (`loaded`), changes: a route change (Back and Forward too), or the data arriving after
+/// the spinner. The first route a context draws shows at once, so launch does not fade.
+/// Painting only: input works throughout.
+fn fade_in(ui: &mut egui::Ui, route: &Route, loaded: bool) {
+    let now = ui.input(|i| i.time);
+    let last = ui.data(|d| d.get_temp::<(Route, bool, f64)>(page_fade_id()));
     let start = match last {
-        Some((r, at, start)) if r == *route && pass <= at + 1 => start,
+        Some((r, l, start)) if r == *route && l == loaded => start,
         Some(_) => now,
         None => now - f64::from(theme::PAGE_FADE),
     };
-    ui.data_mut(|d| d.insert_temp(id, (route.clone(), pass, start)));
+    ui.data_mut(|d| d.insert_temp(page_fade_id(), (route.clone(), loaded, start)));
     let opacity = ((now - start) as f32 / theme::PAGE_FADE).clamp(0.0, 1.0);
     if opacity < 1.0 {
         ui.ctx().request_repaint();
@@ -236,6 +235,11 @@ fn autoscroll_id() -> egui::Id {
 /// it only when it starts right under it, for its header (`behind_bar`).
 fn bar_id() -> egui::Id {
     egui::Id::new("top bar")
+}
+
+/// Where `fade_in` keeps the route last drawn, whether its data was in, and its fade's start.
+fn page_fade_id() -> egui::Id {
+    egui::Id::new("page fade")
 }
 
 /// For what a page's header paints from the page's top (spec §5.4: the backdrop, the artist
@@ -606,6 +610,11 @@ pub fn draw(
             ui.add_space(theme::PAGE_PAD);
         }
         ui.data_mut(|d| d.insert_temp(bar_id(), bar));
+        // The route's content fades in, its title, spinner or failure too; all above stays put.
+        // Login, Search and Settings have no page data to wait for.
+        let loaded = matches!(route, Route::Login | Route::Search | Route::Settings)
+            || model.pages.get(route).is_some_and(|s| s.data.is_some());
+        fade_in(ui, route, loaded);
         match route {
             Route::Login => login::show(ui, &mut ctx, &mut state.login),
             Route::Search => search::show(ui, &mut ctx),
@@ -1044,11 +1053,12 @@ mod tests {
         assert!(check.bottom() + theme::MODULE_GAP <= bar + 1.0, "{check:?}");
     }
 
-    /// How opaque `out` paints the text `text`, from its first glyph's colour: 0 if it paints
-    /// none (egui drops a shape at opacity 0).
+    /// How opaque `out` paints the text `text` right of the sidebar (which lists Home and the
+    /// Collection tabs too), from its first glyph's colour: 0 if it paints none there (egui
+    /// drops a shape at opacity 0).
     fn opacity(out: &egui::FullOutput, text: &str) -> f32 {
         let painted = out.shapes.iter().find_map(|s| match &s.shape {
-            egui::Shape::Text(t) if t.galley.text() == text => {
+            egui::Shape::Text(t) if t.galley.text() == text && t.pos.x >= theme::SIDEBAR => {
                 let rows = t.galley.rows.iter();
                 let v = rows.flat_map(|r| &r.row.visuals.mesh.vertices).next()?;
                 let c = if v.color == egui::Color32::PLACEHOLDER {
@@ -1063,11 +1073,14 @@ mod tests {
         painted.unwrap_or(0.0)
     }
 
-    /// Spec §3.11: a page fades in over `PAGE_FADE` after a route change and when its data
-    /// comes in after the spinner, then rests; the first page a context draws shows at once.
-    /// Input works mid-fade: the first pass, unseen, already takes the pointer.
+    /// Spec §3.11: the route's content fades in over `PAGE_FADE` from the very pass the route
+    /// changes between loaded pages, on Back, on a Collection tab switch (its title is drawn
+    /// outside `page`), and when the data comes in after the spinner; then it rests at 1 with
+    /// no repaints. The first page a context draws shows at once. Input works mid-fade: the
+    /// first pass, unseen, already takes the pointer.
     #[test]
     fn pages_fade_in() {
+        use crate::model::CollectionTab;
         let ctx = testing::context();
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1075,30 +1088,43 @@ mod tests {
         let mut pass = |model: &Model, time: f64, events: Vec<egui::Event>| {
             frame(&ctx, &tx, &mut state, model, Some(time), events)
         };
-        let route = Route::Album(1);
+        let (route, title) = (Route::Album(1), "Album 1");
         let data = || PageData::Album {
             album: testing::album(1),
             tracks: testing::tracks(3),
         };
         let mut model = testing::at(Route::Home);
+        let home = tidal::Page {
+            title: String::new(),
+            shelves: vec![],
+        };
+        model.apply(Event::Page {
+            route: Route::Home,
+            data: PageData::Shelves(home),
+        });
+        let out = pass(&model, 0.0, vec![]);
+        assert_eq!(opacity(&out, "Home"), 1.0, "the first page shows at once");
         model.navigate(route.clone());
         model.apply(Event::Page {
             route: route.clone(),
             data: data(),
         });
-        let title = "Album 1";
-        let out = pass(&model, 0.0, vec![]);
-        assert_eq!(opacity(&out, title), 1.0, "the first page shows at once");
-        model.apply(Event::Back);
-        pass(&model, 0.5, vec![]); // Home
-        model.apply(Event::Forward);
-        assert!(opacity(&pass(&model, 1.0, vec![]), title) < 1.0, "back");
-        let mid = opacity(&pass(&model, 1.075, vec![]), title);
+        assert_eq!(opacity(&pass(&model, 0.1, vec![]), title), 0.0, "next pass");
+        let mid = opacity(&pass(&model, 0.175, vec![]), title);
         assert!(0.0 < mid && mid < 1.0, "{mid}");
-        assert_eq!(opacity(&pass(&model, 1.2, vec![]), title), 1.0, "faded in");
-        let out = pass(&model, 1.3, vec![]);
+        assert_eq!(opacity(&pass(&model, 0.3, vec![]), title), 1.0, "faded in");
+        let out = pass(&model, 0.4, vec![]);
+        assert_eq!(opacity(&out, title), 1.0, "settled");
         let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
         assert_eq!(repaint, Duration::MAX, "repaints at rest");
+        model.apply(Event::Back);
+        assert_eq!(opacity(&pass(&model, 0.5, vec![]), "Home"), 0.0, "Back");
+        model.navigate(Route::Collection(CollectionTab::Tracks));
+        pass(&model, 1.0, vec![]);
+        model.navigate(Route::Collection(CollectionTab::Albums));
+        assert_eq!(opacity(&pass(&model, 1.5, vec![]), "Albums"), 0.0, "tab");
+        let mid = opacity(&pass(&model, 1.575, vec![]), "Albums");
+        assert!(0.0 < mid && mid < 1.0, "the tab's title: {mid}");
         // Loading, then the data.
         let mut model = testing::at(route.clone());
         model.apply(Event::Loading(route.clone()));
@@ -1108,7 +1134,7 @@ mod tests {
             data: data(),
         });
         let out = pass(&model, 2.5, vec![]);
-        assert!(opacity(&out, title) < 1.0, "the data in");
+        assert_eq!(opacity(&out, title), 0.0, "the data in");
         // The album's Play pill (the player bar's is disabled), placed by that unseen pass.
         let tree = out.platform_output.accesskit_update.as_ref();
         let nodes = &tree.expect("AccessKit is on").nodes;
