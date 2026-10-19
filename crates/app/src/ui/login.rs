@@ -48,7 +48,7 @@ fn form(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
             .desired_width(f32::INFINITY);
         text_field(ui, &p, paste);
         let ready = !state.pasted.trim().is_empty();
-        let next = ui.add_enabled_ui(ready, |ui| pill_button(ui, &p, None, &tr("Continue"), true));
+        let next = ui.add_enabled_ui(ready, |ui| pill_button(ui, &p, None, &tr("Continue"), false));
         if next.inner.clicked() {
             let pasted = Redirect(std::mem::take(&mut state.pasted));
             ctx.send(Action::FinishLogin(pasted));

@@ -189,10 +189,11 @@ fn field(text: &mut String) -> egui::TextEdit<'_> {
 }
 
 /// A combo box showing `selected`, its choices drawn by `list`, named `label` for screen
-/// readers: egui would only link it to the label beside it.
+/// readers: egui would only link it to the label beside it. It is a `PILL` tall only inside
+/// a `row`, which sets that height; elsewhere it would be the theme's `interact_size` (32).
 fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
     let combo = egui::ComboBox::from_id_salt(label).selected_text(selected);
-    let shown = combo.show_ui(ui, list); // a `PILL` tall in a `row`
+    let shown = combo.show_ui(ui, list);
     shown.response.widget_info(|| {
         let mut info = WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label);
         info.current_text_value = Some(selected.to_owned());
