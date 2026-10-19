@@ -9,10 +9,13 @@ use crate::model::{Action, PlaylistEdit, Route};
 use crate::theme::{
     self, COL_GAP, COVER_COL, GLYPH, INDEX_COL, Icon, Palette, ROW_COVER, TIME_COL, Tier,
 };
+use egui::text::CCursor;
 use egui::{
-    Align, Color32, DragAndDrop, FontId, PointerButton, Rangef, Rect, Sense, Ui, Vec2, WidgetInfo,
-    WidgetType, pos2, vec2,
+    Align, Color32, DragAndDrop, FontId, Galley, PointerButton, Pos2, Rangef, Rect, Sense, Stroke,
+    Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
+use std::ops::Range;
+use std::sync::Arc;
 
 pub const ROW_H: f32 = theme::ROW;
 
@@ -222,10 +225,19 @@ fn columns(rect: Rect, cover: bool, album: bool) -> [Rangef; 5] {
 }
 
 /// `text` on one line in `font` and `ink`, vertically centred on `mid`, inside `x`: cut with
-/// "…" to fit, and clipped to it. `align` places it at `x`'s start, centre or end.
-fn cell(ui: &Ui, x: Rangef, mid: f32, text: &str, font: FontId, ink: Color32, align: Align) {
+/// "…" to fit, and clipped to it. `align` places it at `x`'s start, centre or end. Where it
+/// went and its layout, if it was drawn.
+fn cell(
+    ui: &Ui,
+    x: Rangef,
+    mid: f32,
+    text: &str,
+    font: FontId,
+    ink: Color32,
+    align: Align,
+) -> Option<(Pos2, Arc<Galley>)> {
     if text.is_empty() || x.span() <= 0.0 {
-        return;
+        return None;
     }
     let galley = line(ui, text, font, ink, x.span());
     let size = galley.size();
@@ -234,9 +246,48 @@ fn cell(ui: &Ui, x: Rangef, mid: f32, text: &str, font: FontId, ink: Color32, al
         Align::Center => x.center() - size.x / 2.0,
         Align::Max => x.max - size.x,
     };
+    let at = pos2(left, mid - size.y / 2.0);
     let clip = Rect::from_x_y_ranges(x, ui.clip_rect().y_range());
-    ui.painter_at(clip)
-        .galley(pos2(left, mid - size.y / 2.0), galley, ink);
+    ui.painter_at(clip).galley(at, galley.clone(), ink);
+    Some((at, galley))
+}
+
+/// `names` (each a char range of the text `galley` lays out at `at`, and where it leads) as
+/// pointer links through `row` (spec §3.8): underlined in `ink` under the pointer (the row
+/// shows the hand), opened by a primary click. No Tab stops: the row's Enter and its menu's
+/// Go to album / Go to artist serve the keyboard. A name the "…" cuts ends at it; one wholly
+/// past the cut is no link.
+fn links(
+    ui: &Ui,
+    ctx: &mut Ctx,
+    row: &egui::Response,
+    (at, galley): (Pos2, Arc<Galley>),
+    names: impl IntoIterator<Item = (Range<usize>, Route)>,
+    ink: Color32,
+) {
+    let Some(pointer) = row.hover_pos().filter(|_| !row.dragged()) else {
+        return;
+    };
+    let end = galley.end().index.0; // past the "…" when cut
+    let shown = end.saturating_sub(usize::from(galley.elided));
+    let x = |i| at.x + galley.pos_from_cursor(CCursor::new(i)).min.x;
+    let y = Rangef::new(at.y, at.y + galley.size().y);
+    for (chars, to) in names {
+        if chars.start >= shown {
+            return;
+        }
+        let last = if chars.end <= shown { chars.end } else { end };
+        let rect = Rect::from_x_y_ranges(x(chars.start)..=x(last), y);
+        if rect.contains(pointer) {
+            let foot = rect.bottom() - 0.5;
+            ui.painter()
+                .hline(rect.x_range(), foot, Stroke::new(1.0, ink));
+            if row.clicked_by(PointerButton::Primary) {
+                ctx.go(to);
+            }
+            return;
+        }
+    }
 }
 
 /// The column header (spec §5.5), `ROW_HEADER` tall: "#", "Title" (over the cover too),
@@ -318,9 +369,18 @@ pub fn paint_row(
     }
     let ink = current.unwrap_or(p.text);
     put(title, &t.title, theme::body_strong(), ink, Align::Min);
-    put(artist, &artists(t), theme::body(), p.text, Align::Min);
-    if album {
-        put(album_x, &t.album.title, theme::body(), p.text, Align::Min);
+    if let Some(laid) = put(artist, &artists(t), theme::body(), p.text, Align::Min) {
+        let mut from = 0;
+        let names = t.artists.iter().map(|a| {
+            let chars = from..from + a.name.chars().count();
+            from = chars.end + ", ".len(); // as `names` joins them
+            (chars, Route::Artist(a.id))
+        });
+        links(ui, ctx, row, laid, names, p.text);
+    }
+    if album && let Some(laid) = put(album_x, &t.album.title, theme::body(), p.text, Align::Min) {
+        let name = (0..t.album.title.chars().count(), Route::Album(t.album.id));
+        links(ui, ctx, row, laid, [name], p.text);
     }
     let length = duration(t.duration);
     put(time, &length, theme::body(), p.secondary, Align::Max);
@@ -428,7 +488,9 @@ mod tests {
     use crate::model::{Action, Event, Model, Route};
     use crate::ui::testing::{self, click, middle};
     use crate::ui::{library, page};
-    use egui::{Key, Pos2};
+    use egui::text::CCursor;
+    use egui::{Key, Pos2, vec2};
+    use std::sync::Arc;
     use tokio::sync::mpsc::UnboundedSender;
 
     fn track() -> tidal::Track {
@@ -458,12 +520,234 @@ mod tests {
         list: &[tidal::Track],
         input: Vec<egui::Event>,
     ) -> (Vec<Event>, egui::FullOutput) {
-        testing::pass_with(ctx, tx, model, input, |ui, c| {
+        pass_at(ctx, tx, model, list, 800.0, input)
+    }
+
+    /// As `pass`, in a window `width` wide.
+    fn pass_at(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        list: &[tidal::Track],
+        width: f32,
+        input: Vec<egui::Event>,
+    ) -> (Vec<Event>, egui::FullOutput) {
+        let input = egui::RawInput {
+            events: input,
+            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(width, 600.0))),
+            ..Default::default()
+        };
+        testing::pass_raw(ctx, tx, model, input, |ui, c| {
             page(ui, &Route::Search, |ui| {
                 super::show(ui, c, "t", list, false, None)
             });
             library::dialog(ui.ctx(), c);
         })
+    }
+
+    /// A primary button press at `at` if `pressed`, else its release.
+    fn primary(at: Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        }
+    }
+
+    /// The pointer moves to `at` and clicks there, a pass each, in a window `width` wide: the
+    /// events those passes gave.
+    fn click_at(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        list: &[tidal::Track],
+        width: f32,
+        at: Pos2,
+    ) -> Vec<Event> {
+        let steps = [
+            vec![egui::Event::PointerMoved(at)],
+            vec![primary(at, true)],
+            vec![primary(at, false)],
+        ];
+        let pass = |input| pass_at(ctx, tx, model, list, width, input).0;
+        steps.into_iter().flat_map(pass).collect()
+    }
+
+    /// The painted text `text` in `out`: where it is drawn, and its layout.
+    fn painted(out: &egui::FullOutput, text: &str) -> (Pos2, Arc<egui::Galley>) {
+        let shape = out.shapes.iter().find_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.text() == text => Some((t.pos, t.galley.clone())),
+            _ => None,
+        });
+        shape.unwrap_or_else(|| panic!("no {text:?} painted"))
+    }
+
+    /// The middle of char `n` of the painted `text` in `out` (the "…" past what shows of a
+    /// cut one), where a pointer would click it.
+    fn char_at(out: &egui::FullOutput, text: &str, n: usize) -> Pos2 {
+        let (at, galley) = painted(out, text);
+        let x = |i: usize| galley.pos_from_cursor(CCursor::new(i)).min.x;
+        at + vec2((x(n) + x(n + 1)) / 2.0, galley.size().y / 2.0)
+    }
+
+    /// Track 1 by `artists`, on "Album 1".
+    fn by(artists: &[u64]) -> tidal::Track {
+        tidal::Track {
+            artists: artists.iter().map(|&id| testing::artist(id)).collect(),
+            ..testing::track(1)
+        }
+    }
+
+    /// Spec §3.8: a primary click on an artist or the album in a row opens it; on the title
+    /// it does not, and a double click there still plays. Hovered, a name is underlined (1 px
+    /// `text` along its foot, under it alone) under the row's hand.
+    #[test]
+    fn names_in_a_row_navigate() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let (model, list) = (Model::default(), vec![by(&[1, 2])]);
+        let names = "Artist 1, Artist 2";
+        let out = pass(&testing::context(), &tx, &model, &list, vec![]).1;
+        // A context each: no click left over to make the next a double one.
+        let click = |at| click_at(&testing::context(), &tx, &model, &list, 800.0, at);
+        let events = click(char_at(&out, names, 10));
+        assert!(
+            matches!(events[..], [Event::Navigate(Route::Artist(2))]),
+            "{events:?}"
+        );
+        let events = click(char_at(&out, "Album 1", 3));
+        assert!(
+            matches!(events[..], [Event::Navigate(Route::Album(1))]),
+            "{events:?}"
+        );
+        let title = char_at(&out, "Track 1", 2);
+        let ctx = testing::context();
+        let events = click_at(&ctx, &tx, &model, &list, 800.0, title);
+        assert!(events.is_empty(), "{events:?}");
+        assert!(rx.try_recv().is_err(), "one click plays nothing");
+        let again = [vec![primary(title, true)], vec![primary(title, false)]];
+        for input in again {
+            pass(&ctx, &tx, &model, &list, input);
+        }
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Action::PlayTracks { start: 0, .. })
+        ));
+
+        let p = crate::theme::Palette::dark();
+        let (at, galley) = painted(&out, names);
+        let x = |i: usize| at.x + galley.pos_from_cursor(CCursor::new(i)).min.x;
+        let foot = at.y + galley.size().y - 0.5;
+        let underlines = |out: &egui::FullOutput| -> Vec<egui::Rangef> {
+            let line = |s: &egui::epaint::ClippedShape| match s.shape {
+                egui::Shape::LineSegment {
+                    points: [a, b],
+                    stroke,
+                } if stroke == egui::Stroke::new(1.0, p.text) && a.y == foot && b.y == foot => {
+                    Some(egui::Rangef::new(a.x.min(b.x), a.x.max(b.x)))
+                }
+                _ => None,
+            };
+            out.shapes.iter().filter_map(line).collect()
+        };
+        assert!(underlines(&out).is_empty(), "at rest");
+        let ctx = testing::context();
+        pass(&ctx, &tx, &model, &list, vec![]); // the rows the pointer finds next pass
+        let moved = vec![egui::Event::PointerMoved(char_at(&out, names, 3))];
+        let out = pass(&ctx, &tx, &model, &list, moved).1;
+        assert_eq!(
+            out.platform_output.cursor_icon,
+            egui::CursorIcon::PointingHand
+        );
+        assert_eq!(
+            underlines(&out),
+            [egui::Rangef::new(x(0), x(8))],
+            "Artist 1"
+        );
+    }
+
+    /// Spec §3.8: a name is the row's: right-clicked, the row's menu opens; in an editable
+    /// playlist, a primary drag from it drags the row, opening nothing.
+    #[test]
+    fn links_leave_the_row_its_menu_and_drag() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (model, list) = (Model::default(), vec![by(&[1, 2])]);
+        let rows = super::PlaylistRows {
+            uuid: "p-1",
+            etag: "e",
+            positions: &[0],
+        };
+        let pass = |ctx: &egui::Context, input| {
+            testing::pass_with(ctx, &tx, &model, input, |ui, c| {
+                page(ui, &Route::Search, |ui| {
+                    super::show(ui, c, "t", &list, false, Some(&rows))
+                });
+            })
+        };
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let out = pass(&ctx, vec![]).1;
+        let at = char_at(&out, "Artist 1, Artist 2", 3);
+        let mut events = Vec::new();
+        for input in [
+            vec![egui::Event::PointerMoved(at), testing::right(at, true)],
+            vec![testing::right(at, false)],
+            vec![],
+        ] {
+            events.extend(pass(&ctx, input).0);
+        }
+        let out = pass(&ctx, vec![]).1;
+        assert!(
+            testing::shown(&out).contains(&"Play next".into()),
+            "no menu"
+        );
+        let ctx = testing::context();
+        for input in [
+            vec![egui::Event::PointerMoved(at)],
+            vec![primary(at, true)],
+            vec![egui::Event::PointerMoved(at + vec2(0.0, 10.0))],
+        ] {
+            events.extend(pass(&ctx, input).0);
+        }
+        let drag = egui::DragAndDrop::payload::<super::PlaylistDrag>(&ctx);
+        assert!(matches!(drag.as_deref(), Some(d) if d.from == 0 && d.etag == "e"));
+        assert!(events.is_empty(), "nothing opened: {events:?}");
+    }
+
+    /// Spec §3.8: in a window `NARROW` wide the artist column cuts "Artist 1, Artist 2,
+    /// Artist 3" to "Artist 1, Art…": the "…" still opens artist 2, and no point of the
+    /// column opens artist 3, which does not show.
+    #[test]
+    fn a_cut_name_links_only_what_shows() {
+        const NARROW: f32 = 610.0;
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (model, list) = (Model::default(), vec![by(&[1, 2, 3])]);
+        let names = "Artist 1, Artist 2, Artist 3";
+        let out = pass_at(&ctx, &tx, &model, &list, NARROW, vec![]).1;
+        let (at, galley) = painted(&out, names);
+        let shown: String = galley.rows[0].glyphs.iter().map(|g| g.chr).collect();
+        assert_eq!(shown, "Artist 1, Art…");
+        let click = |at| click_at(&ctx, &tx, &model, &list, NARROW, at);
+        let events = click(char_at(&out, names, 13));
+        assert!(
+            matches!(events[..], [Event::Navigate(Route::Artist(2))]),
+            "the …: {events:?}"
+        );
+        // Every 2 px from the column's start to the album's.
+        let (album, _) = painted(&out, "Album 1");
+        let y = at.y + galley.size().y / 2.0;
+        let mut opened = Vec::new();
+        let mut x = at.x;
+        while x < album.x {
+            opened.extend(click(Pos2::new(x, y)));
+            x += 2.0;
+        }
+        let to = |id| {
+            let artist = |e: &Event| matches!(e, Event::Navigate(Route::Artist(a)) if *a == id);
+            opened.iter().any(artist)
+        };
+        assert!(to(1) && to(2) && !to(3), "{opened:?}");
     }
 
     /// Tab to the first row and press Enter: it plays, as a double click would.
