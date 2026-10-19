@@ -107,6 +107,9 @@ fn now_playing(
     rect: Rect,
     events: &mut Vec<Event>,
 ) {
+    // One child, whatever plays: the bar's own ids (the transport's, ...) never shift with
+    // how many links this column makes, so their focus survives a track change.
+    let ui = &mut child(ui, rect, Layout::default());
     let Some(t) = &model.playback.track else {
         return;
     };
@@ -175,13 +178,13 @@ fn now_playing(
             break;
         }
     }
-    // Over the names, as a label: screen readers read the whole list, names past the cut too,
-    // and cut, the line shows it on hover, over the links as well. No Tab stop.
-    let all = tracks::artists(t);
-    let row = Rect::from_min_max(pos2(x, y), pos2(left, y + line));
-    let row = ui.allocate_rect(row, Sense::hover());
-    row.widget_info(|| WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &all));
+    // Cut, a label over the names: screen readers read the whole list, names past the cut too,
+    // and the line shows it on hover, over the links as well. No Tab stop.
     if cut {
+        let all = tracks::artists(t);
+        let row = Rect::from_min_max(pos2(x, y), pos2(left, y + line));
+        let row = ui.allocate_rect(row, Sense::hover());
+        row.widget_info(|| WidgetInfo::labeled(WidgetType::Label, ui.is_enabled(), &all));
         row.on_hover_text(all);
     }
 }
@@ -939,6 +942,9 @@ mod tests {
         let out = bar(&ctx, &model, 1000.0);
         let title = testing::bounds(&out, "Go to album Album 1");
         assert!(!underlined(&out, title) && !scrimmed(&out), "at rest");
+        // Nothing cut, the links name every artist: no whole-list node says them again.
+        let shown = testing::shown(&out);
+        assert!(!shown.contains(&"Artist 1".to_owned()), "{shown:?}");
         let out = hover(&ctx, &model, title.center(), 0.0);
         assert_eq!(out.platform_output.cursor_icon, CursorIcon::PointingHand);
         assert!(underlined(&out, title), "no underline under {title:?}");
@@ -948,6 +954,24 @@ mod tests {
         assert!(
             scrimmed(&out) && !underlined(&out, title),
             "the cover hovered"
+        );
+        // Resting there, its tooltip; without a source, "Go to album".
+        let rest = |model: &Model, from: f64| {
+            let moved = vec![egui::Event::PointerMoved(art.center())];
+            bar_at(&ctx, model, 1000.0, from, moved);
+            bar_at(&ctx, model, 1000.0, from + 1.0, vec![]);
+            bar_at(&ctx, model, 1000.0, from + 2.0, vec![])
+        };
+        let out = rest(&model, 1.0);
+        assert!(
+            !painted(&out, "Playing from Playlist").is_empty(),
+            "no tooltip"
+        );
+        model.queue.source = None;
+        let out = rest(&model, 4.0);
+        assert!(
+            !painted(&out, "Go to album").is_empty(),
+            "no fallback tooltip"
         );
     }
 
@@ -994,6 +1018,35 @@ mod tests {
         bar_at(&ctx, &model, 1280.0, 2.0, vec![]); // still now: the tooltip's next pass
         let out = bar_at(&ctx, &model, 1280.0, 3.0, vec![]);
         assert!(!painted(&out, &all).is_empty(), "no whole list on hover");
+    }
+
+    /// The keyboard focus stays on the transport when the track changes, however many artists
+    /// the left column links (none, too): its ids don't move with them.
+    #[test]
+    fn focus_stays_put_across_tracks() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        let tab = || vec![testing::key(egui::Key::Tab)];
+        let next = || focused(&bar_at(&ctx, &model, 1000.0, 0.0, tab())).as_deref() == Some("Next");
+        assert!((0..20).any(|_| next()), "Tab never reached Next");
+        let three = tidal::Track {
+            artists: vec![testing::artist(1), testing::artist(2), testing::artist(3)],
+            ..testing::track(2)
+        };
+        let none = tidal::Track {
+            artists: vec![],
+            ..testing::track(3)
+        };
+        for track in [three, none] {
+            let artists = track.artists.len();
+            model.playback.track = Some(track);
+            for _ in 0..2 {
+                let at = focused(&bar(&ctx, &model, 1000.0));
+                assert_eq!(at.as_deref(), Some("Next"), "{artists} artists");
+            }
+        }
     }
 
     #[test]
