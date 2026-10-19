@@ -46,7 +46,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 let t = &q.tracks[i];
                 let size = vec2(ui.available_width(), ROW_H);
                 let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
-                let row = row.on_hover_cursor(egui::CursorIcon::PointingHand);
+                let row = tracks::hand(row);
                 let num = (i + 1).to_string();
                 // By index: a track queued twice plays at one of them.
                 let current = (q.current == Some(i)).then_some(tier);
@@ -144,7 +144,7 @@ mod tests {
     use super::*;
     use crate::model::Route;
     use crate::ui::{Side, UiState, draw, testing};
-    use egui::{PointerButton, Pos2, pos2};
+    use egui::{CursorIcon, PointerButton, Pos2, pos2};
 
     #[test]
     fn drop_slot_rounds_and_clamps() {
@@ -180,8 +180,8 @@ mod tests {
         );
     }
 
-    /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`.
-    /// Released off the list (beside the panel, or below it over the player bar), a drag moves
+    /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`,
+    /// the hand on the pressed row turning into egui's grab once it drags. Released off the list (beside the panel, or below it over the player bar), a drag moves
     /// nothing. A screen reader's click on a row plays it.
     #[test]
     fn dragging_a_row_moves_it() {
@@ -244,10 +244,13 @@ mod tests {
                 vec![button(to + egui::vec2(off, 0.0), false)],
             ]
         };
-        for input in drag(row4, 0.0) {
-            pass(input);
-        }
+        let cursors: Vec<_> = drag(row4, 0.0)
+            .into_iter()
+            .map(|input| pass(input).platform_output.cursor_icon)
+            .collect();
         assert_eq!(sent(), ["MoveInQueue { from: 0, to: 3 }"]);
+        let (hand, grab) = (CursorIcon::PointingHand, CursorIcon::Grabbing);
+        assert_eq!(cursors[..3], [hand, grab, grab], "pressed, then dragged");
         for input in drag(row4, -500.0) {
             pass(input);
         }

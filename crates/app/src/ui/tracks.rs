@@ -136,7 +136,7 @@ pub fn show(
                     cell(ui, x, mid, &label, theme::small(), p.secondary, Align::Min);
                 }
                 Row::Track(i) => {
-                    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+                    let resp = hand(resp);
                     let t = &tracks[i];
                     let num = if discs {
                         t.track_number.to_string()
@@ -179,6 +179,16 @@ pub fn show(
 /// Enter, Space or a screen reader "click" on `row`, without the mouse.
 pub fn activated(row: &egui::Response) -> bool {
     row.clicked() && !row.clicked_by(PointerButton::Primary)
+}
+
+/// The hand over `row`, but not while it is dragged: egui's drag and drop shows its grab then,
+/// and only over the default cursor.
+pub fn hand(row: egui::Response) -> egui::Response {
+    if row.dragged() {
+        row
+    } else {
+        row.on_hover_cursor(egui::CursorIcon::PointingHand)
+    }
 }
 
 /// The colour of the playing row: the stream's tier's, `text` until it is heard.
