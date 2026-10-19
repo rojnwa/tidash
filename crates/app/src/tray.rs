@@ -38,7 +38,6 @@ pub fn config() -> Config {
         icon,
         template_icon: None,
         themed_icon: true,
-        menu_on_click: false,
         menu: vec![
             MenuItem::action(SHOW, tr("Show or hide Tidash")),
             MenuItem::Separator,

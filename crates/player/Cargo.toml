@@ -15,7 +15,7 @@ thiserror.workspace = true
 tempfile = "3"
 rubato = "5.0.1"
 rtrb = "0.4"
-fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.6.0" }
+fastframe-audio = { git = "https://github.com/crmne/fastframe", tag = "v0.13.0" }
 log = "0.4"
 cpal = "0.18"
 

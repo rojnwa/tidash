@@ -292,6 +292,8 @@ struct Engine {
 
 impl Engine {
     fn run(mut self) {
+        // This thread decodes what the output plays: a busy machine must not starve it.
+        fastframe_audio::raise_feeder_priority();
         let mut maintained = Instant::now();
         let mut idle = false;
         loop {

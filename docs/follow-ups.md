@@ -205,6 +205,12 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 - Exclusive on Linux with the Default device always fails as "device … not found" (the ALSA default
   is never `hw:`), so it falls back with a misleading reason and the hardware test's doc cannot be met
   there (`cpal.rs`); on Windows, `Named` reports every lookup error as "not found" (`wasapi.rs`).
+- Since fastframe 0.11, cpal's default host on Linux is PipeWire or PulseAudio when one runs, so the
+  picker lists their devices and exclusive finds no `hw:` one there: it always falls back to shared on
+  such desktops (ALSA-only systems keep it). List ALSA's `hw:` devices for exclusive if users ask
+  (`cpal.rs`).
+- Settings save the device by name, which two devices can share; fastframe 0.12's `Device::Id`
+  tells them apart (both exclusive backends refuse an id today).
 - macOS: the physical format stays changed after hog mode ends (other apps then run at it); a matched
   physical format with another or any rate is set as is (check the nominal rate after the build, or
   it can time out or resample silently); `set_physical` stops at the first failed set instead of
@@ -266,8 +272,6 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 
 ## CI and dependencies
 
-- fastframe-audio v0.6.0 allocates in the render callback (`typed()`'s `scratch.resize`); the upstream
-  issue is drafted (M3 Task 11) and waits for the human's go-ahead to file.
 - Duplicates `cargo update` cannot settle: windows-sys 0.52/0.59 beside 0.60/0.61 (the winit fork,
   glutin, glutin_egl_sys and ring ask for 0.52, rustix 0.38 for 0.59), and `dpi` twice (the winit
   fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`).
