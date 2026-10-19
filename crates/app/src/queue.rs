@@ -1,7 +1,7 @@
 //! The play queue: a track list, the current position in it, shuffle and repeat. Unavailable
 //! tracks (`stream_ready == false`) are never current.
 
-use crate::model::QueueSnapshot;
+use crate::model::{QueueSnapshot, Source};
 use rand::seq::SliceRandom;
 use tidal::Track;
 
@@ -28,6 +28,8 @@ pub struct Queue {
     current: Option<usize>,
     shuffle: bool,
     repeat: Repeat,
+    /// Where the tracks were played from (`Action::PlayTracks`); edits keep it.
+    pub source: Option<Source>,
 }
 
 impl Queue {
@@ -169,6 +171,7 @@ impl Queue {
             current: self.current,
             shuffle: self.shuffle,
             repeat: self.repeat,
+            source: self.source.clone(),
         }
     }
 

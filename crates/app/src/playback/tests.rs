@@ -133,6 +133,7 @@ fn three_failures_in_a_row_stop_and_a_new_queue_starts_over() {
         Action::PlayTracks {
             tracks: tracks(9),
             start: 0,
+            source: None,
         },
     );
     p.fail_track(None);
@@ -142,6 +143,7 @@ fn three_failures_in_a_row_stop_and_a_new_queue_starts_over() {
         Action::PlayTracks {
             tracks: tracks(9),
             start: 0,
+            source: None,
         },
     );
     assert_eq!(p.failures, 0, "a new queue starts over");
@@ -155,6 +157,55 @@ fn three_failures_in_a_row_stop_and_a_new_queue_starts_over() {
     p.fail_track(None);
     p.reset(None);
     assert_eq!(p.failures, 0, "logout starts over");
+}
+
+/// Spec §3.9: each `PlayTracks` sets the queue's source, as shown; edits keep it.
+#[test]
+fn the_queue_keeps_its_source() {
+    let (mut p, rx) = playback();
+    let from = crate::model::Source {
+        route: crate::model::Route::Album(42),
+        name: "a".into(),
+    };
+    let shown = || {
+        let queues = rx.try_iter().filter_map(|e| match e {
+            Event::Queue(q) => Some(q.source),
+            _ => None,
+        });
+        queues.last().expect("the queue shown")
+    };
+    let source = Some(from.clone());
+    p.handle(
+        None,
+        Action::PlayTracks {
+            tracks: tracks(6),
+            start: 0,
+            source,
+        },
+    );
+    assert_eq!(shown(), Some(from.clone()));
+    for edit in [
+        Action::PlayNext(tracks(1)),
+        Action::AddToQueue(tracks(1)),
+        Action::MoveInQueue { from: 0, to: 3 },
+        Action::RemoveFromQueue(1),
+        Action::SetShuffle(true),
+        Action::SetRepeat(crate::queue::Repeat::All),
+    ] {
+        let what = format!("{edit:?}");
+        p.handle(None, edit);
+        assert_eq!(shown(), Some(from.clone()), "{what}");
+    }
+    let (tracks, start) = (tracks(2), 0);
+    p.handle(
+        None,
+        Action::PlayTracks {
+            tracks,
+            start,
+            source: None,
+        },
+    );
+    assert_eq!(shown(), None, "replaced");
 }
 
 #[test]
@@ -186,6 +237,7 @@ fn each_hiccup_in_a_track_gets_one_restart() {
         Action::PlayTracks {
             tracks: tracks(3),
             start: 0,
+            source: None,
         },
     );
     let hiccup = |p: &mut Playback, at_secs: u32| {
@@ -262,7 +314,14 @@ fn a_superseded_load_task_is_aborted() {
         let c = Some(&c);
         let (mut p, _rx) = playback();
         let (tracks, start) = (tracks(2), 0);
-        p.handle(c, Action::PlayTracks { tracks, start });
+        p.handle(
+            c,
+            Action::PlayTracks {
+                tracks,
+                start,
+                source: None,
+            },
+        );
         let first = p.load.as_ref().expect("loading").abort_handle();
         let sent = async {
             while server
@@ -363,7 +422,14 @@ fn natural_end_with_repeat_one_replays() {
     let (mut p, _rx) = playback();
     p.handle(c, Action::SetRepeat(crate::queue::Repeat::One));
     let (tracks, start) = (tracks(3), 1);
-    p.handle(c, Action::PlayTracks { tracks, start });
+    p.handle(
+        c,
+        Action::PlayTracks {
+            tracks,
+            start,
+            source: None,
+        },
+    );
     let end = |p: &mut Playback| {
         p.loading = false; // loaded and played to its end
         let id = p.seq;
@@ -385,7 +451,14 @@ fn removing_current_while_playing_loads_next() {
     let c = Some(&c);
     let (mut p, _rx) = playback();
     let (tracks, start) = (tracks(4), 1);
-    p.handle(c, Action::PlayTracks { tracks, start });
+    p.handle(
+        c,
+        Action::PlayTracks {
+            tracks,
+            start,
+            source: None,
+        },
+    );
     let now = |p: &mut Playback, state| {
         p.loading = false;
         p.state = state;
@@ -417,7 +490,14 @@ fn removing_current_while_playing_loads_next() {
 fn playing(c: &Arc<Client>) -> (Playback, std::sync::mpsc::Receiver<Event>) {
     let (mut p, rx) = playback();
     let (tracks, start) = (tracks(3), 0);
-    p.handle(Some(c), Action::PlayTracks { tracks, start });
+    p.handle(
+        Some(c),
+        Action::PlayTracks {
+            tracks,
+            start,
+            source: None,
+        },
+    );
     (p.loading, p.state) = (false, PlayState::Playing);
     let id = p.seq;
     p.on_msg(Some(c), Msg::Player(PlayerEvent::TrackStarted(id)));
@@ -508,7 +588,14 @@ fn playback_signals_now_playing_and_scrobble() {
     let (msgs, mut sent) = tokio::sync::mpsc::unbounded_channel();
     p.msgs = msgs;
     let (tracks, start) = (tracks(3), 0);
-    p.handle(Some(&c), Action::PlayTracks { tracks, start });
+    p.handle(
+        Some(&c),
+        Action::PlayTracks {
+            tracks,
+            start,
+            source: None,
+        },
+    );
     (p.loading, p.state) = (false, PlayState::Playing);
     let before = now_ms() / 1000;
     let id = p.seq;

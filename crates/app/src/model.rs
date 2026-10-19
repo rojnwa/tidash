@@ -88,12 +88,24 @@ pub struct Slot {
     pub used: u64,
 }
 
+/// Where playback started (spec §3.9): the page's route, and its title.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Source {
+    pub route: Route,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct QueueSnapshot {
     pub tracks: Vec<tidal::Track>,
     pub current: Option<usize>,
     pub shuffle: bool,
     pub repeat: Repeat,
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the player bar's cover is to read it (spec §3.8)")
+    )]
+    pub source: Option<Source>,
 }
 
 /// A fetch for the side panel: the current track's lyrics or credits.

@@ -151,6 +151,7 @@ pub fn show(
                         ctx.send(Action::PlayTracks {
                             tracks: tracks.to_vec(),
                             start: i,
+                            source: super::playing_from(ctx.model),
                         });
                     }
                     if let Some(e) = edit
@@ -485,6 +486,51 @@ mod tests {
             rx.try_recv(),
             Ok(Action::PlayTracks { start: 0, .. })
         ));
+    }
+
+    /// Spec §3.9: a row double-clicked on a playlist plays from that playlist; on Search, from
+    /// nowhere to return to.
+    #[test]
+    fn a_row_plays_from_its_page() {
+        use crate::model::{PageData, Source};
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let list = vec![track()];
+        let mut source = |model: &Model| {
+            let ctx = testing::context(); // no click left over from the last double click
+            let at = Pos2::new(100.0, crate::theme::ROW_HEADER + super::ROW_H / 2.0);
+            let button = |pressed| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            pass(&ctx, &tx, model, &list, vec![egui::Event::PointerMoved(at)]);
+            for pressed in [true, false, true, false] {
+                pass(&ctx, &tx, model, &list, vec![button(pressed)]);
+            }
+            match rx.try_recv() {
+                Ok(Action::PlayTracks { source, .. }) => source,
+                other => panic!("{other:?}"),
+            }
+        };
+        let route = Route::Playlist("p-1".into());
+        let mut playlist = testing::at(route.clone());
+        let data = PageData::Playlist {
+            playlist: testing::playlist(),
+            tracks: list.clone(),
+            positions: vec![0],
+            etag: None,
+        };
+        playlist.apply(Event::Page {
+            route: route.clone(),
+            data,
+        });
+        let want = Source {
+            route,
+            name: "Playlist".into(),
+        };
+        assert_eq!(source(&playlist), Some(want));
+        assert_eq!(source(&testing::at(Route::Search)), None);
     }
 
     /// Right-clicks the first row of `list`: the output with its menu open.

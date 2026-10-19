@@ -187,6 +187,7 @@ fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item, width: f32) {
         ctx.send(Action::PlayTracks {
             tracks: vec![t.clone()],
             start: 0,
+            source: None, // a lone track: its album is where it leads (spec §3.9)
         });
     }
 }

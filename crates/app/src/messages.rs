@@ -1,6 +1,6 @@
 //! The messages that move between UI and backend.
 
-use crate::model::{Load, PageData, PlaybackSnapshot, QueueSnapshot, Route};
+use crate::model::{Load, PageData, PlaybackSnapshot, QueueSnapshot, Route, Source};
 use crate::queue::Repeat;
 use std::time::Duration;
 
@@ -36,6 +36,8 @@ pub enum Action {
     PlayTracks {
         tracks: Vec<tidal::Track>,
         start: usize,
+        /// The page they are played from; none without one to go back to.
+        source: Option<Source>,
     },
     Play,
     Pause,

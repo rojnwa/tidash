@@ -26,7 +26,7 @@ mod widgets;
 
 use crate::i18n::tr;
 use crate::images::TextureCache;
-use crate::model::{Action, Event, Load, Model, PageData, Route};
+use crate::model::{Action, Event, Load, Model, PageData, Route, Source};
 use crate::theme::{self, Palette};
 use std::borrow::Cow;
 use std::time::Duration;
@@ -287,6 +287,22 @@ fn page_data<'m>(ui: &mut egui::Ui, ctx: &mut Ctx<'m>, route: &Route) -> Option<
         });
     }
     slot.data.as_ref()
+}
+
+/// What playing from the current page starts from (spec §3.9): its route and title. None
+/// before its data is in, or on a page with nothing to go back to (Home, Search, View all).
+pub fn playing_from(model: &Model) -> Option<Source> {
+    let route = model.route();
+    let name = match (route, model.pages.get(route)?.data.as_ref()?) {
+        (Route::Album(_), PageData::Album { album, .. }) => album.title.clone(),
+        (Route::Playlist(_), PageData::Playlist { playlist, .. }) => playlist.title.clone(),
+        (Route::Mix(_), PageData::Mix { mix, .. }) => mix.title.clone(),
+        (Route::Artist(_), PageData::Artist(page)) => page.artist.name.clone(),
+        (Route::Collection(tab), _) => collection::name(*tab).into_owned(),
+        _ => return None,
+    };
+    let route = route.clone();
+    Some(Source { route, name })
 }
 
 /// The current track's data in `slot` (lyrics or credits), once ready. A slot of another
@@ -1169,5 +1185,60 @@ mod tests {
         for (width, px) in cases {
             assert_eq!(request_px(width), px, "{width}");
         }
+    }
+
+    /// Spec §3.9: playing from a page names it by its title; a page with nothing to return to,
+    /// or whose data is not in yet, names nothing.
+    #[test]
+    fn playing_from_names_the_page() {
+        use crate::model::CollectionTab;
+        let from = |route: Route, data: Option<PageData>| {
+            let mut model = testing::at(route.clone());
+            if let Some(data) = data {
+                model.apply(Event::Page { route, data });
+            }
+            playing_from(&model)
+        };
+        let named = |route: Route, data, name: &str| {
+            let want = Source {
+                route: route.clone(),
+                name: name.into(),
+            };
+            assert_eq!(from(route, Some(data)), Some(want));
+        };
+        let tracks = testing::tracks(2);
+        let album = testing::album(1);
+        let album = PageData::Album {
+            album,
+            tracks: tracks.clone(),
+        };
+        named(Route::Album(1), album, "Album 1");
+        let playlist = PageData::Playlist {
+            playlist: testing::playlist(),
+            tracks: tracks.clone(),
+            positions: vec![0, 1],
+            etag: None,
+        };
+        named(Route::Playlist("p-1".into()), playlist, "Playlist");
+        let mix = PageData::Mix {
+            mix: testing::mix(),
+            tracks: tracks.clone(),
+        };
+        named(Route::Mix("m1".into()), mix, "Mix");
+        let artist = tidal::ArtistPage {
+            artist: testing::artist(1),
+            bio: None,
+            shelves: vec![],
+        };
+        named(Route::Artist(1), PageData::Artist(artist), "Artist 1");
+        let tab = CollectionTab::Tracks;
+        let favorites = PageData::Tracks(tracks.clone());
+        named(Route::Collection(tab), favorites, &collection::name(tab));
+        let home = PageData::Shelves(Default::default());
+        assert_eq!(from(Route::Home, Some(home)), None);
+        assert_eq!(from(Route::Search, None), None);
+        let all = Some(PageData::Tracks(tracks));
+        assert_eq!(from(Route::ViewAll("x".into()), all), None);
+        assert_eq!(from(Route::Album(2), None), None, "no data yet");
     }
 }
