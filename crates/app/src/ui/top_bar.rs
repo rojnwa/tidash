@@ -539,6 +539,7 @@ mod tests {
             };
             assert!(!page.contains(&label.as_str()), "{label} before the bar");
             if bar.contains(&label.as_str()) {
+                assert_eq!(label, "Collapse sidebar", "the bar's first Tab stop");
                 return;
             }
         }

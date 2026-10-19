@@ -258,8 +258,9 @@ neither sidebar nor top bar (as today).
 - Collapse: a 32 px `panel-left` `icon_button`, the top bar's first control, left of the Back/Forward pill (label
   "Collapse sidebar" / "Expand sidebar"), flips `sidebar_collapsed`; it moves with the sidebar's edge as it slides.
   `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct ids). Collapsed, nav rows
-  show only their icon (tooltip and AccessKit label keep the name), section headers become a 1 px outline line (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the
-  title as tooltip and label; folders still open and close in place. Menus are unchanged.
+  show only their icon (tooltip and AccessKit label keep the name), section headers become a 1 px outline line
+  (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the title as
+  tooltip and label; folders still open and close in place. Menus are unchanged.
 
 ### 5.3 Top bar and search
 
