@@ -13,8 +13,8 @@ use crate::scrobble::Keys;
 use crate::settings::{Account, Audio, Normalization, Settings, Theme, Updates, nonblank};
 use crate::theme::{self, Palette};
 use egui::{
-    Align, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText, WidgetType,
-    vec2,
+    Align, CursorIcon, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText,
+    WidgetType, vec2,
 };
 use fastframe_theme::Status;
 use fastframe_update::Unsupported;
@@ -82,11 +82,13 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         section(ui, &p, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
         section(ui, &p, tr("Behavior"));
-        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
+        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"))
+            .on_hover_cursor(CursorIcon::PointingHand);
         // Without Close to tray there would be no window to come back to (`starts_hidden`).
         let start_minimized =
             egui::Checkbox::new(&mut new.behavior.start_minimized, tr("Start minimized"));
-        ui.add_enabled(new.behavior.close_to_tray, start_minimized);
+        ui.add_enabled(new.behavior.close_to_tray, start_minimized)
+            .on_hover_cursor(CursorIcon::PointingHand);
         ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, &p, tr("Integrations"));
         if state.lastfm {
@@ -97,7 +99,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         }
         if state.discord {
             let toggle = tr("Show what you play in your Discord status");
-            ui.checkbox(&mut new.integrations.discord, toggle);
+            ui.checkbox(&mut new.integrations.discord, toggle)
+                .on_hover_cursor(CursorIcon::PointingHand);
             ui.weak(tr("Discord must be running on this computer."));
         }
         section(ui, &p, tr("Keyboard shortcuts"));
@@ -188,6 +191,7 @@ fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
         info.current_text_value = Some(selected.to_owned());
         info
     });
+    shown.response.on_hover_cursor(CursorIcon::PointingHand);
 }
 
 /// The theme picker (spec §5.8): the built-ins, then the catalog's files; a built-in clears
@@ -246,7 +250,8 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
             new.custom_theme.as_deref().unwrap_or_default(),
         ));
     }
-    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"));
+    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"))
+        .on_hover_cursor(CursorIcon::PointingHand);
     open
 }
 
@@ -368,6 +373,7 @@ fn updates(
     row(ui, tr("Automatic updates"), |ui| {
         let automatic = tr("Check daily and download new versions");
         ui.checkbox(&mut updates.automatic, automatic)
+            .on_hover_cursor(CursorIcon::PointingHand)
     });
     let (_, clicked) = row(ui, "", |ui| {
         if let Some(update) = update {
@@ -458,7 +464,8 @@ fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
             }
         });
     });
-    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"));
+    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"))
+        .on_hover_cursor(CursorIcon::PointingHand);
     ui.weak(tr(
         "Bit-perfect: each track plays at its own sample rate and bit depth, without other \
          apps' sound and without volume control. Falls back to shared mode when the device \
@@ -469,13 +476,18 @@ fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
             &mut audio.hi_res,
             true,
             tr("Hi-Res (up to 24-bit, 192 kHz)"),
-        );
-        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
+        )
+        .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"))
+            .on_hover_cursor(CursorIcon::PointingHand);
     });
     row(ui, tr("Normalization"), |ui| {
-        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"));
-        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
-        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"));
+        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"))
+            .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"))
+            .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"))
+            .on_hover_cursor(CursorIcon::PointingHand);
     });
 }
 

@@ -46,6 +46,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 let t = &q.tracks[i];
                 let size = vec2(ui.available_width(), ROW_H);
                 let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                let row = row.on_hover_cursor(egui::CursorIcon::PointingHand);
                 let num = (i + 1).to_string();
                 // By index: a track queued twice plays at one of them.
                 let current = (q.current == Some(i)).then_some(tier);

@@ -136,6 +136,7 @@ pub fn show(
                     cell(ui, x, mid, &label, theme::small(), p.secondary, Align::Min);
                 }
                 Row::Track(i) => {
+                    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
                     let t = &tracks[i];
                     let num = if discs {
                         t.track_number.to_string()

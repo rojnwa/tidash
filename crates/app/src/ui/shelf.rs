@@ -100,6 +100,7 @@ fn heading(ui: &mut egui::Ui, ctx: &mut Ctx, s: &Shelf, cards: bool) -> f32 {
         }
         if let Some((more, text)) = more {
             let (rect, r) = ui.allocate_exact_size(text.size(), Sense::click());
+            let r = r.on_hover_cursor(egui::CursorIcon::PointingHand);
             r.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), &*view_all));
             let ink = theme::blend(p.secondary, p.text, fade(ui, &r, r.hovered()));
             ui.painter()

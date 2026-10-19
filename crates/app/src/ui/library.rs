@@ -139,6 +139,7 @@ fn row(
         }
     }
     focus_ring(ui, &r, theme::R_CARD);
+    let r = r.on_hover_cursor(egui::CursorIcon::PointingHand);
     if collapsed { r.on_hover_text(title) } else { r }
 }
 

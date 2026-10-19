@@ -374,6 +374,8 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
     v.popup_shadow = shadow;
     v.slider_trailing_fill = true;
     v.handle_shape = HandleShape::Circle;
+    // Only egui's `Button` (menu items too) reads it; the house widgets set the hand themselves.
+    v.interact_cursor = Some(egui::CursorIcon::PointingHand);
     // Hover and press fills over `surface`, opaque: Dark's are translucent, and on their own
     // would read darker than the idle fill. Glyphs (checks, arrows, the scroll handle) are
     // `secondary` at rest, `text` otherwise.
@@ -419,6 +421,7 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
         ..ScrollStyle::solid()
     };
     s.animation_time = HOVER;
+    s.interaction.selectable_labels = false; // the I-beam is for text fields only
 }
 
 /// `a` moved `t` of the way to `b`, per channel, alpha too.

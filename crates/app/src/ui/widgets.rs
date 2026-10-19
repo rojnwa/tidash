@@ -5,8 +5,8 @@
 use crate::theme::{self, GLYPH, Icon, Palette};
 use egui::text::{LayoutJob, TextWrapping};
 use egui::{
-    Align, Color32, FontId, Galley, Layout, Mesh, Pos2, Rect, Response, RichText, Sense, Stroke,
-    StrokeKind, TextEdit, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType, pos2, vec2,
+    Align, Color32, CursorIcon, FontId, Galley, Layout, Mesh, Pos2, Rect, Response, RichText,
+    Sense, Stroke, StrokeKind, TextEdit, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
 use std::sync::Arc;
 
@@ -95,6 +95,7 @@ pub fn icon_button(
     }
     focus_ring(ui, &r, rect.width() / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A `fill` disc `diameter` across with `icon` in `glyph` at 0.55 of it. Hovered, an `accent`
@@ -124,6 +125,7 @@ pub fn circle_button(
     }
     focus_ring(ui, &r, diameter / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A bare `glyph`-point `icon` in `text` on a `TRANSPORT` square, the player's transport
@@ -137,6 +139,7 @@ pub fn glyph_button(ui: &mut Ui, p: &Palette, icon: Icon, label: &str, glyph: f3
     }
     focus_ring(ui, &r, rect.width() / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A 40 px pill with `label` (and `icon` before it), padded 20. Primary: `accent`
@@ -179,7 +182,7 @@ pub fn pill_button(
         ui.painter().galley(at, text, ink);
     }
     focus_ring(ui, &r, rect.height() / 2.0);
-    r
+    r.on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// `text` in `heading()`: a side panel's, a Settings section's or a dialog's title.
@@ -233,6 +236,7 @@ pub fn nav_row(
         }
     }
     focus_ring(ui, &r, theme::R_CARD);
+    let r = r.on_hover_cursor(CursorIcon::PointingHand);
     if collapsed { r.on_hover_text(label) } else { r }
 }
 
@@ -385,6 +389,37 @@ mod tests {
             let (pressed, _) = run(&ctx, vec![key(Key::Enter)], row);
             assert!(pressed[i].clicked(), "Enter on {i}");
         }
+    }
+
+    /// The cursor with the pointer over the middle of what `draw` adds.
+    fn hovered(ctx: &egui::Context, draw: impl Fn(&mut Ui) -> Response) -> CursorIcon {
+        let (r, _) = run(ctx, vec![], &draw);
+        let at = egui::Event::PointerMoved(r.rect.center());
+        run(ctx, vec![at], &draw).1.platform_output.cursor_icon
+    }
+
+    /// Enabled clickables show the hand, stock buttons too; disabled ones and plain text the
+    /// arrow.
+    #[test]
+    fn clickables_show_the_hand() {
+        let ctx = context();
+        let p = Palette::dark();
+        theme::apply(&ctx, &p);
+        let hand = CursorIcon::PointingHand;
+        let shuffle = |ui: &mut Ui| icon_button(ui, &p, Icon::Shuffle, "Shuffle", None);
+        assert_eq!(hovered(&ctx, shuffle), hand);
+        let play = |ui: &mut Ui| pill_button(ui, &p, Some(Icon::PlayFilled), "Play", true);
+        assert_eq!(hovered(&ctx, play), hand);
+        let home = |ui: &mut Ui| nav_row(ui, &p, Icon::House, "Home", false, false);
+        assert_eq!(hovered(&ctx, home), hand);
+        assert_eq!(hovered(&ctx, |ui| ui.button("Retry")), hand); // via `interact_cursor`
+        let off = |ui: &mut Ui| ui.add_enabled(false, egui::Button::new("Off"));
+        assert_eq!(hovered(&ctx, off), CursorIcon::Default);
+        let off = |ui: &mut Ui| ui.add_enabled_ui(false, play).inner;
+        assert_eq!(hovered(&ctx, off), CursorIcon::Default);
+        let text = |ui: &mut Ui| ui.label("Plain text");
+        assert_eq!(hovered(&ctx, text), CursorIcon::Default); // no I-beam
+        assert!(!ctx.global_style().interaction.selectable_labels);
     }
 
     #[test]
