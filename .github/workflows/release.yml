@@ -17,6 +17,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request replaces its dry run. Every other run (a tag, a manual run) has a
+# group of its own: a shared one would let a later run replace a pending one.
+concurrency:
+  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
