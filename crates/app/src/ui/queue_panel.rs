@@ -3,9 +3,11 @@
 //! built, and these rows are virtual. A playlist's rows drag the same way (`dragging`).
 
 use super::tracks::{self, ROW_H};
+use super::widgets::{context_menu, menu_button};
 use super::{Ctx, rows};
 use crate::i18n::tr;
 use crate::model::Action;
+use crate::theme::Icon;
 use egui::style::ScrollAnimation;
 use egui::{DragAndDrop, PointerButton, ScrollArea, Sense, vec2};
 use std::any::Any;
@@ -61,8 +63,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
                     ctx.send(Action::PlayQueueIndex(i));
                 }
-                row.context_menu(|ui| {
-                    if ui.button(tr("Remove")).clicked() {
+                context_menu(&row, |ui| {
+                    let remove = menu_button(&ctx.palette, Icon::X, tr("Remove"));
+                    if ui.add(remove).clicked() {
                         ctx.send(Action::RemoveFromQueue(i));
                         ui.close();
                     }

@@ -1,6 +1,8 @@
 //! Track list, virtualized inside the caller's page scroll; shared by every view with tracks.
 
-use super::widgets::{fade, focus_ring, line, paint_icon};
+use super::widgets::{
+    context_menu, fade, focus_ring, line, menu_button, menu_separator, paint_icon,
+};
 use super::{Ctx, library, queue_panel, rows};
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, PlaylistEdit, Route};
@@ -340,46 +342,65 @@ fn menu(
     if row.secondary_clicked() {
         row.ctx.data_mut(|d| d.insert_temp(id, now())); // as the menu opens
     }
-    row.context_menu(|ui| {
+    let p = ctx.palette;
+    context_menu(row, |ui| {
         if ui.data(|d| d.get_temp(id)) != Some(now()) {
             ui.close();
             return;
         }
-        if ui.button(tr("Play next")).clicked() {
+        if ui
+            .add(menu_button(&p, Icon::ListStart, tr("Play next")))
+            .clicked()
+        {
             ctx.send(Action::PlayNext(vec![t.clone()]));
             ui.close();
         }
-        if ui.button(tr("Add to queue")).clicked() {
+        if ui
+            .add(menu_button(&p, Icon::ListPlus, tr("Add to queue")))
+            .clicked()
+        {
             ctx.send(Action::AddToQueue(vec![t.clone()]));
             ui.close();
         }
         library::add_to_playlist(ui, ctx, std::slice::from_ref(t));
-        if ui.button(tr("Go to album")).clicked() {
+        menu_separator(ui);
+        if ui
+            .add(menu_button(&p, Icon::Disc3, tr("Go to album")))
+            .clicked()
+        {
             ctx.go(Route::Album(t.album.id));
             ui.close();
         }
         if let Some(artist) = t.artists.first()
-            && ui.button(tr("Go to artist")).clicked()
+            && ui
+                .add(menu_button(&p, Icon::User, tr("Go to artist")))
+                .clicked()
         {
             ctx.go(Route::Artist(artist.id));
             ui.close();
         }
-        let radio = egui::Button::new(tr("Track radio"));
+        let radio = menu_button(&p, Icon::Radio, tr("Track radio"));
         if ui.add_enabled(t.mixes.track.is_some(), radio).clicked()
             && let Some(mix) = &t.mixes.track
         {
             ctx.go(Route::Mix(mix.clone()));
             ui.close();
         }
+        menu_separator(ui);
         let fav = tidal::Favorite::Track(t.id);
-        let label = ctx.favorite_label(&fav);
-        if ctx
-            .favorite_button(ui, fav, egui::Button::new(label.as_ref()))
-            .clicked()
-        {
+        let heart = if ctx.model.favorites.contains(&fav) {
+            Icon::HeartFilled
+        } else {
+            Icon::Heart
+        };
+        let item = menu_button(&p, heart, ctx.favorite_label(&fav));
+        if ctx.favorite_button(ui, fav, item).clicked() {
             ui.close();
         }
-        if ui.button(tr("Copy link")).clicked() {
+        if ui
+            .add(menu_button(&p, Icon::Link, tr("Copy link")))
+            .clicked()
+        {
             ui.ctx()
                 .copy_text(format!("https://tidal.com/browse/track/{}", t.id));
             ui.close();
@@ -387,8 +408,9 @@ fn menu(
         if let Some((e, i)) = edit
             && let Some(&position) = e.positions.get(i)
         {
-            ui.separator();
-            if ui.button(tr("Remove from this playlist")).clicked() {
+            menu_separator(ui);
+            let remove = menu_button(&p, Icon::X, tr("Remove from this playlist"));
+            if ui.add(remove).clicked() {
                 ctx.send(Action::EditPlaylist(PlaylistEdit::Remove {
                     uuid: e.uuid.to_owned(),
                     etag: e.etag.to_owned(),
@@ -508,6 +530,75 @@ mod tests {
             matches!(events[..], [Event::Navigate(Route::Album(2))]),
             "{events:?}"
         );
+    }
+
+    /// Spec §3.7: a row's menu has `MENU_ITEM`-tall items, its groups split by 1 px `outline`
+    /// rules, and a frame at least `MENU_W` wide; its "Add to playlist" submenu's items too.
+    #[test]
+    fn the_row_menu_is_roomy() {
+        use crate::theme::{MENU_ITEM, MENU_W, Palette};
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let p = Palette::dark();
+        crate::theme::apply(&ctx, &p);
+        ctx.all_styles_mut(|s| s.animation_time = 0.0); // the menu shows at once, not fading in
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let t = tidal::Track {
+            artists: vec![testing::artist(1)],
+            ..track()
+        };
+        let (model, list) = (Model::default(), vec![t]);
+        let out = open_menu(&ctx, &tx, &model, &list);
+        let b = |label: &str| testing::bounds(&out, label);
+        for label in [
+            "Play next",
+            "Add to queue",
+            "Go to album",
+            "Go to artist",
+            "Copy link",
+        ] {
+            assert!(
+                b(label).height() >= MENU_ITEM - 0.5,
+                "{label}: {:?}",
+                b(label)
+            );
+        }
+        let shapes: Vec<egui::Shape> = out
+            .shapes
+            .iter()
+            .flat_map(|c| match &c.shape {
+                egui::Shape::Vec(v) => v.clone(),
+                s => vec![s.clone()],
+            })
+            .collect();
+        let rule_between = |above: &str, below: &str| {
+            let y = egui::Rangef::new(b(above).bottom(), b(below).top());
+            shapes.iter().any(|s| match s {
+                egui::Shape::LineSegment {
+                    points: [a, z],
+                    stroke,
+                } => a.y == z.y && y.contains(a.y) && *stroke == egui::Stroke::new(1.0, p.outline),
+                _ => false,
+            })
+        };
+        assert!(rule_between("Add to playlist", "Go to album"));
+        assert!(rule_between("Track radio", "Add to favorites"));
+        let frame = shapes.iter().find_map(|s| match s {
+            egui::Shape::Rect(r) if r.fill == p.overlay => Some(r.rect),
+            _ => None,
+        });
+        let frame = frame.expect("the menu's frame");
+        assert!(frame.width() >= MENU_W, "{frame:?}");
+        pass(
+            &ctx,
+            &tx,
+            &model,
+            &list,
+            vec![click(&out, "Add to playlist")],
+        );
+        let out = settle(&ctx, &tx, &model, &list);
+        let new = testing::bounds(&out, "New playlist…");
+        assert!(new.height() >= MENU_ITEM - 0.5, "{new:?}");
     }
 
     /// "Play next" and "Add to queue" in a row's menu send that track to the queue.

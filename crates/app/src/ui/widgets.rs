@@ -187,6 +187,55 @@ pub fn pill_button(
     r.on_hover_cursor(CursorIcon::PointingHand)
 }
 
+/// A menu item (spec §3.7): a `GLYPH` `secondary` `icon`, then `label`, `MENU_ITEM` tall.
+/// Screen readers hear `label` alone.
+pub fn menu_button<'a>(
+    p: &Palette,
+    icon: Icon,
+    label: impl Into<egui::WidgetText>,
+) -> egui::Button<'a> {
+    let atoms = (icon.image(p.secondary, GLYPH), label.into());
+    egui::Button::new(atoms).min_size(vec2(0.0, theme::MENU_ITEM))
+}
+
+/// A `menu_button` ending in a `secondary` chevron, opening the submenu `add` beside it.
+pub fn submenu(
+    ui: &mut Ui,
+    p: &Palette,
+    icon: Icon,
+    label: impl Into<egui::WidgetText>,
+    add: impl FnOnce(&mut Ui),
+) {
+    let chevron = Icon::ChevronRight.image(p.secondary, GLYPH);
+    let button = menu_button(p, icon, label).right_text(chevron);
+    let sub = egui::containers::menu::SubMenuButton::from_button(button);
+    sub.ui(ui, |ui| {
+        menu_width(ui);
+        add(ui);
+    });
+}
+
+/// `add`'s menu, opened by right-clicking `resp`, in `theme::menu_style` (its submenus too).
+pub fn context_menu(resp: &Response, add: impl FnOnce(&mut Ui)) {
+    let menu = egui::Popup::context_menu(resp).style(theme::menu_style);
+    menu.show(|ui| {
+        menu_width(ui);
+        add(ui);
+    });
+}
+
+/// Makes the menu `ui` is the inside of at least `MENU_W` wide, its frame included.
+pub(super) fn menu_width(ui: &mut Ui) {
+    let frame = egui::Frame::menu(ui.style()).total_margin().sum().x;
+    ui.set_min_width(theme::MENU_W - frame);
+}
+
+/// The rule between a menu's groups: 1 px `outline` (egui's separator stroke, which
+/// `theme::style` makes that) with 5 above and below.
+pub fn menu_separator(ui: &mut Ui) {
+    ui.add(egui::Separator::default().spacing(11.0));
+}
+
 /// `text` in `heading()`: a side panel's, a Settings section's or a dialog's title.
 pub fn heading(ui: &mut Ui, p: &Palette, text: &str) -> Response {
     ui.label(RichText::new(text).font(theme::heading()).color(p.text))

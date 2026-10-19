@@ -3,7 +3,8 @@
 
 use super::Ctx;
 use super::widgets::{
-    NAV_PAD, fade, focus_ring, icon_button, line, paint_icon, pill_button, text_field,
+    NAV_PAD, context_menu, fade, focus_ring, icon_button, line, menu_button, menu_width,
+    paint_icon, pill_button, submenu, text_field,
 };
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
@@ -198,15 +199,18 @@ fn folder(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, id: &str, collapsed: bo
                 }
                 let listed = ctx.model.folders.get(sub);
                 let empty = *count == 0 && listed.is_none_or(Vec::is_empty);
-                header.context_menu(|ui| {
-                    if ui.button(tr("Rename")).clicked() {
+                context_menu(&header, |ui| {
+                    if ui
+                        .add(menu_button(&pal, Icon::Pencil, tr("Rename")))
+                        .clicked()
+                    {
                         let (id, name) = (sub.clone(), name.clone());
                         open(ui.ctx(), Dialog::RenameFolder { id, name });
                         ui.close();
                     }
                     // ponytail: what TIDAL does to the playlists in a deleted folder is unknown
                     // (S5), so only one known empty goes; the edit could move them out first.
-                    let delete = egui::Button::new(tr("Delete"));
+                    let delete = menu_button(&pal, Icon::Trash2, tr("Delete"));
                     let delete = ui
                         .add_enabled(empty, delete)
                         .on_disabled_hover_text(tr("Move its playlists out first."));
@@ -257,14 +261,13 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
     if resp.clicked() {
         ctx.go(route);
     }
-    resp.context_menu(|ui| {
-        ui.menu_button(tr("Move to folder"), |ui| {
+    let pal = ctx.palette;
+    context_menu(&resp, |ui| {
+        submenu(ui, &pal, Icon::FolderInput, tr("Move to folder"), |ui| {
             let here = (parent != "root").then_some(parent);
             for (to, name) in destinations(ctx.model) {
-                if ui
-                    .add_enabled(to != here, egui::Button::new(name))
-                    .clicked()
-                {
+                let item = menu_button(&pal, Icon::Folder, name);
+                if ui.add_enabled(to != here, item).clicked() {
                     let (uuid, folder) = (p.uuid.clone(), to.map(str::to_owned));
                     ctx.send(Action::EditPlaylist(PlaylistEdit::MoveToFolder {
                         uuid,
@@ -275,7 +278,11 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
             }
         });
         let own = p.creator_id.is_some() && p.creator_id == ctx.model.user_id;
-        if own && ui.button(tr("Delete")).clicked() {
+        if own
+            && ui
+                .add(menu_button(&pal, Icon::Trash2, tr("Delete")))
+                .clicked()
+        {
             open(ui.ctx(), delete_playlist(p));
             ui.close();
         }
@@ -308,14 +315,20 @@ fn destinations(model: &Model) -> Vec<(Option<&str>, Cow<'_, str>)> {
 /// picked.
 pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]) {
     let ids = || tracks.iter().map(|t| t.id).collect();
-    let label = tr("Add to playlist");
+    let (pal, label) = (ctx.palette, tr("Add to playlist"));
     let picks = |ui: &mut Ui| {
-        if ui.button(tr("New playlist…")).clicked() {
+        if ui
+            .add(menu_button(&pal, Icon::Plus, tr("New playlist…")))
+            .clicked()
+        {
             open(ui.ctx(), new_playlist(ids()));
             ui.close();
         }
         for p in &ctx.model.own_playlists {
-            if ui.button(&p.title).clicked() {
+            if ui
+                .add(menu_button(&pal, Icon::ListMusic, &p.title))
+                .clicked()
+            {
                 let (uuid, tracks) = (p.uuid.clone(), ids());
                 ctx.send(Action::EditPlaylist(PlaylistEdit::Add { uuid, tracks }));
                 ui.close();
@@ -324,17 +337,16 @@ pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]
     };
     // A page's action is a pill; in a row's menu it is a submenu.
     if !egui::containers::menu::is_in_menu(ui) {
-        let pill =
-            super::widgets::pill_button(ui, &ctx.palette, Some(Icon::ListPlus), &label, false);
-        egui::Popup::menu(&pill).show(picks);
+        let pill = pill_button(ui, &pal, Some(Icon::ListPlus), &label, false);
+        egui::Popup::menu(&pill)
+            .style(theme::menu_style)
+            .show(|ui| {
+                menu_width(ui);
+                picks(ui);
+            });
         return;
     }
-    let menu = ui.menu_button(label.as_ref(), picks);
-    // Inside a menu, egui's label for a screen reader ends in the submenu's arrow.
-    let resp = menu.response;
-    resp.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, resp.enabled(), &label)
-    });
+    submenu(ui, &pal, Icon::ListMusic, label, picks);
 }
 
 /// A new playlist's dialog, empty; the playlist starts with `tracks`.

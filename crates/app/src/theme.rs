@@ -231,6 +231,9 @@ pub const SETTINGS_FIELD: f32 = 280.0;
 /// The search pill at its narrowest: its icon and a word. With less room it reaches over the
 /// history pill, never the gear.
 pub const SEARCH_MIN: f32 = 120.0;
+/// A menu item's height, and a menu's least width, its frame included (spec §3.7).
+pub const MENU_ITEM: f32 = 34.0;
+pub const MENU_W: f32 = 200.0;
 
 // Corner radii; pills and discs are fully round.
 pub const R_ART: f32 = 2.0;
@@ -428,6 +431,20 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
     s.interaction.selectable_labels = false; // the I-beam is for text fields only
 }
 
+/// A menu's and its submenus' style (spec §3.7): egui's (no strokes, idle items unfilled),
+/// items `MENU_ITEM` tall and flush, inset 12 with 12 between icon and label, the hover
+/// fill's radius 8, inside a 6 margin.
+pub fn menu_style(s: &mut egui::Style) {
+    egui::containers::menu::menu_style(s);
+    let sp = &mut s.spacing;
+    sp.button_padding.x = 12.0;
+    sp.icon_spacing = 12.0;
+    sp.item_spacing.y = 0.0;
+    sp.interact_size.y = MENU_ITEM;
+    sp.menu_margin = egui::Margin::same(6);
+    s.visuals.widgets.hovered.corner_radius = CornerRadius::same(R_FIELD as u8);
+}
+
 /// `a` moved `t` of the way to `b`, per channel, alpha too.
 pub fn blend(a: Color32, b: Color32, t: f32) -> Color32 {
     a.lerp_to_gamma(b, t)
@@ -484,6 +501,9 @@ fastframe_icons::icons! {
         User => lucide "user",
         Clock => lucide "clock",
         PanelLeft => lucide "panel-left",
+        Plus => lucide "plus",
+        Pencil => lucide "pencil",
+        Trash2 => lucide "trash-2",
         House => "house",
         Compass => "compass",
         ListMusic => "list-music",
@@ -506,6 +526,9 @@ fastframe_icons::icons! {
         FolderPlus => "folder-plus",
         Folder => "folder",
         FolderOpen => "folder-open",
+        FolderInput => "folder-input",
+        ListStart => "list-start",
+        Link => "link",
     }
 }
 
