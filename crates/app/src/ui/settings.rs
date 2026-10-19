@@ -155,25 +155,32 @@ fn section(ui: &mut Ui, p: &Palette, title: Cow<'static, str>) {
 
 /// A setting's row (ruling 30), left to right in reading order: `label` in a `SETTINGS_LABEL`
 /// column, cut with "…", then what `controls` adds, wrapping. With less room than that column
-/// and a field, the label stacks above the controls.
+/// and a field, the label stacks above the controls. Its lines are a `PILL` tall, as its
+/// fields, buttons and combo boxes.
 fn row<R>(
     ui: &mut Ui,
     label: impl Into<WidgetText>,
     controls: impl FnOnce(&mut Ui) -> R,
 ) -> (Response, R) {
-    if ui.available_width() < theme::SETTINGS_LABEL + theme::SETTINGS_FIELD {
+    // egui centres an item on the line height known when it is added, so the label is
+    // centred on the controls after it only if the line is their height from the start.
+    let height = std::mem::replace(&mut ui.spacing_mut().interact_size.y, theme::PILL);
+    let shown = if ui.available_width() < theme::SETTINGS_LABEL + theme::SETTINGS_FIELD {
         let label = ui.label(label);
-        return (label, ui.horizontal_wrapped(controls).inner);
-    }
-    ui.horizontal(|ui| {
-        let size = vec2(theme::SETTINGS_LABEL, ui.spacing().interact_size.y);
-        let (column, _) = ui.allocate_exact_size(size, Sense::hover());
-        let layout = Layout::left_to_right(Align::Center);
-        let mut column = ui.new_child(UiBuilder::new().max_rect(column).layout(layout));
-        let label = column.add(egui::Label::new(label).truncate());
         (label, ui.horizontal_wrapped(controls).inner)
-    })
-    .inner
+    } else {
+        ui.horizontal(|ui| {
+            let size = vec2(theme::SETTINGS_LABEL, ui.spacing().interact_size.y);
+            let (column, _) = ui.allocate_exact_size(size, Sense::hover());
+            let layout = Layout::left_to_right(Align::Center);
+            let mut column = ui.new_child(UiBuilder::new().max_rect(column).layout(layout));
+            let label = column.add(egui::Label::new(label).truncate());
+            (label, ui.horizontal_wrapped(controls).inner)
+        })
+        .inner
+    };
+    ui.spacing_mut().interact_size.y = height;
+    shown
 }
 
 /// A one-line field for a row, `SETTINGS_FIELD` wide or the room left.
@@ -185,10 +192,7 @@ fn field(text: &mut String) -> egui::TextEdit<'_> {
 /// readers: egui would only link it to the label beside it.
 fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
     let combo = egui::ComboBox::from_id_salt(label).selected_text(selected);
-    // A pill tall, as the row's fields and buttons.
-    let height = std::mem::replace(&mut ui.spacing_mut().interact_size.y, theme::PILL);
-    let shown = combo.show_ui(ui, list);
-    ui.spacing_mut().interact_size.y = height;
+    let shown = combo.show_ui(ui, list); // a `PILL` tall in a `row`
     shown.response.widget_info(|| {
         let mut info = WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label);
         info.current_text_value = Some(selected.to_owned());

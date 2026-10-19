@@ -170,10 +170,12 @@ fn listenbrainz_connect_and_disconnect() {
     assert_eq!(sent.iter().filter(|a| disconnect(a)).count(), 1, "{sent:?}");
 }
 
-/// Spec §3.6: a row's field, button and combo box are a pill tall, centred on one line.
+/// Spec §3.6: a row's field, button and combo box are a pill tall, centred on one line, and
+/// its label is centred on them.
 #[test]
 fn a_rows_field_and_button_line_up() {
     use crate::theme::PILL;
+    use egui::accesskit::Role;
     let ctx = testing::context();
     ctx.enable_accesskit();
     let mut state = UiState::default();
@@ -189,6 +191,38 @@ fn a_rows_field_and_button_line_up() {
         let (ya, yb) = (a.center().y, b.center().y);
         assert!((ya - yb).abs() <= 0.5, "{a:?} {b:?}");
     }
+    let rect = |n: &egui::accesskit::Node| {
+        let b = n.bounds().expect("placed");
+        let (min, max) = ((b.x0 as f32, b.y0 as f32), (b.x1 as f32, b.y1 as f32));
+        egui::Rect::from_min_max(min.into(), max.into())
+    };
+    // A row's label, and where it is drawn.
+    let label = |out: &egui::FullOutput, text: &str| {
+        let label = nodes(out)
+            .iter()
+            .find(|(_, n)| n.role() == Role::Label && n.value() == Some(text));
+        let (id, node) = label.unwrap_or_else(|| panic!("no label {text:?}"));
+        (*id, rect(node))
+    };
+    let centred = |label: egui::Rect, control: egui::Rect| {
+        let (a, b) = (label.center().y, control.center().y);
+        assert!((a - b).abs() <= 1.0, "label {label:?}, control {control:?}");
+    };
+    let (client, at) = label(&out, "Client ID");
+    let field = nodes(&out)
+        .iter()
+        .find(|(_, n)| n.labelled_by().contains(&client));
+    centred(at, rect(&field.expect("Client ID's field").1));
+    centred(
+        label(&out, "ListenBrainz").1,
+        testing::bounds(&out, "User token"),
+    );
+    centred(label(&out, "Theme").1, testing::bounds(&out, "Theme"));
+    // ListenBrainz connected: the one Connect is Last.fm's.
+    state.settings.lastfm = true;
+    model.settings.integrations.listenbrainz_user = Some("rob".into());
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    centred(label(&out, "Last.fm").1, testing::bounds(&out, "Connect"));
 }
 
 /// Hidden without keys. With them: Connect; while it waits, Cancel; connected, the user
