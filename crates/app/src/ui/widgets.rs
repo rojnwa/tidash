@@ -13,6 +13,8 @@ use std::sync::Arc;
 /// A nav row's inset around its icon and text; the library's rows share it.
 pub(super) const NAV_PAD: f32 = 8.0;
 const NAV_ICON: f32 = 24.0;
+/// A nav row's height.
+pub(super) const NAV_ROW: f32 = NAV_ICON + 2.0 * NAV_PAD;
 
 /// `icon` at `size` points square, centred on `center`, tinted `tint`.
 pub(super) fn paint_icon(ui: &Ui, icon: Icon, center: Pos2, size: f32, tint: Color32) {
@@ -201,7 +203,7 @@ pub fn nav_row(
     selected: bool,
     collapsed: bool,
 ) -> Response {
-    let height = NAV_ICON + 2.0 * NAV_PAD;
+    let height = NAV_ROW;
     let size = vec2(ui.available_width().max(height), height);
     let (rect, r) = ui.allocate_exact_size(size, Sense::click());
     r.widget_info(|| {

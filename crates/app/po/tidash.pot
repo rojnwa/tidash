@@ -174,11 +174,11 @@ msgstr ""
 msgid "Collection"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 msgid "Collapse sidebar"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 msgid "Expand sidebar"
 msgstr ""
 

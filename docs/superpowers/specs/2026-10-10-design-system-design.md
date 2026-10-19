@@ -244,8 +244,8 @@ neither sidebar nor top bar (as today).
 ### 5.2 Sidebar
 
 - Window fill, 1 px outline on its right edge, 16 px side margins.
-- Below the collapse button everything scrolls as one (nav rows, Collection, All playlists, the tree), so the
-  library stays reachable in a short window.
+- Everything scrolls as one from the panel's top (nav rows, Collection, All playlists, the tree), so the
+  library stays reachable in a short window; Home's centre is level with the top bar's controls.
 - Nav rows (`nav_row`): 24 px icon, Label text, radius 12, padding 8; idle secondary, hovered surface_hover and text,
   selected surface_active and text. Home (`house`), Explore (`compass`).
 - "Collection" section header (Small, dim, sentence case as in TIDAL 2.43): Playlists, Albums, Tracks, Artists, Mixes,
@@ -255,16 +255,16 @@ neither sidebar nor top bar (as today).
   (today's two buttons, same labels and dialogs), then the library tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
   their open/closed chevron. Rename, move and delete menus are unchanged.
 - Back and Forward leave the sidebar for the top bar. Search and Settings leave it too.
-- Collapse: a 32 px `panel-left` `icon_button` at the sidebar's top (label "Collapse sidebar" / "Expand sidebar")
-  flips `sidebar_collapsed`. `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct
-  ids). Collapsed, nav rows show only their icon (tooltip and AccessKit label keep the name), section headers become a
-  1 px outline line (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the
+- Collapse: a 32 px `panel-left` `icon_button`, the top bar's first control, left of the Back/Forward pill (label
+  "Collapse sidebar" / "Expand sidebar"), flips `sidebar_collapsed`; it moves with the sidebar's edge as it slides.
+  `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct ids). Collapsed, nav rows
+  show only their icon (tooltip and AccessKit label keep the name), section headers become a 1 px outline line (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the
   title as tooltip and label; folders still open and close in place. Menus are unchanged.
 
 ### 5.3 Top bar and search
 
 - 56 tall, inside the central panel above the page scroll; page padding on both sides. As in TIDAL 2.43:
-  history on the left, search and the gear on the right.
+  the sidebar toggle and history on the left, search and the gear on the right.
 - Drawn before the page, so it comes first in Tab and AccessKit order, on a sublayer above the page's, so it paints
   over and takes the clicks from what paints behind it. It has no fill: the album, playlist and mix backdrop, the
   artist hero and the coverless tint (§5.9) start at the window's top, behind it; the page's scroll viewport starts
