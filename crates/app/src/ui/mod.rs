@@ -167,7 +167,8 @@ impl Ctx<'_> {
 /// A route's one vertical scroll; each route keeps its own offset, and the ids inside (a
 /// shelf's sideways offset, say) are the route's own: egui does not salt them by the scroll's.
 /// Right under the top bar, with nothing between (`draw`), its header paints up behind the bar
-/// (`behind_bar`); nothing else on it goes there (ruling 31).
+/// (`behind_bar`); nothing else on it goes there (ruling 31). It fades in (`fade_in`) and ends
+/// `MODULE_GAP` below its content, clear of the player bar.
 pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let bar = ui.data(|d| d.get_temp::<Option<egui::Rect>>(bar_id()).flatten());
     let bar = bar.filter(|b| ui.cursor().top() <= b.bottom());
@@ -178,12 +179,15 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
         .id_salt(("page", route))
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            fade_in(ui, route);
             if let Some(step) = step {
                 let animation = egui::style::ScrollAnimation::none();
                 ui.scroll_with_delta_animation(egui::vec2(0.0, -step), animation);
                 ui.ctx().request_repaint();
             }
-            padded(ui, |ui| ui.push_id(route, f).inner)
+            let inner = padded(ui, |ui| ui.push_id(route, f).inner);
+            gap(ui);
+            inner
         });
     if let (Some(v), Some(step)) = (speed, step) {
         // This step lands next pass; turn round now if it reaches an end (give or take float
@@ -195,6 +199,26 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
         }
     }
     out.inner
+}
+
+/// Fades `ui` in over `PAGE_FADE` (spec §3.11) when `route` was not drawn the pass before: a
+/// new route, or its data just in after the spinner (`page_data`). The first page a context
+/// draws shows at once, so launch does not fade. Painting only: input works throughout.
+fn fade_in(ui: &mut egui::Ui, route: &Route) {
+    let id = egui::Id::new("page fade");
+    let (pass, now) = (ui.ctx().cumulative_pass_nr(), ui.input(|i| i.time));
+    let last = ui.data(|d| d.get_temp::<(Route, u64, f64)>(id));
+    let start = match last {
+        Some((r, at, start)) if r == *route && pass <= at + 1 => start,
+        Some(_) => now,
+        None => now - f64::from(theme::PAGE_FADE),
+    };
+    ui.data_mut(|d| d.insert_temp(id, (route.clone(), pass, start)));
+    let opacity = ((now - start) as f32 / theme::PAGE_FADE).clamp(0.0, 1.0);
+    if opacity < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    ui.multiply_opacity(opacity);
 }
 
 /// `f` inset `PAGE_PAD` from both sides, as `page` insets a page: the central panel has no
@@ -967,6 +991,146 @@ mod tests {
         assert!(tinted.r() > tinted.g() + 8, "toward red: {tinted:?}");
         model.settings.accent_from_art = false;
         assert_eq!(settled(&model, &mut state), panel, "accent_from_art off");
+    }
+
+    /// One pass of `draw` in an 800 by 600 window at `time` (egui's own clock if `None`), fed
+    /// `events`: egui's output.
+    fn frame(
+        ctx: &egui::Context,
+        tx: &UnboundedSender<Action>,
+        state: &mut UiState,
+        model: &Model,
+        time: Option<f64>,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
+        let input = egui::RawInput {
+            events,
+            time,
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(800.0, 600.0),
+            )),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            draw(ui, model, tx, state);
+        });
+        out.textures_delta.clear(); // nothing renders them
+        out
+    }
+
+    /// Spec §3.4: scrolled to its end, a page keeps `MODULE_GAP` above the player bar; Settings'
+    /// last control, Check now, too.
+    #[test]
+    fn every_page_ends_with_room() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = testing::at(Route::Settings);
+        // Down until it turns round at the end; that last step lands, then the page is still.
+        autoscroll(&ctx, 6000.0);
+        for _ in 0..100 {
+            if ctx.data(|d| d.get_temp::<f32>(autoscroll_id())) < Some(0.0) {
+                break;
+            }
+            frame(&ctx, &tx, &mut state, &model, None, vec![]);
+        }
+        autoscroll(&ctx, 0.0);
+        frame(&ctx, &tx, &mut state, &model, None, vec![]);
+        let out = frame(&ctx, &tx, &mut state, &model, None, vec![]);
+        let check = testing::bounds(&out, "Check now");
+        let bar = 600.0 - theme::PLAYER_BAR;
+        assert!(check.bottom() + theme::MODULE_GAP <= bar + 1.0, "{check:?}");
+    }
+
+    /// How opaque `out` paints the text `text`, from its first glyph's colour: 0 if it paints
+    /// none (egui drops a shape at opacity 0).
+    fn opacity(out: &egui::FullOutput, text: &str) -> f32 {
+        let painted = out.shapes.iter().find_map(|s| match &s.shape {
+            egui::Shape::Text(t) if t.galley.text() == text => {
+                let rows = t.galley.rows.iter();
+                let v = rows.flat_map(|r| &r.row.visuals.mesh.vertices).next()?;
+                let c = if v.color == egui::Color32::PLACEHOLDER {
+                    t.fallback_color
+                } else {
+                    v.color
+                };
+                Some(t.opacity_factor * f32::from(c.a()) / 255.0)
+            }
+            _ => None,
+        });
+        painted.unwrap_or(0.0)
+    }
+
+    /// Spec §3.11: a page fades in over `PAGE_FADE` after a route change and when its data
+    /// comes in after the spinner, then rests; the first page a context draws shows at once.
+    /// Input works mid-fade: the first pass, unseen, already takes the pointer.
+    #[test]
+    fn pages_fade_in() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut pass = |model: &Model, time: f64, events: Vec<egui::Event>| {
+            frame(&ctx, &tx, &mut state, model, Some(time), events)
+        };
+        let route = Route::Album(1);
+        let data = || PageData::Album {
+            album: testing::album(1),
+            tracks: testing::tracks(3),
+        };
+        let mut model = testing::at(Route::Home);
+        model.navigate(route.clone());
+        model.apply(Event::Page {
+            route: route.clone(),
+            data: data(),
+        });
+        let title = "Album 1";
+        let out = pass(&model, 0.0, vec![]);
+        assert_eq!(opacity(&out, title), 1.0, "the first page shows at once");
+        model.apply(Event::Back);
+        pass(&model, 0.5, vec![]); // Home
+        model.apply(Event::Forward);
+        assert!(opacity(&pass(&model, 1.0, vec![]), title) < 1.0, "back");
+        let mid = opacity(&pass(&model, 1.075, vec![]), title);
+        assert!(0.0 < mid && mid < 1.0, "{mid}");
+        assert_eq!(opacity(&pass(&model, 1.2, vec![]), title), 1.0, "faded in");
+        let out = pass(&model, 1.3, vec![]);
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "repaints at rest");
+        // Loading, then the data.
+        let mut model = testing::at(route.clone());
+        model.apply(Event::Loading(route.clone()));
+        pass(&model, 2.0, vec![]); // the spinner
+        model.apply(Event::Page {
+            route,
+            data: data(),
+        });
+        let out = pass(&model, 2.5, vec![]);
+        assert!(opacity(&out, title) < 1.0, "the data in");
+        // The album's Play pill (the player bar's is disabled), placed by that unseen pass.
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let play = nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some("Play") && !n.is_disabled());
+        let b = play.and_then(|(_, n)| n.bounds());
+        let b = b.expect("the album's Play");
+        let at = egui::pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let press = vec![egui::Event::PointerMoved(at), button(true)];
+        pass(&model, 2.55, press);
+        let out = pass(&model, 2.6, vec![button(false)]);
+        assert!(opacity(&out, title) < 1.0, "still fading");
+        let played = std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|a| matches!(a, Action::PlayTracks { .. }));
+        assert!(played, "the click is delivered mid-fade");
     }
 
     /// Small covers are asked for exactly; larger ones in steps of 32 px, so a card that

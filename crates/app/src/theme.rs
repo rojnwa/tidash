@@ -252,6 +252,8 @@ pub const HOVER: f32 = 0.15;
 pub const OVERLAY: f32 = 0.3;
 /// The player bar's sliders growing their rail and thumb when hovered.
 pub const SLIDER_HOVER: f32 = 0.12;
+/// A page's content fading in, on a route change or its data coming in.
+pub const PAGE_FADE: f32 = 0.15;
 /// The player bar's tint, per channel.
 pub const TINT_FADE: f32 = 0.45;
 /// The cover size the tint is taken from, in pixels.
