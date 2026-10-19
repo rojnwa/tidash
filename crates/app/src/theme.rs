@@ -250,6 +250,8 @@ pub const SCRIM: Color32 = Color32::from_black_alpha(179);
 pub const HOVER: f32 = 0.15;
 /// The card cover's overlay fade.
 pub const OVERLAY: f32 = 0.3;
+/// The player bar's sliders growing their rail and thumb when hovered.
+pub const SLIDER_HOVER: f32 = 0.12;
 /// The player bar's tint, per channel.
 pub const TINT_FADE: f32 = 0.45;
 /// The cover size the tint is taken from, in pixels.

@@ -9,9 +9,10 @@ use crate::images::TextureCache;
 use crate::model::{Action, Model, OutputInfo};
 use crate::queue::Repeat;
 use crate::theme::{self, ICON_BUTTON, Icon, PLAY_GLYPH, Palette, SKIP_GLYPH, TRANSPORT, Tier};
+use egui::style::HandleShape;
 use egui::{
-    Align, Color32, Frame, Label, Layout, Panel, Rect, Response, RichText, Slider, Stroke, Ui,
-    UiBuilder, Vec2, pos2, vec2,
+    Align, Color32, CursorIcon, Frame, Label, Layout, Panel, Rect, Response, RichText, Slider,
+    Stroke, Ui, UiBuilder, Vec2, lerp, pos2, remap_clamp, vec2,
 };
 use player::{PlayState, Player};
 use std::ops::RangeInclusive;
@@ -276,33 +277,46 @@ fn extras(
     });
 }
 
-/// egui's `Slider` over `range` (its keys, its AccessKit node), as TIDAL's (spec §5.7): the rail
-/// `surface_active`, `text` up to the value, there a `text` knob with no stroke, faded with
-/// the rest when disabled. The row is a line of body text tall; egui's knob, 2/5 of it.
+/// egui's `Slider` over `range` for its input, keys and AccessKit node, painted as TIDAL's
+/// (spec §5.7). It is `interact_size.y` tall, the seek row's height, so its rail sits on the
+/// row's centre line, the times' and the volume icon's: 4 px `surface_active`, `text` up to
+/// the value. Hovered, dragged or focused, over `SLIDER_HOVER` the rail grows to 6 px, the
+/// played part turns `accent` and a 12 px `text` thumb grows in at the value; focused, the
+/// focus ring too. Faded with the rest when disabled.
 fn slider(ui: &mut Ui, p: &Palette, value: &mut f32, range: RangeInclusive<f32>) -> Response {
     ui.scope(|ui| {
-        let s = ui.style_mut();
-        s.spacing.interact_size.y = 0.0;
-        s.visuals.selection.bg_fill = p.text; // the played part (spec §4.6)
-        let w = &mut s.visuals.widgets;
-        w.inactive.bg_fill = p.surface_active; // the rail, and egui's knob at rest
+        let v = &mut ui.style_mut().visuals;
+        v.handle_shape = HandleShape::Rect { aspect_ratio: 0.0 }; // the value spans the width
+        v.selection.bg_fill = Color32::TRANSPARENT; // egui paints nothing seen
+        let w = &mut v.widgets;
         for state in [
             &mut w.noninteractive,
             &mut w.inactive,
             &mut w.hovered,
             &mut w.active,
         ] {
+            state.bg_fill = Color32::TRANSPARENT;
             state.fg_stroke = Stroke::NONE;
         }
         let ends = *range.start()..=*range.end();
         let r = ui.add(Slider::new(value, range).show_value(false));
-        // Over egui's knob, where egui puts it: its rest colour is the rail's.
-        let t = egui::remap_clamp(*value, ends, 0.0..=1.0);
-        let radius = r.rect.height() / 2.5;
-        let x = r.rect.x_range().shrink(radius);
-        let at = pos2(egui::lerp(x.min..=x.max, t), r.rect.center().y);
-        ui.painter().circle_filled(at, radius, p.text);
-        r
+        let on = r.enabled() && (r.hovered() || r.dragged() || r.has_focus());
+        let t = ui
+            .ctx()
+            .animate_bool_with_time(r.id, on, theme::SLIDER_HOVER);
+        let y = r.rect.center().y;
+        let half = lerp(4.0..=6.0, t) / 2.0;
+        let rail = Rect::from_x_y_ranges(r.rect.x_range(), y - half..=y + half);
+        let at = lerp(rail.x_range(), remap_clamp(*value, ends, 0.0..=1.0));
+        let (painter, round) = (ui.painter(), rail.height() / 2.0);
+        painter.rect_filled(rail, round, p.surface_active);
+        let played = theme::blend(p.text, p.accent, t);
+        painter.rect_filled(rail.with_max_x(at), round, played);
+        if t > 0.0 {
+            painter.circle_filled(pos2(at, y), 6.0 * t, p.text);
+        }
+        widgets::focus_ring(ui, &r, r.rect.height() / 2.0);
+        r.on_hover_cursor(CursorIcon::PointingHand)
     })
     .inner
 }
@@ -433,6 +447,17 @@ mod tests {
 
     /// One pass of the bar alone, in a window `width` by 600.
     fn bar(ctx: &egui::Context, model: &Model, width: f32) -> egui::FullOutput {
+        bar_at(ctx, model, width, 0.0, vec![])
+    }
+
+    /// `bar` at `time` seconds, fed `events`.
+    fn bar_at(
+        ctx: &egui::Context,
+        model: &Model,
+        width: f32,
+        time: f64,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let p = Palette::dark();
         let (mut state, mut side) = (State::default(), None);
@@ -440,6 +465,8 @@ mod tests {
         let screen = Rect::from_min_size(egui::Pos2::ZERO, vec2(width, 600.0));
         let input = egui::RawInput {
             screen_rect: Some(screen),
+            time: Some(time),
+            events,
             ..Default::default()
         };
         let mut out = ctx.run_ui(input, |ui| {
@@ -564,27 +591,133 @@ mod tests {
         }
     }
 
-    /// The seek and volume knobs are small discs with no stroke, playing or not (the seek
-    /// slider disabled then).
-    #[test]
-    fn slider_knobs_are_small() {
-        let ctx = testing::context();
-        theme::apply(&ctx, &Palette::dark()); // the knob shape and sizes
-        let mut model = Model::default();
-        for track in [Some(testing::track(1)), None] {
-            model.playback.track = track;
-            let out = bar(&ctx, &model, 1000.0);
-            let knobs: Vec<_> = (out.shapes.iter())
-                .filter_map(|s| match &s.shape {
-                    egui::Shape::Circle(c) => Some(c),
-                    _ => None,
-                })
-                .collect();
-            assert!(knobs.len() >= 2, "{knobs:?}");
-            for k in knobs {
-                assert!(k.radius <= 7.0 && k.stroke.is_empty(), "{k:?}");
-            }
+    /// The discs in `out`.
+    fn circles(out: &egui::FullOutput) -> Vec<&egui::epaint::CircleShape> {
+        (out.shapes.iter())
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Circle(c) => Some(c),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The enabled sliders' rails in `out`, in paint order: the seek's, then the volume's.
+    fn rails(out: &egui::FullOutput) -> Vec<Rect> {
+        let rail = Palette::dark().surface_active;
+        (out.shapes.iter())
+            .filter_map(|s| match &s.shape {
+                egui::Shape::Rect(r) if r.fill == rail => Some(r.rect),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Where the sliders are, enabled or not, left to right: the seek, then the volume.
+    fn sliders(out: &egui::FullOutput) -> Vec<Rect> {
+        let tree = out.platform_output.accesskit_update.as_ref();
+        let nodes = &tree.expect("AccessKit is on").nodes;
+        let at = |x: f64, y: f64| pos2(x as f32, y as f32);
+        let mut found: Vec<_> = (nodes.iter())
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::Slider)
+            .filter_map(|(_, n)| n.bounds())
+            .map(|b| Rect::from_min_max(at(b.x0, b.y0), at(b.x1, b.y1)))
+            .collect();
+        found.sort_by(|a, b| a.left().total_cmp(&b.left()));
+        found
+    }
+
+    /// The pointer moved to `at` at `from`, then passes every 0.1 s for 0.3 s: the last.
+    fn hover(ctx: &egui::Context, model: &Model, at: egui::Pos2, from: f64) -> egui::FullOutput {
+        let moved = || vec![egui::Event::PointerMoved(at)];
+        let mut out = bar_at(ctx, model, 1000.0, from, moved());
+        for i in 1..=3 {
+            out = bar_at(ctx, model, 1000.0, from + f64::from(i) * 0.1, vec![]);
         }
+        out
+    }
+
+    /// At rest the sliders show no thumb on a 4 px rail; hovered, the seek rail grows to 6 px,
+    /// a 12 px stroke-less disc sits on its centre line, under the hand; the pointer gone, it
+    /// shrinks back and the bar is still.
+    #[test]
+    fn slider_thumb_only_on_hover() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        theme::apply(&ctx, &Palette::dark());
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        let out = bar_at(&ctx, &model, 1000.0, 0.0, vec![]);
+        assert!(circles(&out).is_empty(), "at rest: {:?}", circles(&out));
+        let seek = rails(&out)[0];
+        assert!((seek.height() - 4.0).abs() <= 0.5, "{seek:?}");
+        let out = hover(&ctx, &model, seek.center(), 0.0);
+        let rail = rails(&out)[0];
+        assert!((rail.height() - 6.0).abs() <= 0.5, "{rail:?}");
+        let thumb = circles(&out);
+        assert!(matches!(thumb[..], [_]), "{thumb:?}");
+        let c = thumb[0];
+        assert!(
+            (c.radius - 6.0).abs() <= 0.5 && c.stroke.is_empty(),
+            "{c:?}"
+        );
+        assert!(
+            (c.center.y - rail.center().y).abs() <= 0.5,
+            "{c:?} {rail:?}"
+        );
+        assert_eq!(out.platform_output.cursor_icon, CursorIcon::PointingHand);
+        let out = hover(&ctx, &model, pos2(10.0, 10.0), 0.4);
+        assert!(circles(&out).is_empty(), "left: {:?}", circles(&out));
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "repaints at rest");
+    }
+
+    /// The times sit on the seek rail's centre line, the volume rail on its icon's.
+    #[test]
+    fn times_sit_on_the_seek_rail() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        theme::apply(&ctx, &Palette::dark());
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        let out = bar(&ctx, &model, 1000.0);
+        let [seek, volume] = rails(&out)[..] else {
+            panic!("two rails: {:?}", rails(&out));
+        };
+        for text in ["0:00", "3:20"] {
+            let t = painted(&out, text);
+            let t = t.first().unwrap_or_else(|| panic!("no {text:?}"));
+            let y = t.galley.rect.translate(t.pos.to_vec2()).center().y;
+            assert!(
+                (y - seek.center().y).abs() <= 0.5,
+                "{text}: {y} vs {seek:?}"
+            );
+        }
+        let icon = testing::bounds(&out, "Volume");
+        assert!(
+            (volume.center().y - icon.center().y).abs() <= 0.5,
+            "{volume:?} {icon:?}"
+        );
+    }
+
+    /// A disabled slider shows no thumb when hovered, and the arrow: the volume in exclusive
+    /// mode, the seek with nothing playing.
+    #[test]
+    fn a_disabled_slider_shows_no_thumb() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        theme::apply(&ctx, &Palette::dark());
+        let mut model = Model::default();
+        model.playback.track = Some(testing::track(1));
+        model.settings.audio.exclusive = true; // the volume fixed
+        let volume = sliders(&bar(&ctx, &model, 1000.0))[1];
+        let out = hover(&ctx, &model, volume.center(), 0.0);
+        assert!(circles(&out).is_empty(), "volume: {:?}", circles(&out));
+        assert_eq!(out.platform_output.cursor_icon, CursorIcon::Default);
+        model.settings.audio.exclusive = false;
+        model.playback.track = None;
+        let seek = sliders(&bar_at(&ctx, &model, 1000.0, 0.4, vec![]))[0];
+        let out = hover(&ctx, &model, seek.center(), 0.5);
+        assert!(circles(&out).is_empty(), "seek: {:?}", circles(&out));
     }
 
     /// Nothing playing, the left column is empty: no cover placeholder.

@@ -187,6 +187,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 |---|---|
 | Hover colour on rows, nav rows, icons | 150 ms (`ctx.animate_bool_with_time`) |
 | Card cover overlay | 300 ms fade |
+| Slider hover (player bar) | 120 ms (`theme::SLIDER_HOVER`) |
 | Discs and icon buttons | hover scale 1.1, press 0.9 |
 | egui `animation_time` | 0.15 s (also the sidebar's slide) |
 | Theme change | fastframe `Reveal::Band`, 0.42 s |
@@ -209,8 +210,10 @@ From `Visuals::dark()` or `light()` by `dark`, then:
   they would be darker than the idle fill); `weak_bg_fill` the same.
 - Text styles of §4.3; `item_spacing` (8, 8); `button_padding` (16, 8); `interact_size` (40, 32); `menu_margin` 4.
 - Sliders: `slider_rail_height` 4, circle handle; the trailing fill is egui's selection fill globally. The player
-  bar's sliders differ (§5.7): a `surface_active` rail, `text` up to the value, and an app-drawn `text` knob with no
-  stroke (~13.6 px) over egui's handle, which takes the rail's colour.
+  bar's sliders differ (§5.7): egui's slider for input, keys and AccessKit, painting nothing seen; the app draws a
+  4 px `surface_active` rail on the row's centre line (the times' and the volume icon's), `text` up to the value, no
+  thumb. Hovered, dragged or focused, over 120 ms the rail grows to 6 px, the played part turns `accent` and a 12 px
+  stroke-less `text` thumb grows in at the value; focus adds the focus ring. Disabled, the rest look, faded.
 - Scroll bars stay `ScrollStyle::solid()` (the floating bars' fade repaints while idle, S3): 6 px wide; egui's solid
   bars always show their track (`surface`) and draw the handle at 55% text, full text hovered or dragged. TIDAL's
   hidden track is out of reach without the floating bars.
@@ -326,7 +329,7 @@ neither sidebar nor top bar (as today).
   glyph, in text, each in a 40 px hit box (`glyph_button`; TIDAL 2.43 draws no disc, hovered or not: hover scales
   the glyph).
   Below, the seek row (max 800 wide): times in Small secondary, tabular; egui's slider with the player bar's look
-  (§4.6: `surface_active` rail, `text` fill and a stroke-less `text` knob).
+  (§4.6: `surface_active` rail, `text` fill, a `text` thumb only on hover).
 - Right: the format badge (`badge`, tier colours) with the short format ("24/96 FLAC", plus " · Exclusive"), its
   hover text and AccessKit value the full badge text and its explanation; then Queue (`list-music`), Lyrics
   (`mic-vocal`), Credits (`info`) icon buttons, toggles drawn like Shuffle (text and a surface_active disc when their
