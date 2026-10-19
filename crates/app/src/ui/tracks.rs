@@ -343,7 +343,7 @@ fn menu(
         row.ctx.data_mut(|d| d.insert_temp(id, now())); // as the menu opens
     }
     let p = ctx.palette;
-    context_menu(row, |ui| {
+    context_menu(row, &p, |ui| {
         if ui.data(|d| d.get_temp(id)) != Some(now()) {
             ui.close();
             return;
@@ -563,14 +563,14 @@ mod tests {
                 b(label)
             );
         }
-        let shapes: Vec<egui::Shape> = out
-            .shapes
-            .iter()
-            .flat_map(|c| match &c.shape {
+        fn flat(out: &egui::FullOutput) -> Vec<egui::Shape> {
+            let one = |c: &egui::epaint::ClippedShape| match &c.shape {
                 egui::Shape::Vec(v) => v.clone(),
                 s => vec![s.clone()],
-            })
-            .collect();
+            };
+            out.shapes.iter().flat_map(one).collect()
+        }
+        let shapes = flat(&out);
         let rule_between = |above: &str, below: &str| {
             let y = egui::Rangef::new(b(above).bottom(), b(below).top());
             shapes.iter().any(|s| match s {
@@ -599,6 +599,28 @@ mod tests {
         let out = settle(&ctx, &tx, &model, &list);
         let new = testing::bounds(&out, "New playlist…");
         assert!(new.height() >= MENU_ITEM - 0.5, "{new:?}");
+        // Hovered, an item (a submenu's too) is `surface_hover` over `overlay`, radius 8, and
+        // reads against the frame: before, it was `surface`'s hover, 6 off `overlay`.
+        let hover = p.overlay.blend(p.surface_hover);
+        assert!(hover.r().abs_diff(p.overlay.r()) >= 16, "{hover:?}");
+        let hovered = |at: egui::Pos2| {
+            pass(
+                &ctx,
+                &tx,
+                &model,
+                &list,
+                vec![egui::Event::PointerMoved(at)],
+            );
+            let out = pass(&ctx, &tx, &model, &list, vec![]).1;
+            flat(&out).iter().any(|s| match s {
+                egui::Shape::Rect(r) => {
+                    r.fill == hover && r.rect.contains(at) && r.corner_radius == 8.into()
+                }
+                _ => false,
+            })
+        };
+        assert!(hovered(new.center()), "New playlist…");
+        assert!(hovered(b("Copy link").center()), "Copy link");
     }
 
     /// "Play next" and "Add to queue" in a row's menu send that track to the queue.

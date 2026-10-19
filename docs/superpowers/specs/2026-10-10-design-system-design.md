@@ -346,8 +346,9 @@ neither sidebar nor top bar (as today).
   Small secondary, names as links.
 - Menus, popovers, tooltips and dialogs are stock egui, styled by §4.6 (overlay fill, radius 12 and 20, shadow).
   Menus and their submenus are roomier (`theme::menu_style`, interface polish §3.7): a 6 px margin, at least 200 px
-  wide; items 34 px tall, a 16 px `secondary` icon 12 in and a 12 px gap before the label, hover radius 8; groups split
-  by a 1 px `outline` rule with 5 px above and below; a submenu item ends in a `secondary` chevron.
+  wide; items 34 px tall, a 16 px `secondary` icon 12 in and a 12 px gap before the label; hovered, pressed or open,
+  `surface_hover` composited over `overlay` (opaque), radius 8; groups split by a 1 px `outline` rule with 5 px above
+  and below; a submenu item ends in a `secondary` chevron.
 - Settings: Heading per section, one row per setting, left to right: the label in a 180 px column (cut to it), then
   the controls in reading order; in a narrower content area the label sits above them. Appearance becomes a combo box:
   Follow system, Dark, Light, a separator, then the catalog's themes by `display_name`; beside it "Open themes folder";

@@ -63,8 +63,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
                     ctx.send(Action::PlayQueueIndex(i));
                 }
-                context_menu(&row, |ui| {
-                    let remove = menu_button(&ctx.palette, Icon::X, tr("Remove"));
+                let p = ctx.palette;
+                context_menu(&row, &p, |ui| {
+                    let remove = menu_button(&p, Icon::X, tr("Remove"));
                     if ui.add(remove).clicked() {
                         ctx.send(Action::RemoveFromQueue(i));
                         ui.close();

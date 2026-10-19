@@ -216,8 +216,8 @@ pub fn submenu(
 }
 
 /// `add`'s menu, opened by right-clicking `resp`, in `theme::menu_style` (its submenus too).
-pub fn context_menu(resp: &Response, add: impl FnOnce(&mut Ui)) {
-    let menu = egui::Popup::context_menu(resp).style(theme::menu_style);
+pub fn context_menu(resp: &Response, p: &Palette, add: impl FnOnce(&mut Ui)) {
+    let menu = egui::Popup::context_menu(resp).style(theme::menu_style(*p));
     menu.show(|ui| {
         menu_width(ui);
         add(ui);

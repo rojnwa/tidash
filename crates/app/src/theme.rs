@@ -431,18 +431,27 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
     s.interaction.selectable_labels = false; // the I-beam is for text fields only
 }
 
-/// A menu's and its submenus' style (spec §3.7): egui's (no strokes, idle items unfilled),
-/// items `MENU_ITEM` tall and flush, inset 12 with 12 between icon and label, the hover
-/// fill's radius 8, inside a 6 margin.
-pub fn menu_style(s: &mut egui::Style) {
-    egui::containers::menu::menu_style(s);
-    let sp = &mut s.spacing;
-    sp.button_padding.x = 12.0;
-    sp.icon_spacing = 12.0;
-    sp.item_spacing.y = 0.0;
-    sp.interact_size.y = MENU_ITEM;
-    sp.menu_margin = egui::Margin::same(6);
-    s.visuals.widgets.hovered.corner_radius = CornerRadius::same(R_FIELD as u8);
+/// A menu's and its submenus' style in `p` (spec §3.7): egui's (no strokes, idle items
+/// unfilled), items `MENU_ITEM` tall and flush, inset 12 with 12 between icon and label,
+/// inside a 6 margin. Hovered, pressed or open, an item takes `surface_hover` over the frame's
+/// `overlay`, opaque, radius 8.
+pub fn menu_style(p: Palette) -> impl Fn(&mut egui::Style) + Send + Sync + 'static {
+    move |s| {
+        egui::containers::menu::menu_style(s);
+        let sp = &mut s.spacing;
+        sp.button_padding.x = 12.0;
+        sp.icon_spacing = 12.0;
+        sp.item_spacing.y = 0.0;
+        sp.interact_size.y = MENU_ITEM;
+        sp.menu_margin = egui::Margin::same(6);
+        let hover = p.overlay.blend(p.surface_hover);
+        let w = &mut s.visuals.widgets;
+        for state in [&mut w.hovered, &mut w.active, &mut w.open] {
+            state.bg_fill = hover;
+            state.weak_bg_fill = hover;
+        }
+        w.hovered.corner_radius = CornerRadius::same(R_FIELD as u8);
+    }
 }
 
 /// `a` moved `t` of the way to `b`, per channel, alpha too.

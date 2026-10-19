@@ -199,7 +199,7 @@ fn folder(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, id: &str, collapsed: bo
                 }
                 let listed = ctx.model.folders.get(sub);
                 let empty = *count == 0 && listed.is_none_or(Vec::is_empty);
-                context_menu(&header, |ui| {
+                context_menu(&header, &pal, |ui| {
                     if ui
                         .add(menu_button(&pal, Icon::Pencil, tr("Rename")))
                         .clicked()
@@ -262,7 +262,7 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
         ctx.go(route);
     }
     let pal = ctx.palette;
-    context_menu(&resp, |ui| {
+    context_menu(&resp, &pal, |ui| {
         submenu(ui, &pal, Icon::FolderInput, tr("Move to folder"), |ui| {
             let here = (parent != "root").then_some(parent);
             for (to, name) in destinations(ctx.model) {
@@ -339,7 +339,7 @@ pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]
     if !egui::containers::menu::is_in_menu(ui) {
         let pill = pill_button(ui, &pal, Some(Icon::ListPlus), &label, false);
         egui::Popup::menu(&pill)
-            .style(theme::menu_style)
+            .style(theme::menu_style(pal))
             .show(|ui| {
                 menu_width(ui);
                 picks(ui);
