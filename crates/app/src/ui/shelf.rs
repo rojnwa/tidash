@@ -1,7 +1,7 @@
 //! Shelves (a title, maybe "View all", then a sideways row of cards, a few tracks, or links)
 //! and the card grid.
 
-use super::widgets::{fade, focus_ring, icon_button, line};
+use super::widgets::{fade, focus_ring, icon_button, line, pill_button};
 use super::{Ctx, card, rows, tracks};
 use crate::i18n::tr;
 use crate::model::{Action, Route};
@@ -55,10 +55,11 @@ fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
             tracks::show(ui, ctx, "tracks", &list, false, None);
         }
         Layout::Links => {
+            let p = ctx.palette;
             ui.horizontal_wrapped(|ui| {
                 for item in &s.items {
                     if let Item::Link { title, api_path } = item
-                        && ui.button(title).clicked()
+                        && pill_button(ui, &p, None, title, false).clicked()
                     {
                         ctx.go(Route::Page(api_path.clone()));
                     }

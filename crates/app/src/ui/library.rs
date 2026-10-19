@@ -2,7 +2,9 @@
 //! R7), with the dialogs that make and change them.
 
 use super::Ctx;
-use super::widgets::{NAV_PAD, fade, focus_ring, icon_button, line, paint_icon, pill_button};
+use super::widgets::{
+    NAV_PAD, fade, focus_ring, icon_button, line, paint_icon, pill_button, text_field,
+};
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
 use crate::theme::{self, GLYPH, Icon, Palette, SIDEBAR_COVER};
@@ -460,8 +462,8 @@ pub fn playlist_dialog(
     description: &mut String,
 ) -> Option<bool> {
     modal(egui, p, heading, &tr("OK"), |ui, first| {
-        let enter = field(ui, &tr("Title"), title, first)
-            | field(ui, &tr("Description"), description, false);
+        let enter = field(ui, p, &tr("Title"), title, first)
+            | field(ui, p, &tr("Description"), description, false);
         (enter, !title.trim().is_empty())
     })
 }
@@ -474,7 +476,7 @@ fn name_dialog(
     name: &mut String,
 ) -> Option<bool> {
     modal(egui, p, heading, &tr("OK"), |ui, first| {
-        let enter = field(ui, &tr("Name"), name, first);
+        let enter = field(ui, p, &tr("Name"), name, first);
         (enter, !name.trim().is_empty())
     })
 }
@@ -516,9 +518,9 @@ fn modal(
 }
 
 /// A labelled one-line field, focused if `focus`: true when Enter was pressed in it.
-fn field(ui: &mut egui::Ui, label: &str, text: &mut String, focus: bool) -> bool {
+fn field(ui: &mut egui::Ui, p: &Palette, label: &str, text: &mut String, focus: bool) -> bool {
     let label = ui.label(label);
-    let edit = ui.text_edit_singleline(text).labelled_by(label.id);
+    let edit = text_field(ui, p, egui::TextEdit::singleline(text)).labelled_by(label.id);
     if focus {
         edit.request_focus();
     }

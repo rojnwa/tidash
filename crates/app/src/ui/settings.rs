@@ -5,7 +5,7 @@
 //! are actions. The Discord toggle and the behavior are settings like the others.
 
 use super::Ctx;
-use super::widgets::{heading, pill_button};
+use super::widgets::{heading, pill_button, text_field};
 use crate::i18n::tr;
 use crate::messages::{Secret, UpdateStep};
 use crate::model::{Action, Event, Model, Route, UpdateState};
@@ -63,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     super::page(ui, &Route::Settings, |ui| {
         // Logged out there is no sidebar: this is the way back to the login page.
         if !model.logged_in {
-            back = ui.button(tr("Back")).clicked();
+            back = pill_button(ui, &p, None, &tr("Back"), false).clicked();
         }
         ui.label(
             RichText::new(tr("Settings"))
@@ -76,7 +76,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
             logout = pill_button(ui, &p, None, &tr("Log out"), false).clicked();
         }
         section(ui, &p, tr("Appearance"));
-        if appearance(ui, model, &mut new) {
+        if appearance(ui, &p, model, &mut new) {
             ctx.send(Action::OpenThemesFolder);
         }
         section(ui, &p, tr("Audio"));
@@ -92,9 +92,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, &p, tr("Integrations"));
         if state.lastfm {
-            connect = lastfm(ui, model);
+            connect = lastfm(ui, &p, model);
         }
-        if let Some(action) = listenbrainz(ui, model, state) {
+        if let Some(action) = listenbrainz(ui, &p, model, state) {
             connect = Some(action);
         }
         if state.discord {
@@ -185,7 +185,10 @@ fn field(text: &mut String) -> egui::TextEdit<'_> {
 /// readers: egui would only link it to the label beside it.
 fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
     let combo = egui::ComboBox::from_id_salt(label).selected_text(selected);
+    // A pill tall, as the row's fields and buttons.
+    let height = std::mem::replace(&mut ui.spacing_mut().interact_size.y, theme::PILL);
     let shown = combo.show_ui(ui, list);
+    ui.spacing_mut().interact_size.y = height;
     shown.response.widget_info(|| {
         let mut info = WidgetInfo::labeled(WidgetType::ComboBox, ui.is_enabled(), label);
         info.current_text_value = Some(selected.to_owned());
@@ -198,7 +201,7 @@ fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
 /// the file and its cache, a file leaves the cache for `main` to fill. Beside it "Open themes
 /// folder", under it the status line, then the album-art tint. Whether "Open themes folder"
 /// was clicked.
-fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
+fn appearance(ui: &mut Ui, p: &Palette, model: &Model, new: &mut Settings) -> bool {
     let builtins = [
         (Theme::System, tr("Follow system")),
         (Theme::Dark, tr("Dark")),
@@ -242,7 +245,7 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
                 }
             }
         });
-        ui.button(tr("Open themes folder")).clicked()
+        pill_button(ui, p, None, &tr("Open themes folder"), false).clicked()
     });
     if let Some(status) = &model.theme_status {
         ui.weak(status_text(
@@ -280,7 +283,7 @@ fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
         (tr("Redirect URL"), &mut state.redirect_uri),
     ];
     for (label, text) in fields {
-        let (label, edit) = row(ui, label, |ui| ui.add(field(text)));
+        let (label, edit) = row(ui, label, |ui| text_field(ui, p, field(text)));
         edit.labelled_by(label.id);
     }
     let typed = Account {
@@ -300,19 +303,19 @@ fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
 
 /// Who Last.fm is connected as, with Disconnect; while a connect waits for the user, Cancel;
 /// else Connect. What was clicked, to send.
-fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
+fn lastfm(ui: &mut Ui, p: &Palette, model: &Model) -> Option<Action> {
     let user = &model.settings.integrations.lastfm_user;
     let (_, clicked) = row(ui, tr("Last.fm"), |ui| {
         if let Some(user) = user {
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            let disconnect = ui.button(tr("Disconnect")).clicked();
+            let disconnect = pill_button(ui, p, None, &tr("Disconnect"), false).clicked();
             disconnect.then_some(Action::DisconnectLastfm)
         } else if model.lastfm_waiting {
             ui.label(tr("Waiting for you to allow Tidash on Last.fm…"));
-            let cancel = ui.button(tr("Cancel")).clicked();
+            let cancel = pill_button(ui, p, None, &tr("Cancel"), false).clicked();
             cancel.then_some(Action::CancelLastfm)
         } else {
-            let connect = ui.button(tr("Connect")).clicked();
+            let connect = pill_button(ui, p, None, &tr("Connect"), false).clicked();
             connect.then_some(Action::ConnectLastfm)
         }
     });
@@ -326,12 +329,12 @@ fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
 
 /// Who ListenBrainz is connected as, with Disconnect; or the token field, called "User token",
 /// with Connect. What was clicked, to send.
-fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action> {
+fn listenbrainz(ui: &mut Ui, p: &Palette, model: &Model, state: &mut State) -> Option<Action> {
     let name = tr("ListenBrainz");
     if let Some(user) = &model.settings.integrations.listenbrainz_user {
         let (_, disconnect) = row(ui, name, |ui| {
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            ui.button(tr("Disconnect")).clicked()
+            pill_button(ui, p, None, &tr("Disconnect"), false).clicked()
         });
         return disconnect.then_some(Action::DisconnectListenBrainz);
     }
@@ -340,14 +343,17 @@ fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action>
         let token = field(&mut state.listenbrainz_token)
             .password(true)
             .hint_text(hint.as_ref());
-        let token = ui.add(token);
+        let token = text_field(ui, p, token);
         // The hint is AccessKit's placeholder, not its name; `widget_info` would also make it
         // a plain text input.
         ui.ctx()
             .accesskit_node_builder(token.id, |node| node.set_label(hint));
         let token = nonblank(&state.listenbrainz_token);
-        let button = egui::Button::new(tr("Connect"));
-        let clicked = ui.add_enabled(token.is_some(), button).clicked();
+        // Not `add_enabled_ui`, as in `updates`: the pill is the row's last, and must wrap.
+        if token.is_none() {
+            ui.disable();
+        }
+        let clicked = pill_button(ui, p, None, &tr("Connect"), false).clicked();
         clicked.then_some(token).flatten()
     });
     ui.weak(tr(

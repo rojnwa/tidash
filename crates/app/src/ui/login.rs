@@ -2,7 +2,7 @@
 //! with).
 
 use super::Ctx;
-use super::widgets::pill_button;
+use super::widgets::{pill_button, text_field};
 use crate::i18n::tr;
 use crate::model::{Action, Redirect, Route};
 use crate::theme;
@@ -38,16 +38,18 @@ fn form(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
         ));
         ui.add_space(8.0);
         ui.label(tr("Login page"));
+        let p = ctx.palette;
         // Read-only but selectable/copyable: edits go to a throwaway copy.
-        ui.add(egui::TextEdit::singleline(&mut url.as_str()).desired_width(f32::INFINITY));
+        let url = &mut url.as_str();
+        text_field(ui, &p, egui::TextEdit::singleline(url).desired_width(f32::INFINITY));
         ui.add_space(8.0);
-        ui.add(
-            egui::TextEdit::singleline(&mut state.pasted)
-                .hint_text(tr("Paste the address here"))
-                .desired_width(f32::INFINITY),
-        );
+        let paste = egui::TextEdit::singleline(&mut state.pasted)
+            .hint_text(tr("Paste the address here"))
+            .desired_width(f32::INFINITY);
+        text_field(ui, &p, paste);
         let ready = !state.pasted.trim().is_empty();
-        if ui.add_enabled(ready, egui::Button::new(tr("Continue"))).clicked() {
+        let next = ui.add_enabled_ui(ready, |ui| pill_button(ui, &p, None, &tr("Continue"), true));
+        if next.inner.clicked() {
             let pasted = Redirect(std::mem::take(&mut state.pasted));
             ctx.send(Action::FinishLogin(pasted));
         }

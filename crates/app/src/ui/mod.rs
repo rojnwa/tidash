@@ -277,7 +277,8 @@ fn page_data<'m>(ui: &mut egui::Ui, ctx: &mut Ctx<'m>, route: &Route) -> Option<
         padded(ui, |ui| {
             if slot.failed {
                 ui.label(tr("Couldn't load this page"));
-                if ui.button(tr("Retry")).clicked() {
+                let retry = widgets::pill_button(ui, &ctx.palette, None, &tr("Retry"), false);
+                if retry.clicked() {
                     ctx.go(route.clone()); // asks for it again
                 }
             } else if slot.loading {
@@ -316,7 +317,8 @@ fn track_data<'m, T>(
         Some(Load::Ready(data)) => return Some(data),
         Some(Load::Failed) => {
             ui.label(failed);
-            if ui.button(tr("Retry")).clicked() {
+            let retry = widgets::pill_button(ui, &ctx.palette, None, &tr("Retry"), false);
+            if retry.clicked() {
                 asks(ctx);
             }
         }

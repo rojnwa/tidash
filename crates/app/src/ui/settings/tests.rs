@@ -170,6 +170,27 @@ fn listenbrainz_connect_and_disconnect() {
     assert_eq!(sent.iter().filter(|a| disconnect(a)).count(), 1, "{sent:?}");
 }
 
+/// Spec §3.6: a row's field, button and combo box are a pill tall, centred on one line.
+#[test]
+fn a_rows_field_and_button_line_up() {
+    use crate::theme::PILL;
+    let ctx = testing::context();
+    ctx.enable_accesskit();
+    let mut state = UiState::default();
+    let mut model = testing::at(Route::Settings);
+    state.settings.lastfm = false; // the one Connect is ListenBrainz's
+    let (_, out) = pass(&ctx, &mut state, &mut model, vec![]);
+    let pairs = [("User token", "Connect"), ("Theme", "Open themes folder")];
+    for (a, b) in pairs {
+        let (a, b) = (testing::bounds(&out, a), testing::bounds(&out, b));
+        for r in [a, b] {
+            assert!((r.height() - PILL).abs() <= 0.5, "{r:?}");
+        }
+        let (ya, yb) = (a.center().y, b.center().y);
+        assert!((ya - yb).abs() <= 0.5, "{a:?} {b:?}");
+    }
+}
+
 /// Hidden without keys. With them: Connect; while it waits, Cancel; connected, the user
 /// with Disconnect.
 #[test]

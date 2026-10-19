@@ -298,6 +298,25 @@ pub fn search_field(
     r
 }
 
+/// The house text field (spec §3.6): `edit` on a `PILL`-tall, fully round `surface` pill
+/// like the search's, its text inset 16 and centred, with the focus ring. Width, hint and the
+/// rest stay the caller's.
+pub fn text_field(ui: &mut Ui, p: &Palette, edit: TextEdit<'_>) -> Response {
+    let radius = theme::PILL / 2.0;
+    // A frame of our own skips egui's margin, fill and stroke: it brings them itself.
+    let frame = egui::Frame::new()
+        .fill(p.surface)
+        .corner_radius(radius)
+        .inner_margin(egui::Margin::symmetric(16, 0));
+    let edit = edit
+        .frame(frame)
+        .min_size(vec2(0.0, theme::PILL))
+        .vertical_align(Align::Center);
+    let r = ui.add(edit);
+    focus_ring(ui, &r, radius);
+    r
+}
+
 const BADGE_PAD: Vec2 = vec2(12.0, 6.0);
 
 /// A pill of `small()` `text` in `color`, on `color` at 10% with a 1 px stroke of it at 50%,
@@ -558,6 +577,33 @@ mod tests {
         field(vec![egui::Event::Text("abc".into())]);
         assert_eq!(text, "abc");
         assert!(ctx.memory(|m| m.has_focus(id)));
+    }
+
+    /// A text field is a pill tall, and a pointer's click on it lets you type.
+    #[test]
+    fn text_fields_are_a_pill_tall() {
+        let ctx = context();
+        let p = Palette::dark();
+        let mut text = String::new();
+        let mut field = |events| {
+            run(&ctx, events, |ui| {
+                text_field(ui, &p, TextEdit::singleline(&mut text).hint_text("Name"))
+            })
+            .0
+        };
+        let r = field(vec![]);
+        assert_eq!(r.rect.height(), theme::PILL);
+        let at = r.rect.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        field(vec![egui::Event::PointerMoved(at), button(true)]);
+        field(vec![button(false)]);
+        field(vec![egui::Event::Text("abc".into())]);
+        assert_eq!(text, "abc");
     }
 
     #[test]

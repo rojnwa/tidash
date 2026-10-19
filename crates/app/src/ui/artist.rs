@@ -92,7 +92,7 @@ mod tests {
         assert_eq!(model.open_current(now), Some(route.clone()));
         model.apply(Event::PageFailed(route.clone()));
         assert_eq!(model.open_current(now), None, "a failed page waits");
-        let egui = egui::Context::default();
+        let egui = crate::ui::testing::context(); // Retry's pill needs the house fonts
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         for input in [vec![], vec![key(Key::Tab)], vec![key(Key::Enter)]] {
             let (events, _) = pass(&egui, &tx, &model, super::show, input);
