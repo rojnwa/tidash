@@ -9,7 +9,7 @@ use crate::model::{Action, PlaylistEdit, Route};
 use crate::theme::{
     self, COL_GAP, COVER_COL, GLYPH, INDEX_COL, Icon, Palette, ROW_COVER, TIME_COL, Tier,
 };
-use egui::text::CCursor;
+use egui::epaint::text::Glyph;
 use egui::{
     Align, Color32, DragAndDrop, FontId, Galley, PointerButton, Pos2, Rangef, Rect, Sense, Stroke,
     Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
@@ -73,12 +73,15 @@ pub fn summary(tracks: &[tidal::Track]) -> String {
     )
 }
 
+/// Between two artists' names.
+const SEP: &str = ", ";
+
 pub fn names(artists: &[tidal::Artist]) -> String {
     artists
         .iter()
         .map(|a| a.name.as_str())
         .collect::<Vec<_>>()
-        .join(", ")
+        .join(SEP)
 }
 
 pub fn artists(t: &tidal::Track) -> String {
@@ -252,11 +255,12 @@ fn cell(
     Some((at, galley))
 }
 
-/// `names` (each a char range of the text `galley` lays out at `at`, and where it leads) as
+/// `names` (each a byte range of the text `galley` lays out at `at`, and where it leads) as
 /// pointer links through `row` (spec §3.8): underlined in `ink` under the pointer (the row
 /// shows the hand), opened by a primary click. No Tab stops: the row's Enter and its menu's
-/// Go to album / Go to artist serve the keyboard. A name the "…" cuts ends at it; one wholly
-/// past the cut is no link.
+/// Go to album / Go to artist serve the keyboard. A name spans its glyphs, found by their
+/// source bytes: a right-to-left run keeps its glyphs in visual order. A name the "…" cuts
+/// ends at it; one with nothing left but the "…" is no link.
 fn links(
     ui: &Ui,
     ctx: &mut Ctx,
@@ -268,16 +272,28 @@ fn links(
     let Some(pointer) = row.hover_pos().filter(|_| !row.dragged()) else {
         return;
     };
-    let end = galley.end().index.0; // past the "…" when cut
-    let shown = end.saturating_sub(usize::from(galley.elided));
-    let x = |i| at.x + galley.pos_from_cursor(CCursor::new(i)).min.x;
-    let y = Rangef::new(at.y, at.y + galley.size().y);
-    for (chars, to) in names {
-        if chars.start >= shown {
-            return;
-        }
-        let last = if chars.end <= shown { chars.end } else { end };
-        let rect = Rect::from_x_y_ranges(x(chars.start)..=x(last), y);
+    let Some(line) = galley.rows.first() else {
+        return;
+    };
+    // A cut text's "…" carries the source byte of the first glyph it hid (or the last shown).
+    let cut = usize::from(galley.elided);
+    let (shown, dots) = line.glyphs.split_at(line.glyphs.len().saturating_sub(cut));
+    let offset = at.to_vec2() + line.pos.to_vec2();
+    for (bytes, to) in names {
+        let of = |g: &&Glyph| bytes.contains(&(g.cluster as usize));
+        let Some(rect) = shown
+            .iter()
+            .filter(of)
+            .map(Glyph::logical_rect)
+            .reduce(Rect::union)
+        else {
+            continue;
+        };
+        let rect = dots
+            .iter()
+            .filter(of)
+            .fold(rect, |r, g| r.union(g.logical_rect()));
+        let rect = rect.translate(offset);
         if rect.contains(pointer) {
             let foot = rect.bottom() - 0.5;
             ui.painter()
@@ -372,14 +388,14 @@ pub fn paint_row(
     if let Some(laid) = put(artist, &artists(t), theme::body(), p.text, Align::Min) {
         let mut from = 0;
         let names = t.artists.iter().map(|a| {
-            let chars = from..from + a.name.chars().count();
-            from = chars.end + ", ".len(); // as `names` joins them
-            (chars, Route::Artist(a.id))
+            let bytes = from..from + a.name.len();
+            from = bytes.end + SEP.len(); // as `names` joins them
+            (bytes, Route::Artist(a.id))
         });
         links(ui, ctx, row, laid, names, p.text);
     }
     if album && let Some(laid) = put(album_x, &t.album.title, theme::body(), p.text, Align::Min) {
-        let name = (0..t.album.title.chars().count(), Route::Album(t.album.id));
+        let name = (0..t.album.title.len(), Route::Album(t.album.id));
         links(ui, ctx, row, laid, [name], p.text);
     }
     let length = duration(t.duration);
@@ -486,7 +502,7 @@ fn menu(
 #[cfg(test)]
 mod tests {
     use crate::model::{Action, Event, Model, Route};
-    use crate::ui::testing::{self, click, middle};
+    use crate::ui::testing::{self, click, middle, primary};
     use crate::ui::{library, page};
     use egui::text::CCursor;
     use egui::{Key, Pos2, vec2};
@@ -543,16 +559,6 @@ mod tests {
             });
             library::dialog(ui.ctx(), c);
         })
-    }
-
-    /// A primary button press at `at` if `pressed`, else its release.
-    fn primary(at: Pos2, pressed: bool) -> egui::Event {
-        egui::Event::PointerButton {
-            pos: at,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers: Default::default(),
-        }
     }
 
     /// The pointer moves to `at` and clicks there, a pass each, in a window `width` wide: the
@@ -634,36 +640,104 @@ mod tests {
             Ok(Action::PlayTracks { start: 0, .. })
         ));
 
-        let p = crate::theme::Palette::dark();
         let (at, galley) = painted(&out, names);
         let x = |i: usize| at.x + galley.pos_from_cursor(CCursor::new(i)).min.x;
         let foot = at.y + galley.size().y - 0.5;
-        let underlines = |out: &egui::FullOutput| -> Vec<egui::Rangef> {
-            let line = |s: &egui::epaint::ClippedShape| match s.shape {
-                egui::Shape::LineSegment {
-                    points: [a, b],
-                    stroke,
-                } if stroke == egui::Stroke::new(1.0, p.text) && a.y == foot && b.y == foot => {
-                    Some(egui::Rangef::new(a.x.min(b.x), a.x.max(b.x)))
-                }
-                _ => None,
-            };
-            out.shapes.iter().filter_map(line).collect()
-        };
         assert!(underlines(&out).is_empty(), "at rest");
-        let ctx = testing::context();
-        pass(&ctx, &tx, &model, &list, vec![]); // the rows the pointer finds next pass
-        let moved = vec![egui::Event::PointerMoved(char_at(&out, names, 3))];
-        let out = pass(&ctx, &tx, &model, &list, moved).1;
+        let out = hover_at(&tx, &model, &list, 800.0, char_at(&out, names, 3));
         assert_eq!(
             out.platform_output.cursor_icon,
             egui::CursorIcon::PointingHand
         );
-        assert_eq!(
-            underlines(&out),
-            [egui::Rangef::new(x(0), x(8))],
-            "Artist 1"
+        let near = |a: f32, b: f32| (a - b).abs() <= 1.0;
+        let lines = underlines(&out);
+        assert!(
+            matches!(lines[..], [(x0, y)] if near(x0.min, x(0)) && near(x0.max, x(8)) && near(y, foot)),
+            "not under Artist 1 alone: {lines:?}"
         );
+    }
+
+    /// The pointer over `at`, in a window `width` wide, in a context of its own: the output.
+    fn hover_at(
+        tx: &UnboundedSender<Action>,
+        model: &Model,
+        list: &[tidal::Track],
+        width: f32,
+        at: Pos2,
+    ) -> egui::FullOutput {
+        let ctx = testing::context();
+        pass_at(&ctx, tx, model, list, width, vec![]); // the rows the pointer finds next pass
+        let moved = vec![egui::Event::PointerMoved(at)];
+        pass_at(&ctx, tx, model, list, width, moved).1
+    }
+
+    /// The underlines in `out`, 1 px `text` lines across: where each runs, and its height.
+    fn underlines(out: &egui::FullOutput) -> Vec<(egui::Rangef, f32)> {
+        let text = crate::theme::Palette::dark().text;
+        let line = |s: &egui::epaint::ClippedShape| match s.shape {
+            egui::Shape::LineSegment {
+                points: [a, b],
+                stroke,
+            } if stroke == egui::Stroke::new(1.0, text) && a.y == b.y => {
+                Some((egui::Rangef::new(a.x.min(b.x), a.x.max(b.x)), a.y))
+            }
+            _ => None,
+        };
+        out.shapes.iter().filter_map(line).collect()
+    }
+
+    /// The middle of the glyph painted for the char at `byte` of the painted `text` in `out`:
+    /// right-to-left runs keep their glyphs in visual order, so not char order.
+    fn glyph_at(out: &egui::FullOutput, text: &str, byte: usize) -> Pos2 {
+        let (at, galley) = painted(out, text);
+        let row = &galley.rows[0];
+        let glyph = row.glyphs.iter().find(|g| g.cluster as usize == byte);
+        let rect = glyph.expect("a glyph there").logical_rect();
+        at + row.pos.to_vec2() + rect.center().to_vec2()
+    }
+
+    /// Right-to-left names link too: alone, after a left-to-right one, and two side by side.
+    /// A click on one opens that artist; hovered, it alone is underlined.
+    #[test]
+    fn right_to_left_names_link_too() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let model = Model::default();
+        let arabic = |id, name: &str| tidal::Artist {
+            name: name.into(),
+            ..testing::artist(id)
+        };
+        let (amr, nancy) = (arabic(5, "عمرو دياب"), arabic(6, "نانسي"));
+        for artists in [
+            vec![amr.clone()],
+            vec![testing::artist(1), amr.clone()],
+            vec![amr.clone(), nancy.clone()],
+        ] {
+            let text = super::names(&artists);
+            let list = vec![tidal::Track {
+                artists: artists.clone(),
+                ..testing::track(1)
+            }];
+            let out = pass_at(&testing::context(), &tx, &model, &list, 1400.0, vec![]).1;
+            let mid =
+                |a: &tidal::Artist| glyph_at(&out, &text, text.find(&a.name).expect("in the list"));
+            for a in &artists {
+                let ctx = testing::context();
+                let events = click_at(&ctx, &tx, &model, &list, 1400.0, mid(a));
+                assert!(
+                    matches!(&events[..], [Event::Navigate(Route::Artist(id))] if *id == a.id),
+                    "{text}, {}: {events:?}",
+                    a.name
+                );
+                let lines = underlines(&hover_at(&tx, &model, &list, 1400.0, mid(a)));
+                let others = artists.iter().filter(|b| b.id != a.id);
+                let alone = |x: egui::Rangef| others.clone().all(|b| !x.contains(mid(b).x));
+                assert!(
+                    matches!(lines[..], [(x, _)] if x.contains(mid(a).x) && alone(x)),
+                    "{text}, {}: {lines:?}",
+                    a.name
+                );
+            }
+        }
     }
 
     /// Spec §3.8: a name is the row's: right-clicked, the row's menu opens; in an editable
