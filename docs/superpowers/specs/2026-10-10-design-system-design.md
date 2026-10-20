@@ -189,6 +189,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 | Card cover overlay | 300 ms fade |
 | Slider hover (player bar) | 120 ms (`theme::SLIDER_HOVER`) |
 | Page fade-in | 150 ms (`theme::PAGE_FADE`) |
+| Toast fade | 150 ms in and out, shown 2.5 s (`theme::TOAST_FADE`, `theme::TOAST_SHOW`) |
 | Discs and icon buttons | hover scale 1.1, press 0.9 |
 | egui `animation_time` | 0.15 s (also the sidebar's slide) |
 | Theme change | fastframe `Reveal::Band`, 0.42 s |

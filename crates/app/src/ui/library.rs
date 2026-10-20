@@ -1,11 +1,11 @@
 //! The sidebar's playlists and folders, as TIDAL keeps them (own and favorited playlists alike,
 //! R7), with the dialogs that make and change them.
 
-use super::Ctx;
 use super::widgets::{
     NAV_PAD, context_menu, fade, focus_ring, icon_button, line, menu_button, menu_width,
     paint_icon, pill_button, submenu, text_field,
 };
+use super::{Ctx, toast};
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
 use crate::theme::{self, GLYPH, Icon, Palette, SIDEBAR_COVER};
@@ -312,7 +312,7 @@ fn destinations(model: &Model) -> Vec<(Option<&str>, Cow<'_, str>)> {
 
 /// The "Add to playlist" menu, under a secondary pill (a submenu inside a menu): "New
 /// playlist…", then the user's own playlists, newest updated first. `tracks` go into the one
-/// picked.
+/// picked, and a toast says so.
 pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]) {
     let ids = || tracks.iter().map(|t| t.id).collect();
     let (pal, label) = (ctx.palette, tr("Add to playlist"));
@@ -331,6 +331,8 @@ pub fn add_to_playlist(ui: &mut egui::Ui, ctx: &mut Ctx, tracks: &[tidal::Track]
             {
                 let (uuid, tracks) = (p.uuid.clone(), ids());
                 ctx.send(Action::EditPlaylist(PlaylistEdit::Add { uuid, tracks }));
+                let done = tr("Added to {playlist}").replace("{playlist}", &p.title);
+                toast::show(ui.ctx(), done);
                 ui.close();
             }
         }

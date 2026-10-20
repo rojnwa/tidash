@@ -257,6 +257,10 @@ pub const OVERLAY: f32 = 0.3;
 pub const SLIDER_HOVER: f32 = 0.12;
 /// A page's content fading in, on a route change or its data coming in.
 pub const PAGE_FADE: f32 = 0.15;
+/// A toast fading in, and out (spec §3.10).
+pub const TOAST_FADE: f32 = 0.15;
+/// How long a toast shows before it fades out, its fade in included.
+pub const TOAST_SHOW: f32 = 2.5;
 /// The player bar's tint, per channel.
 pub const TINT_FADE: f32 = 0.45;
 /// The cover size the tint is taken from, in pixels.

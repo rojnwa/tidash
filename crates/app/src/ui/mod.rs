@@ -1,5 +1,5 @@
 //! Drawing: the player bar, the sidebar and the side panel; then the top bar, dismissible
-//! errors under it, and the current route.
+//! errors under it, and the current route; a toast over it.
 
 mod album;
 mod artist;
@@ -20,6 +20,7 @@ mod search;
 pub mod settings;
 mod shelf;
 mod sidebar;
+mod toast;
 mod top_bar;
 mod tracks;
 mod widgets;
@@ -595,7 +596,7 @@ pub fn draw(
 
     // No margin: pages inset themselves (`page`, `padded`), their scroll bars at the edge.
     let frame = egui::Frame::central_panel(ui.style()).inner_margin(0);
-    egui::CentralPanel::default().frame(frame).show(ui, |ui| {
+    let central = egui::CentralPanel::default().frame(frame).show(ui, |ui| {
         let mut ctx = Ctx {
             model,
             tx,
@@ -646,6 +647,7 @@ pub fn draw(
             Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
         }
     });
+    toast::paint(ui.ctx(), &palette, central.response.rect);
     state.transition.paint(ui.ctx()); // over everything
     events
 }

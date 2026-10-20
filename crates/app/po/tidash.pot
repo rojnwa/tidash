@@ -238,6 +238,30 @@ msgstr ""
 msgid "Copy link"
 msgstr ""
 
+#: src/ui/tracks.rs
+msgid "Link copied"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Playing next"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Added to queue"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Added to favorites"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Removed from favorites"
+msgstr ""
+
+#: src/ui/library.rs
+msgid "Added to {playlist}"
+msgstr ""
+
 #: src/ui/collection.rs
 msgid "Mixes"
 msgstr ""

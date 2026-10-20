@@ -3,7 +3,7 @@
 use super::widgets::{
     context_menu, fade, focus_ring, line, menu_button, menu_separator, paint_icon,
 };
-use super::{Ctx, library, queue_panel, rows};
+use super::{Ctx, library, queue_panel, rows, toast};
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, PlaylistEdit, Route};
 use crate::theme::{
@@ -404,7 +404,8 @@ pub fn paint_row(
 
 /// A track row's context menu; with `edit`, the playlist's rows and this one's index in them,
 /// it can remove the row. `ui.close()` also closes it when an entry is picked from the
-/// keyboard or a screen reader, which no pointer click does.
+/// keyboard or a screen reader, which no pointer click does. An entry with no visible result
+/// says what it did in a toast.
 ///
 /// A row's ids are its index's, so a list replaced under an open menu (a playlist reloaded
 /// after an edit) would hand it another track and listing: it closes instead.
@@ -430,6 +431,7 @@ fn menu(
             .clicked()
         {
             ctx.send(Action::PlayNext(vec![t.clone()]));
+            toast::show(ui.ctx(), tr("Playing next").into_owned());
             ui.close();
         }
         if ui
@@ -437,6 +439,7 @@ fn menu(
             .clicked()
         {
             ctx.send(Action::AddToQueue(vec![t.clone()]));
+            toast::show(ui.ctx(), tr("Added to queue").into_owned());
             ui.close();
         }
         library::add_to_playlist(ui, ctx, std::slice::from_ref(t));
@@ -465,13 +468,14 @@ fn menu(
         }
         menu_separator(ui);
         let fav = tidal::Favorite::Track(t.id);
-        let heart = if ctx.model.favorites.contains(&fav) {
-            Icon::HeartFilled
+        let (heart, done) = if ctx.model.favorites.contains(&fav) {
+            (Icon::HeartFilled, tr("Removed from favorites"))
         } else {
-            Icon::Heart
+            (Icon::Heart, tr("Added to favorites"))
         };
         let item = menu_button(&p, heart, ctx.favorite_label(&fav));
         if ctx.favorite_button(ui, fav, item).clicked() {
+            toast::show(ui.ctx(), done.into_owned());
             ui.close();
         }
         if ui
@@ -480,6 +484,7 @@ fn menu(
         {
             ui.ctx()
                 .copy_text(format!("https://tidal.com/browse/track/{}", t.id));
+            toast::show(ui.ctx(), tr("Link copied").into_owned());
             ui.close();
         }
         if let Some((e, i)) = edit
@@ -503,7 +508,7 @@ fn menu(
 mod tests {
     use crate::model::{Action, Event, Model, Route};
     use crate::ui::testing::{self, click, middle, primary};
-    use crate::ui::{library, page};
+    use crate::ui::{library, page, toast};
     use egui::text::CCursor;
     use egui::{Key, Pos2, vec2};
     use std::sync::Arc;
@@ -527,8 +532,8 @@ mod tests {
         }
     }
 
-    /// One pass of a page holding `list`, with the library's dialog, fed `input`: the events it
-    /// gave, and its output.
+    /// One pass of a page holding `list`, with the library's dialog and any toast, fed `input`:
+    /// the events it gave, and its output.
     fn pass(
         ctx: &egui::Context,
         tx: &UnboundedSender<Action>,
@@ -558,6 +563,7 @@ mod tests {
                 super::show(ui, c, "t", list, false, None)
             });
             library::dialog(ui.ctx(), c);
+            toast::paint(ui.ctx(), &c.palette, ui.max_rect());
         })
     }
 
@@ -1027,21 +1033,46 @@ mod tests {
         assert!(hovered(b("Copy link").center()), "Copy link");
     }
 
-    /// "Play next" and "Add to queue" in a row's menu send that track to the queue.
+    /// "Play next" and "Add to queue" in a row's menu send that track to the queue; they, and
+    /// "Copy link", say so in a toast (spec §3.10).
     #[test]
     fn track_menu_play_next_sends_action() {
         let ctx = testing::context();
         ctx.enable_accesskit();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let (model, list) = (Model::default(), vec![track()]);
-        let mut pick = |entry| {
+        // Picks `entry`, which must toast `done`: the action it sent.
+        let mut pick = |entry, done: &str| {
             let out = open_menu(&ctx, &tx, &model, &list);
-            pass(&ctx, &tx, &model, &list, vec![click(&out, entry)]);
-            rx.try_recv().expect("an action")
+            let (_, out) = pass(&ctx, &tx, &model, &list, vec![click(&out, entry)]);
+            let toast = testing::shown(&out).iter().any(|s| s == done);
+            assert!(toast, "{entry}: no {done:?}");
+            rx.try_recv().ok()
         };
         let ids = |t: &[tidal::Track]| t.iter().map(|t| t.id).collect::<Vec<_>>();
-        assert!(matches!(pick("Play next"), Action::PlayNext(t) if ids(&t) == [1]));
-        assert!(matches!(pick("Add to queue"), Action::AddToQueue(t) if ids(&t) == [1]));
+        let next = pick("Play next", "Playing next");
+        assert!(matches!(next, Some(Action::PlayNext(t)) if ids(&t) == [1]));
+        let queued = pick("Add to queue", "Added to queue");
+        assert!(matches!(queued, Some(Action::AddToQueue(t)) if ids(&t) == [1]));
+        assert!(pick("Copy link", "Link copied").is_none(), "sends nothing");
+    }
+
+    /// The menu's favourites item says in a toast what it did: added, or removed.
+    #[test]
+    fn the_menu_heart_toasts() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut model, list) = (Model::default(), vec![track()]);
+        for (entry, done) in [
+            ("Add to favorites", "Added to favorites"),
+            ("Remove from favorites", "Removed from favorites"),
+        ] {
+            let out = open_menu(&ctx, &tx, &model, &list);
+            let (_, out) = pass(&ctx, &tx, &model, &list, vec![click(&out, entry)]);
+            assert!(testing::shown(&out).iter().any(|s| s == done), "{entry}");
+            model.favorites.tracks.insert(1); // as the backend's answer would
+        }
     }
 
     /// "Track radio" opens the track's mix.
@@ -1115,7 +1146,8 @@ mod tests {
         let out = add_menu(&ctx, &tx, &model, &list);
         let y = |label| middle(&out, label).y;
         assert!(y("New playlist…") < y("Newer") && y("Newer") < y("Older"));
-        pass(&ctx, &tx, &model, &list, vec![click(&out, "Older")]);
+        let (_, picked) = pass(&ctx, &tx, &model, &list, vec![click(&out, "Older")]);
+        assert!(testing::shown(&picked).contains(&"Added to Older".into()));
         let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
             .map(|a| format!("{a:?}"))
             .collect();
