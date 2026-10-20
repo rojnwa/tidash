@@ -277,6 +277,8 @@ pub enum Event {
     /// List the themes folder again (Settings opened): `main`'s.
     RescanThemes,
     Error(String),
+    /// A short confirmation of a write with no visible result: the UI's (`UiState::apply`).
+    Toast(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),
     Navigate(Route),

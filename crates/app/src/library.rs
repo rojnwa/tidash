@@ -82,7 +82,7 @@ async fn write(c: &Client, edit: &PlaylistEdit) -> tidal::Result<Vec<Event>> {
                 .replace("{playlist}", &title),
             };
             let mut events = changed(uuid);
-            events.push(Event::Error(said));
+            events.push(Event::Toast(said));
             events
         }
         PlaylistEdit::Remove {
@@ -341,7 +341,8 @@ mod tests {
         assert_eq!((shown, said), (vec![changed], 1));
     }
 
-    /// How many were added, by the playlist's name; or that they were all in already.
+    /// How many were added, by the playlist's name; or that they were all in already. A toast
+    /// says it, not an error notice.
     #[tokio::test]
     async fn add_reports_added_or_already_there() {
         let server = MockServer::start().await;
@@ -370,7 +371,11 @@ mod tests {
                 tracks,
             };
             let events = events(&server, &format!("edit-add-{i}"), add, &[]).await;
-            said.extend(errors(&events).into_iter().map(str::to_owned));
+            assert!(errors(&events).is_empty(), "{events:?}");
+            said.extend(events.into_iter().filter_map(|e| match e {
+                Event::Toast(t) => Some(t),
+                _ => None,
+            }));
         }
         assert_eq!(
             said,

@@ -258,10 +258,6 @@ msgstr ""
 msgid "Removed from favorites"
 msgstr ""
 
-#: src/ui/library.rs
-msgid "Added to {playlist}"
-msgstr ""
-
 #: src/ui/collection.rs
 msgid "Mixes"
 msgstr ""

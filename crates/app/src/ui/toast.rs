@@ -66,7 +66,7 @@ pub fn paint(ctx: &egui::Context, p: &Palette, over: Rect) {
 mod tests {
     use super::show;
     use crate::model::{Action, Event, PageData, Route};
-    use crate::theme::{TOAST_FADE, TOAST_SHOW};
+    use crate::theme::{self, Palette, TOAST_FADE, TOAST_SHOW};
     use crate::ui::{UiState, draw, testing};
     use std::time::Duration;
 
@@ -122,6 +122,13 @@ mod tests {
         let left = Duration::from_secs_f32(TOAST_SHOW - 1.0);
         let delay = repaint(&out);
         assert!(Duration::ZERO < delay && delay <= left, "{delay:?}");
+        // The pill, opaque, `PAGE_PAD` above the content area's bottom (the player bar's top).
+        let foot = 600.0 - theme::PLAYER_BAR - theme::PAGE_PAD;
+        let pill = out.shapes.iter().any(|s| match &s.shape {
+            egui::Shape::Rect(r) => r.fill == Palette::dark().overlay && r.rect.bottom() == foot,
+            _ => false,
+        });
+        assert!(pill, "no pill painted");
 
         // A double click where it sits plays the row under it.
         let at = testing::middle(&out, "Link copied");
@@ -151,5 +158,22 @@ mod tests {
             shown(&out, "Added to queue"),
             "the second keeps its own time"
         );
+    }
+
+    /// The backend's answer (`Event::Toast`), through `UiState::apply`, shows as a toast.
+    #[test]
+    fn a_toast_event_shows() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = testing::at(Route::Home);
+        let said = "Added 1 track to Road trip";
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            state.apply(ui.ctx(), &Event::Toast(said.into()));
+            draw(ui, &model, &tx, &mut state);
+        });
+        out.textures_delta.clear(); // nothing renders them
+        assert!(testing::shown(&out).iter().any(|s| s == said));
     }
 }

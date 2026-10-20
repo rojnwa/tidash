@@ -369,6 +369,7 @@ impl Model {
             Event::Themes { names, status } => (self.themes, self.theme_status) = (names, status),
             Event::RescanThemes => {} // the app's (main.rs)
             Event::Error(e) => self.error(e),
+            Event::Toast(_) => {} // the UI's (`UiState::apply`)
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {
                 self.back();

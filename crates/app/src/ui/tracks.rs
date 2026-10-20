@@ -1146,8 +1146,7 @@ mod tests {
         let out = add_menu(&ctx, &tx, &model, &list);
         let y = |label| middle(&out, label).y;
         assert!(y("New playlist…") < y("Newer") && y("Newer") < y("Older"));
-        let (_, picked) = pass(&ctx, &tx, &model, &list, vec![click(&out, "Older")]);
-        assert!(testing::shown(&picked).contains(&"Added to Older".into()));
+        pass(&ctx, &tx, &model, &list, vec![click(&out, "Older")]);
         let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok())
             .map(|a| format!("{a:?}"))
             .collect();
