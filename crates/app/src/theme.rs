@@ -255,6 +255,8 @@ pub const HOVER: f32 = 0.15;
 pub const OVERLAY: f32 = 0.3;
 /// The player bar's sliders growing their rail and thumb when hovered.
 pub const SLIDER_HOVER: f32 = 0.12;
+/// A cover fading in over its placeholder when its first texture comes (spec §3.11).
+pub const COVER_FADE: f32 = 0.2;
 /// A page's content fading in, on a route change or its data coming in.
 pub const PAGE_FADE: f32 = 0.15;
 /// A toast fading in, and out (spec §3.10).

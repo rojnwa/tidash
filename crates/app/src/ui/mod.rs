@@ -354,9 +354,9 @@ fn track_data<'m, T>(
 }
 
 /// Paints `image` over `rect` with corners of `radius`, requested as many pixels wide as it
-/// is drawn (at most its largest rendition); or a flat placeholder. Nothing out of view is
-/// requested. Artwork of another shape (a wide playlist image) is cropped around its centre,
-/// not stretched.
+/// is drawn (at most its largest rendition); or a flat placeholder, which the artwork fades in
+/// over when it first comes (`COVER_FADE`). Nothing out of view is requested. Artwork of
+/// another shape (a wide playlist image) is cropped around its centre, not stretched.
 fn cover(
     ui: &egui::Ui,
     images: &mut TextureCache,
@@ -393,17 +393,22 @@ fn cover(
             });
         })
     });
+    // Keyed by image, and a first call returns its target: a cover cached when first drawn
+    // shows at once, one drawn first without fades in when it comes, a size swap never fades.
+    let a = image.map_or(0.0, |img| {
+        let id = egui::Id::new(("cover", img.key()));
+        ui.ctx()
+            .animate_bool_with_time(id, tex.is_some(), theme::COVER_FADE)
+    });
     let painter = ui.painter();
-    match tex {
-        Some(t) => {
-            let uv = crop(t.aspect_ratio(), rect.aspect_ratio());
-            let shape = egui::epaint::RectShape::filled(rect, radius, egui::Color32::WHITE)
-                .with_texture(t.id(), uv);
-            painter.add(shape);
-        }
-        None => {
-            painter.rect_filled(rect, radius, ui.visuals().faint_bg_color);
-        }
+    if a < 1.0 {
+        painter.rect_filled(rect, radius, ui.visuals().faint_bg_color);
+    }
+    if let Some(t) = tex {
+        let uv = crop(t.aspect_ratio(), rect.aspect_ratio());
+        let tint = egui::Color32::WHITE.gamma_multiply(a);
+        let shape = egui::epaint::RectShape::filled(rect, radius, tint).with_texture(t.id(), uv);
+        painter.add(shape);
     }
 }
 
@@ -1181,6 +1186,124 @@ mod tests {
         let played = std::iter::from_fn(|| rx.try_recv().ok())
             .any(|a| matches!(a, Action::PlayTracks { .. }));
         assert!(played, "the click is delivered mid-fade");
+    }
+
+    /// Each textured shape in `out`: its texture and its tint's alpha.
+    fn covers(out: &egui::FullOutput) -> Vec<(egui::TextureId, u8)> {
+        let shapes = out.shapes.iter();
+        let textured = shapes.filter_map(|s| match &s.shape {
+            egui::Shape::Rect(r) => r.brush.as_ref().map(|b| (b.fill_texture_id, r.fill.a())),
+            _ => None,
+        });
+        textured.collect()
+    }
+
+    /// Track 1, its album's cover "ab-cd".
+    fn covered() -> tidal::Track {
+        let mut track = testing::track(1);
+        track.album.cover = Some("ab-cd".into());
+        track
+    }
+
+    /// Caches "ab-cd" `px` wide.
+    fn arrives(ctx: &egui::Context, state: &mut UiState, px: f32) {
+        let grey = egui::ColorImage::filled([px as usize; 2], egui::Color32::GRAY);
+        state.images.insert(ctx, "ab-cd".into(), px as u32, grey);
+    }
+
+    /// Spec §3.11: a cover first drawn without its texture fades in over its placeholder when
+    /// the texture comes, over `COVER_FADE`, then rests with no repaints. The player bar's,
+    /// outside the page's own fade.
+    #[test]
+    fn a_cover_fades_in_when_it_arrives() {
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        model.settings.accent_from_art = false; // no tint easing in meanwhile
+        model.playback.track = Some(covered());
+        let pass = |state: &mut UiState, t| frame(&ctx, &tx, state, &model, Some(t), vec![]);
+        assert_eq!(covers(&pass(&mut state, 0.0)), [], "the placeholder only");
+        arrives(&ctx, &mut state, theme::PLAYER_COVER);
+        let fading = covers(&pass(&mut state, 0.05));
+        assert!(matches!(fading[..], [(_, a)] if a < 255), "{fading:?}");
+        let shown = covers(&pass(&mut state, 0.3));
+        assert!(matches!(shown[..], [(_, 255)]), "{shown:?}");
+        let out = pass(&mut state, 0.4);
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "repaints at rest");
+    }
+
+    /// Spec §3.11: a cover already cached when first drawn shows at once; the larger size
+    /// replacing the one shown meanwhile swaps in without a fade.
+    #[test]
+    fn a_cached_cover_shows_at_once() {
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        model.settings.accent_from_art = false;
+        model.playback.track = Some(covered());
+        let pass = |state: &mut UiState, t| frame(&ctx, &tx, state, &model, Some(t), vec![]);
+        arrives(&ctx, &mut state, 32.0); // another size, shown while the bar's loads
+        let small = covers(&pass(&mut state, 0.0));
+        assert!(matches!(small[..], [(_, 255)]), "first pass: {small:?}");
+        arrives(&ctx, &mut state, theme::PLAYER_COVER);
+        let large = covers(&pass(&mut state, 0.05));
+        assert!(matches!(large[..], [(_, 255)]), "the swap: {large:?}");
+        assert_ne!(small[0].0, large[0].0, "the larger size shown");
+    }
+
+    /// Spec §3.11: one cover drawn in many places (five rows of one album, and the player bar
+    /// playing one of them) ends faded in everywhere by `COVER_FADE`, and stays.
+    #[test]
+    fn one_cover_in_many_places_fades_once() {
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let route = Route::Playlist("p-1".into());
+        let mut model = testing::at(route.clone());
+        model.settings.accent_from_art = false;
+        let tracks: Vec<_> = (0..5).map(|_| covered()).collect();
+        model.playback.track = Some(covered());
+        let data = PageData::Playlist {
+            playlist: testing::playlist(),
+            tracks,
+            positions: (0..5).collect(),
+            etag: None,
+        };
+        model.apply(Event::Page { route, data });
+        // Tall enough for every row.
+        let pass = |state: &mut UiState, time| {
+            let input = egui::RawInput {
+                time: Some(time),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1000.0, 1200.0),
+                )),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                draw(ui, &model, &tx, state);
+            });
+            out.textures_delta.clear(); // nothing renders them
+            out
+        };
+        pass(&mut state, 0.0);
+        // The page still; the playlist's own image never comes.
+        assert_eq!(covers(&pass(&mut state, 1.0)), [], "placeholders only");
+        arrives(&ctx, &mut state, theme::ROW_COVER);
+        arrives(&ctx, &mut state, theme::PLAYER_COVER);
+        let mut out = pass(&mut state, 1.05);
+        let fading = covers(&out);
+        assert!(fading.iter().any(|(_, a)| *a < 255), "fading: {fading:?}");
+        for time in [1.3, 1.4, 1.5] {
+            out = pass(&mut state, time);
+            let alphas: Vec<_> = covers(&out).into_iter().map(|(_, a)| a).collect();
+            assert_eq!(alphas, [255; 6], "at {time}");
+        }
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "repaints at rest");
     }
 
     /// Small covers are asked for exactly; larger ones in steps of 32 px, so a card that

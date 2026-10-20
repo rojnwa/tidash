@@ -187,6 +187,7 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 |---|---|
 | Hover colour on rows, nav rows, icons | 150 ms (`ctx.animate_bool_with_time`) |
 | Card cover overlay | 300 ms fade |
+| Cover fade-in | 200 ms, first arrival only (`theme::COVER_FADE`) |
 | Slider hover (player bar) | 120 ms (`theme::SLIDER_HOVER`) |
 | Page fade-in | 150 ms (`theme::PAGE_FADE`) |
 | Toast fade | 150 ms in and out, shown 2.5 s (`theme::TOAST_FADE`, `theme::TOAST_SHOW`) |
