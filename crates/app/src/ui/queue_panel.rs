@@ -185,8 +185,9 @@ mod tests {
     }
 
     /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`,
-    /// the hand on the pressed row turning into egui's grab once it drags. Released off the list (beside the panel, or below it over the player bar), a drag moves
-    /// nothing. A screen reader's click on a row plays it.
+    /// the hand on the pressed row turning into egui's grab once it drags. Released off the list
+    /// (beside the panel, or below it over the player bar), a drag moves nothing. A screen
+    /// reader's click on a row plays it.
     #[test]
     fn dragging_a_row_moves_it() {
         let ctx = testing::context();

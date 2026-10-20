@@ -312,6 +312,7 @@ neither sidebar nor top bar (as today).
   album Body in text; duration Body in secondary, tabular, right-aligned. Unavailable rows at 50% opacity. Disc rows:
   `disc-3` icon and "Disc n" in Small secondary.
 - Context menu, drag to reorder and keyboard activation are unchanged; the drop line is 2 px accent.
+- Artist and album names are pointer links, underlined on hover, with no Tab stop (interface polish §3.8).
 
 ### 5.6 Cards
 
@@ -328,6 +329,8 @@ neither sidebar nor top bar (as today).
   enough for its controls and the widest format pill the exclusive setting can show ("24/176.4 FLAC · Exclusive",
   or without " · Exclusive"), playing or not, so Play never moves; the left takes what is left.
 - Left: 52 px cover (radius 2); title Label; artists Small secondary.
+  The cover opens the playback source, the title the album, each artist that artist; all are focusable links
+  (interface polish §3.8).
 - Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc); Previous and Next bare 22 px
   `skip-back-filled` / `skip-forward-filled` glyphs and Play/Pause a bare 24 px `play-filled` / `pause-filled`
   glyph, in text, each in a 40 px hit box (`glyph_button`; TIDAL 2.43 draws no disc, hovered or not: hover scales
@@ -354,7 +357,8 @@ neither sidebar nor top bar (as today).
 - Settings: Heading per section, one row per setting, left to right: the label in a 180 px column (cut to it), then
   the controls in reading order; in a narrower content area the label sits above them. Appearance becomes a combo box:
   Follow system, Dark, Light, a separator, then the catalog's themes by `display_name`; beside it "Open themes folder";
-  under it the catalog status line. Primary actions (Apply, Log in) are primary pills; the rest stock buttons.
+  under it the catalog status line. Primary actions (Apply, Log in) are primary pills; every other button outside
+  menus is a secondary pill (interface polish §3.6).
 - Login: a centred column with the primary pill "Log in with TIDAL" and a Settings link.
 
 ### 5.9 Album-art tint
