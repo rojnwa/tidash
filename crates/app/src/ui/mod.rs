@@ -206,7 +206,8 @@ pub fn page<R>(ui: &mut egui::Ui, route: &Route, f: impl FnOnce(&mut egui::Ui) -
 
 /// Fades `ui` in over `PAGE_FADE` (spec §3.11) from the pass `route`, or whether its data is
 /// in (`loaded`), changes: a route change (Back and Forward too), or the data arriving after
-/// the spinner. The first route a context draws shows at once, so launch does not fade.
+/// the spinner. A context's first pass shows at once; the first page's data, coming in later,
+/// still fades in.
 /// Painting only: input works throughout.
 fn fade_in(ui: &mut egui::Ui, route: &Route, loaded: bool) {
     let now = ui.input(|i| i.time);
@@ -657,9 +658,12 @@ pub fn draw(
         }
         ui.data_mut(|d| d.insert_temp(bar_id(), bar));
         // The route's content fades in, its title, spinner or failure too; all above stays put.
-        // Login, Search and Settings have no page data to wait for.
-        let loaded = matches!(route, Route::Login | Route::Search | Route::Settings)
-            || model.pages.get(route).is_some_and(|s| s.data.is_some());
+        // Login, Search and Settings have no page data to wait for; a Collection tab paints its
+        // title before its data, so it fades on the switch only, lest the title blink.
+        let loaded = matches!(
+            route,
+            Route::Login | Route::Search | Route::Settings | Route::Collection(_)
+        ) || model.pages.get(route).is_some_and(|s| s.data.is_some());
         fade_in(ui, route, loaded);
         match route {
             Route::Login => login::show(ui, &mut ctx, &mut state.login),
@@ -1122,8 +1126,8 @@ mod tests {
 
     /// Spec §3.11: the route's content fades in over `PAGE_FADE` from the very pass the route
     /// changes between loaded pages, on Back, on a Collection tab switch (its title is drawn
-    /// outside `page`), and when the data comes in after the spinner; then it rests at 1 with
-    /// no repaints. The first page a context draws shows at once. Input works mid-fade: the
+    /// outside `page`) but not when that tab's data comes in, and when other data comes in
+    /// after the spinner; then it rests at 1 with no repaints. The first page a context draws shows at once. Input works mid-fade: the
     /// first pass, unseen, already takes the pointer.
     #[test]
     fn pages_fade_in() {
@@ -1172,6 +1176,18 @@ mod tests {
         assert_eq!(opacity(&pass(&model, 1.5, vec![]), "Albums"), 0.0, "tab");
         let mid = opacity(&pass(&model, 1.575, vec![]), "Albums");
         assert!(0.0 < mid && mid < 1.0, "the tab's title: {mid}");
+        let albums = Route::Collection(CollectionTab::Albums);
+        model.apply(Event::Loading(albums.clone()));
+        assert_eq!(opacity(&pass(&model, 1.7, vec![]), "Albums"), 1.0, "in");
+        model.apply(Event::Page {
+            route: albums,
+            data: PageData::Items(vec![tidal::Item::Album(testing::album(1))]),
+        });
+        let out = pass(&model, 1.75, vec![]);
+        assert_eq!(opacity(&out, "Albums"), 1.0, "no second fade");
+        let out = pass(&model, 1.8, vec![]);
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "the tab at rest");
         // Loading, then the data.
         let mut model = testing::at(route.clone());
         model.apply(Event::Loading(route.clone()));

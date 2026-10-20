@@ -190,7 +190,8 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
   data arrives after its spinner, the content below the top bar fades in over 150 ms (opacity only, no slide),
   keyed by the route and whether its data is in. Titles, spinners and failure messages fade with it. The first page
   a window draws shows at once. Input works from the first frame; the top bar, sidebar and player bar don't fade.
-  (Builder's call.)
+  Collection tabs fade on the switch only: their title is drawn before their data, so their list appears after the
+  spinner without a second fade and the title never blinks. (Builder's call.)
 - **Buttons**: covered by §3.6 (house pills already fade on hover over `HOVER`).
 - Durations join the motion table (design-system spec §4.5): cover fade 200 ms, page fade 150 ms, toast fade
   150 ms, slider hover 120 ms.
