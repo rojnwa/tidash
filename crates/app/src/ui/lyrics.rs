@@ -82,6 +82,7 @@ fn synced(
         job.halign = align;
         let galley = ui.painter().layout_job(job);
         let (rect, row) = ui.allocate_exact_size(vec2(width, galley.size().y), Sense::click());
+        let row = row.on_hover_cursor(egui::CursorIcon::PointingHand);
         row.widget_info(|| {
             WidgetInfo::selected(WidgetType::SelectableLabel, ui.is_enabled(), on, text)
         });

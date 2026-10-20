@@ -231,6 +231,9 @@ pub const SETTINGS_FIELD: f32 = 280.0;
 /// The search pill at its narrowest: its icon and a word. With less room it reaches over the
 /// history pill, never the gear.
 pub const SEARCH_MIN: f32 = 120.0;
+/// A menu item's height, and a menu's least width, its frame included (spec §3.7).
+pub const MENU_ITEM: f32 = 34.0;
+pub const MENU_W: f32 = 200.0;
 
 // Corner radii; pills and discs are fully round.
 pub const R_ART: f32 = 2.0;
@@ -250,6 +253,16 @@ pub const SCRIM: Color32 = Color32::from_black_alpha(179);
 pub const HOVER: f32 = 0.15;
 /// The card cover's overlay fade.
 pub const OVERLAY: f32 = 0.3;
+/// The player bar's sliders growing their rail and thumb when hovered.
+pub const SLIDER_HOVER: f32 = 0.12;
+/// A cover fading in over its placeholder when its first texture comes (spec §3.11).
+pub const COVER_FADE: f32 = 0.2;
+/// A page's content fading in, on a route change or its data coming in.
+pub const PAGE_FADE: f32 = 0.15;
+/// A toast fading in, and out (spec §3.10).
+pub const TOAST_FADE: f32 = 0.15;
+/// How long a toast shows before it fades out, its fade in included.
+pub const TOAST_SHOW: f32 = 2.5;
 /// The player bar's tint, per channel.
 pub const TINT_FADE: f32 = 0.45;
 /// The cover size the tint is taken from, in pixels.
@@ -374,6 +387,8 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
     v.popup_shadow = shadow;
     v.slider_trailing_fill = true;
     v.handle_shape = HandleShape::Circle;
+    // Only egui's `Button` (menu items too) reads it; the house widgets set the hand themselves.
+    v.interact_cursor = Some(egui::CursorIcon::PointingHand);
     // Hover and press fills over `surface`, opaque: Dark's are translucent, and on their own
     // would read darker than the idle fill. Glyphs (checks, arrows, the scroll handle) are
     // `secondary` at rest, `text` otherwise.
@@ -419,6 +434,30 @@ pub fn style(s: &mut egui::Style, p: &Palette) {
         ..ScrollStyle::solid()
     };
     s.animation_time = HOVER;
+    s.interaction.selectable_labels = false; // the I-beam is for text fields only
+}
+
+/// A menu's and its submenus' style in `p` (spec §3.7): egui's (no strokes, idle items
+/// unfilled), items `MENU_ITEM` tall and flush, inset 12 with 12 between icon and label,
+/// inside a 6 margin. Hovered, pressed or open, an item takes `surface_hover` over the frame's
+/// `overlay`, opaque, radius 8.
+pub fn menu_style(p: Palette) -> impl Fn(&mut egui::Style) + Send + Sync + 'static {
+    move |s| {
+        egui::containers::menu::menu_style(s);
+        let sp = &mut s.spacing;
+        sp.button_padding.x = 12.0;
+        sp.icon_spacing = 12.0;
+        sp.item_spacing.y = 0.0;
+        sp.interact_size.y = MENU_ITEM;
+        sp.menu_margin = egui::Margin::same(6);
+        let hover = p.overlay.blend(p.surface_hover);
+        let w = &mut s.visuals.widgets;
+        for state in [&mut w.hovered, &mut w.active, &mut w.open] {
+            state.bg_fill = hover;
+            state.weak_bg_fill = hover;
+        }
+        w.hovered.corner_radius = CornerRadius::same(R_FIELD as u8);
+    }
 }
 
 /// `a` moved `t` of the way to `b`, per channel, alpha too.
@@ -477,6 +516,9 @@ fastframe_icons::icons! {
         User => lucide "user",
         Clock => lucide "clock",
         PanelLeft => lucide "panel-left",
+        Plus => lucide "plus",
+        Pencil => lucide "pencil",
+        Trash2 => lucide "trash-2",
         House => "house",
         Compass => "compass",
         ListMusic => "list-music",
@@ -499,6 +541,9 @@ fastframe_icons::icons! {
         FolderPlus => "folder-plus",
         Folder => "folder",
         FolderOpen => "folder-open",
+        FolderInput => "folder-input",
+        ListStart => "list-start",
+        Link => "link",
     }
 }
 

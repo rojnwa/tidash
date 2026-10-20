@@ -88,12 +88,20 @@ pub struct Slot {
     pub used: u64,
 }
 
+/// Where playback started (spec §3.9): the page's route, and its title.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Source {
+    pub route: Route,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct QueueSnapshot {
     pub tracks: Vec<tidal::Track>,
     pub current: Option<usize>,
     pub shuffle: bool,
     pub repeat: Repeat,
+    pub source: Option<Source>,
 }
 
 /// A fetch for the side panel: the current track's lyrics or credits.
@@ -361,6 +369,7 @@ impl Model {
             Event::Themes { names, status } => (self.themes, self.theme_status) = (names, status),
             Event::RescanThemes => {} // the app's (main.rs)
             Event::Error(e) => self.error(e),
+            Event::Toast(_) => {} // the UI's (`UiState::apply`)
             Event::Navigate(r) => self.navigate(r),
             Event::Back => {
                 self.back();

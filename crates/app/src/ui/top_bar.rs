@@ -1,4 +1,5 @@
-//! The top bar (spec §5.3): history on the left; the search pill and the gear on the right.
+//! The top bar (spec §5.3): the sidebar toggle and history on the left; the search pill and
+//! the gear on the right.
 //! Under it, the offline notice and the errors.
 
 use super::widgets::{icon_button, search_field};
@@ -23,6 +24,7 @@ pub fn show(ui: &mut Ui, ctx: &mut Ctx, search: &mut search::State, bar: Rect) {
         .max_rect(row)
         .layout(layout);
     let mut bar = ui.new_child(builder);
+    sidebar_toggle(&mut bar, ctx);
     history(&mut bar, ctx);
     // The gear first, at the right end: in a narrow window the search pill shrinks, the gear
     // stays.
@@ -42,6 +44,25 @@ pub fn show(ui: &mut Ui, ctx: &mut Ctx, search: &mut search::State, bar: Rect) {
             ctx.go(Route::Search);
         }
     });
+}
+
+/// The `panel-left` button that folds the sidebar to icons and back. Outside the sliding
+/// panels, its id and so its focus hold through the slide.
+fn sidebar_toggle(ui: &mut Ui, ctx: &mut Ctx) {
+    let (p, model) = (ctx.palette, ctx.model);
+    // The setting, not the form drawn: mid-slide the button already says what a click does.
+    let folded = model.settings.sidebar_collapsed;
+    let label = if folded {
+        tr("Expand sidebar")
+    } else {
+        tr("Collapse sidebar")
+    };
+    if icon_button(ui, &p, Icon::PanelLeft, &label, None).clicked() {
+        let mut new = model.settings.clone();
+        new.sidebar_collapsed = !folded;
+        ctx.events.push(Event::Settings(new.clone()));
+        ctx.send(Action::SetSettings(new));
+    }
 }
 
 /// Back and Forward on a `surface` pill `PILL` tall around them, each disabled at its end of
@@ -99,9 +120,10 @@ pub fn notices(ui: &mut Ui, ctx: &mut Ctx) {
 #[cfg(test)]
 mod tests {
     use super::super::{Side, UiState, draw, testing};
-    use crate::model::{Action, Event, Model, PageData, Route};
+    use crate::model::{Action, CollectionTab, Event, Model, PageData, Route};
     use crate::theme::{self, Palette};
     use egui::{Pos2, Rect, vec2};
+    use tidal::FolderItem;
     use tokio::sync::mpsc::UnboundedSender;
 
     /// One pass of `draw` in a window `width` by 600, fed `events`: what it gave, and egui's
@@ -181,6 +203,141 @@ mod tests {
             let field = testing::bounds(&out, "Search TIDAL");
             assert!(window.contains_rect(gear), "{side:?}: {gear:?}");
             assert!(gear.left() >= field.right(), "{side:?}: {gear:?} {field:?}");
+        }
+    }
+
+    /// The sidebar toggle leads the bar, left of the history pill; both and Home sit on the
+    /// bar's centre line.
+    #[test]
+    fn the_toggle_leads_the_top_bar() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let model = testing::at(Route::Home);
+        let (_, out) = pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
+        let toggle = testing::bounds(&out, "Collapse sidebar");
+        let back = testing::bounds(&out, "Back");
+        // In the bar, not the sidebar.
+        assert!(toggle.left() >= theme::SIDEBAR, "{toggle:?}");
+        assert!(toggle.right() <= back.left(), "{toggle:?} {back:?}");
+        let mid = theme::TOP_BAR / 2.0;
+        for label in ["Collapse sidebar", "Back", "Home"] {
+            let y = testing::middle(&out, label).y;
+            assert!((y - mid).abs() <= 1.0, "{label}: {y}");
+        }
+    }
+
+    /// The smallest window with the side panel open: every control of the bar shows, none
+    /// on another.
+    #[test]
+    fn the_top_bar_fits_at_the_minimum_width() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState {
+            side: Some(Side::Queue),
+            ..Default::default()
+        };
+        let model = testing::at(Route::Home);
+        let [width, _] = theme::MIN_WINDOW;
+        let (_, out) = pass(&ctx, &tx, &mut state, &model, width, vec![]);
+        let window = Rect::from_min_size(Pos2::ZERO, vec2(width, 600.0));
+        let labels = [
+            "Collapse sidebar",
+            "Back",
+            "Forward",
+            "Search TIDAL",
+            "Settings",
+        ];
+        let rects = labels.map(|l| testing::bounds(&out, l));
+        for (i, (a, ra)) in labels.iter().zip(rects).enumerate() {
+            assert!(window.contains_rect(ra), "{a}: {ra:?}");
+            for (b, rb) in labels.iter().zip(rects).skip(i + 1) {
+                assert!(!ra.intersect(rb).is_positive(), "{a} {ra:?} on {b} {rb:?}");
+            }
+        }
+    }
+
+    /// "Collapse sidebar" saves the setting; collapsed, the rows keep their names and work.
+    #[test]
+    fn collapsing_flips_the_setting_and_rows_still_work() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut pass = |m: &Model, events| pass(&ctx, &tx, &mut state, m, 1000.0, events);
+        let mut m = testing::at(Route::Collection(CollectionTab::Tracks));
+        let items = vec![FolderItem::Playlist(testing::playlist())];
+        m.apply(Event::Folder {
+            id: "root".into(),
+            items,
+        });
+        let (_, out) = pass(&m, vec![]);
+        let (events, _) = pass(&m, vec![testing::click(&out, "Collapse sidebar")]);
+        let [Event::Settings(settings)] = &events[..] else {
+            panic!("{events:?}")
+        };
+        assert!(settings.sidebar_collapsed);
+        let sent: Vec<Action> = std::iter::from_fn(|| rx.try_recv().ok())
+            .filter(|a| !matches!(a, Action::LoadImage { .. })) // the playlist's cover
+            .collect();
+        assert!(
+            matches!(&sent[..], [Action::SetSettings(s)] if s.sidebar_collapsed),
+            "{sent:?}"
+        );
+        m.apply(Event::Settings(settings.clone()));
+        let mut out = pass(&m, vec![]).1;
+        for _ in 0..30 {
+            out = pass(&m, vec![]).1; // the slide ends
+        }
+        assert!(testing::shown(&out).contains(&"Expand sidebar".into()));
+        for label in ["Home", "Playlist"] {
+            let rect = testing::bounds(&out, label);
+            assert!(
+                rect.right() <= theme::SIDEBAR_COLLAPSED,
+                "{label}: {rect:?}"
+            );
+        }
+        let (events, _) = pass(&m, vec![testing::click(&out, "Home")]);
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Home)]),
+            "{events:?}"
+        );
+        let (events, _) = pass(&m, vec![testing::click(&out, "Playlist")]);
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Playlist(p))] if p == "p-1"),
+            "{events:?}"
+        );
+    }
+
+    /// Tab to the collapse button, Enter, then the slide: the focus stays on the button, both
+    /// ways.
+    #[test]
+    fn the_collapse_button_keeps_the_focus() {
+        let ctx = testing::context();
+        ctx.enable_accesskit();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut pass = |m: &Model, events| pass(&ctx, &tx, &mut state, m, 1000.0, events);
+        let label = |out: &egui::FullOutput| focused(out).map(|(label, _)| label);
+        let mut m = testing::at(Route::Home);
+        // The player bar's and the sidebar's controls come first.
+        let reached = (0..50).any(|_| {
+            let (_, out) = pass(&m, vec![testing::key(egui::Key::Tab)]);
+            label(&out).as_deref() == Some("Collapse sidebar")
+        });
+        assert!(reached, "Tab never reached the toggle");
+        for then in ["Expand sidebar", "Collapse sidebar"] {
+            let (events, _) = pass(&m, vec![testing::key(egui::Key::Enter)]);
+            for ev in events {
+                m.apply(ev);
+            }
+            let mut out = pass(&m, vec![]).1;
+            for _ in 0..30 {
+                out = pass(&m, vec![]).1; // each pass a 60th of a second on: the slide ends
+            }
+            assert_eq!(label(&out).as_deref(), Some(then));
         }
     }
 
@@ -365,7 +522,13 @@ mod tests {
         let mut state = UiState::default();
         let model = album_page(3);
         pass(&ctx, &tx, &mut state, &model, 1000.0, vec![]);
-        let bar = ["Back", "Forward", "Search TIDAL", "Settings"];
+        let bar = [
+            "Collapse sidebar",
+            "Back",
+            "Forward",
+            "Search TIDAL",
+            "Settings",
+        ];
         // The album's own controls: its Play pill (the player's is disabled), heart and pill.
         let page = ["Play", "Add to favorites", "Add to playlist"];
         for _ in 0..200 {
@@ -376,6 +539,7 @@ mod tests {
             };
             assert!(!page.contains(&label.as_str()), "{label} before the bar");
             if bar.contains(&label.as_str()) {
+                assert_eq!(label, "Collapse sidebar", "the bar's first Tab stop");
                 return;
             }
         }

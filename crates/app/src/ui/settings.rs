@@ -5,7 +5,7 @@
 //! are actions. The Discord toggle and the behavior are settings like the others.
 
 use super::Ctx;
-use super::widgets::{heading, pill_button};
+use super::widgets::{heading, pill_button, text_field};
 use crate::i18n::tr;
 use crate::messages::{Secret, UpdateStep};
 use crate::model::{Action, Event, Model, Route, UpdateState};
@@ -13,8 +13,8 @@ use crate::scrobble::Keys;
 use crate::settings::{Account, Audio, Normalization, Settings, Theme, Updates, nonblank};
 use crate::theme::{self, Palette};
 use egui::{
-    Align, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText, WidgetType,
-    vec2,
+    Align, CursorIcon, Layout, Response, RichText, Sense, Ui, UiBuilder, WidgetInfo, WidgetText,
+    WidgetType, vec2,
 };
 use fastframe_theme::Status;
 use fastframe_update::Unsupported;
@@ -63,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
     super::page(ui, &Route::Settings, |ui| {
         // Logged out there is no sidebar: this is the way back to the login page.
         if !model.logged_in {
-            back = ui.button(tr("Back")).clicked();
+            back = pill_button(ui, &p, None, &tr("Back"), false).clicked();
         }
         ui.label(
             RichText::new(tr("Settings"))
@@ -76,28 +76,31 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx, state: &mut State) {
             logout = pill_button(ui, &p, None, &tr("Log out"), false).clicked();
         }
         section(ui, &p, tr("Appearance"));
-        if appearance(ui, model, &mut new) {
+        if appearance(ui, &p, model, &mut new) {
             ctx.send(Action::OpenThemesFolder);
         }
         section(ui, &p, tr("Audio"));
         audio(ui, &model.devices, &mut new.audio);
         section(ui, &p, tr("Behavior"));
-        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"));
+        ui.checkbox(&mut new.behavior.close_to_tray, tr("Close to tray"))
+            .on_hover_cursor(CursorIcon::PointingHand);
         // Without Close to tray there would be no window to come back to (`starts_hidden`).
         let start_minimized =
             egui::Checkbox::new(&mut new.behavior.start_minimized, tr("Start minimized"));
-        ui.add_enabled(new.behavior.close_to_tray, start_minimized);
+        ui.add_enabled(new.behavior.close_to_tray, start_minimized)
+            .on_hover_cursor(CursorIcon::PointingHand);
         ui.weak(tr("Only where the desktop shows a tray icon."));
         section(ui, &p, tr("Integrations"));
         if state.lastfm {
-            connect = lastfm(ui, model);
+            connect = lastfm(ui, &p, model);
         }
-        if let Some(action) = listenbrainz(ui, model, state) {
+        if let Some(action) = listenbrainz(ui, &p, model, state) {
             connect = Some(action);
         }
         if state.discord {
             let toggle = tr("Show what you play in your Discord status");
-            ui.checkbox(&mut new.integrations.discord, toggle);
+            ui.checkbox(&mut new.integrations.discord, toggle)
+                .on_hover_cursor(CursorIcon::PointingHand);
             ui.weak(tr("Discord must be running on this computer."));
         }
         section(ui, &p, tr("Keyboard shortcuts"));
@@ -152,25 +155,32 @@ fn section(ui: &mut Ui, p: &Palette, title: Cow<'static, str>) {
 
 /// A setting's row (ruling 30), left to right in reading order: `label` in a `SETTINGS_LABEL`
 /// column, cut with "…", then what `controls` adds, wrapping. With less room than that column
-/// and a field, the label stacks above the controls.
+/// and a field, the label stacks above the controls. Its lines are a `PILL` tall, as its
+/// fields, buttons and combo boxes.
 fn row<R>(
     ui: &mut Ui,
     label: impl Into<WidgetText>,
     controls: impl FnOnce(&mut Ui) -> R,
 ) -> (Response, R) {
-    if ui.available_width() < theme::SETTINGS_LABEL + theme::SETTINGS_FIELD {
+    // egui centres an item on the line height known when it is added, so the label is
+    // centred on the controls after it only if the line is their height from the start.
+    let height = std::mem::replace(&mut ui.spacing_mut().interact_size.y, theme::PILL);
+    let shown = if ui.available_width() < theme::SETTINGS_LABEL + theme::SETTINGS_FIELD {
         let label = ui.label(label);
-        return (label, ui.horizontal_wrapped(controls).inner);
-    }
-    ui.horizontal(|ui| {
-        let size = vec2(theme::SETTINGS_LABEL, ui.spacing().interact_size.y);
-        let (column, _) = ui.allocate_exact_size(size, Sense::hover());
-        let layout = Layout::left_to_right(Align::Center);
-        let mut column = ui.new_child(UiBuilder::new().max_rect(column).layout(layout));
-        let label = column.add(egui::Label::new(label).truncate());
         (label, ui.horizontal_wrapped(controls).inner)
-    })
-    .inner
+    } else {
+        ui.horizontal(|ui| {
+            let size = vec2(theme::SETTINGS_LABEL, ui.spacing().interact_size.y);
+            let (column, _) = ui.allocate_exact_size(size, Sense::hover());
+            let layout = Layout::left_to_right(Align::Center);
+            let mut column = ui.new_child(UiBuilder::new().max_rect(column).layout(layout));
+            let label = column.add(egui::Label::new(label).truncate());
+            (label, ui.horizontal_wrapped(controls).inner)
+        })
+        .inner
+    };
+    ui.spacing_mut().interact_size.y = height;
+    shown
 }
 
 /// A one-line field for a row, `SETTINGS_FIELD` wide or the room left.
@@ -179,7 +189,8 @@ fn field(text: &mut String) -> egui::TextEdit<'_> {
 }
 
 /// A combo box showing `selected`, its choices drawn by `list`, named `label` for screen
-/// readers: egui would only link it to the label beside it.
+/// readers: egui would only link it to the label beside it. It is a `PILL` tall only inside
+/// a `row`, which sets that height; elsewhere it would be the theme's `interact_size` (32).
 fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
     let combo = egui::ComboBox::from_id_salt(label).selected_text(selected);
     let shown = combo.show_ui(ui, list);
@@ -188,13 +199,14 @@ fn combo(ui: &mut Ui, label: &str, selected: &str, list: impl FnOnce(&mut Ui)) {
         info.current_text_value = Some(selected.to_owned());
         info
     });
+    shown.response.on_hover_cursor(CursorIcon::PointingHand);
 }
 
 /// The theme picker (spec §5.8): the built-ins, then the catalog's files; a built-in clears
 /// the file and its cache, a file leaves the cache for `main` to fill. Beside it "Open themes
 /// folder", under it the status line, then the album-art tint. Whether "Open themes folder"
 /// was clicked.
-fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
+fn appearance(ui: &mut Ui, p: &Palette, model: &Model, new: &mut Settings) -> bool {
     let builtins = [
         (Theme::System, tr("Follow system")),
         (Theme::Dark, tr("Dark")),
@@ -238,7 +250,7 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
                 }
             }
         });
-        ui.button(tr("Open themes folder")).clicked()
+        pill_button(ui, p, None, &tr("Open themes folder"), false).clicked()
     });
     if let Some(status) = &model.theme_status {
         ui.weak(status_text(
@@ -246,7 +258,8 @@ fn appearance(ui: &mut Ui, model: &Model, new: &mut Settings) -> bool {
             new.custom_theme.as_deref().unwrap_or_default(),
         ));
     }
-    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"));
+    ui.checkbox(&mut new.accent_from_art, tr("Colour from album art"))
+        .on_hover_cursor(CursorIcon::PointingHand);
     open
 }
 
@@ -275,7 +288,7 @@ fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
         (tr("Redirect URL"), &mut state.redirect_uri),
     ];
     for (label, text) in fields {
-        let (label, edit) = row(ui, label, |ui| ui.add(field(text)));
+        let (label, edit) = row(ui, label, |ui| text_field(ui, p, field(text)));
         edit.labelled_by(label.id);
     }
     let typed = Account {
@@ -295,19 +308,19 @@ fn account(ui: &mut Ui, p: &Palette, state: &mut State, account: &mut Account) {
 
 /// Who Last.fm is connected as, with Disconnect; while a connect waits for the user, Cancel;
 /// else Connect. What was clicked, to send.
-fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
+fn lastfm(ui: &mut Ui, p: &Palette, model: &Model) -> Option<Action> {
     let user = &model.settings.integrations.lastfm_user;
     let (_, clicked) = row(ui, tr("Last.fm"), |ui| {
         if let Some(user) = user {
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            let disconnect = ui.button(tr("Disconnect")).clicked();
+            let disconnect = pill_button(ui, p, None, &tr("Disconnect"), false).clicked();
             disconnect.then_some(Action::DisconnectLastfm)
         } else if model.lastfm_waiting {
             ui.label(tr("Waiting for you to allow Tidash on Last.fm…"));
-            let cancel = ui.button(tr("Cancel")).clicked();
+            let cancel = pill_button(ui, p, None, &tr("Cancel"), false).clicked();
             cancel.then_some(Action::CancelLastfm)
         } else {
-            let connect = ui.button(tr("Connect")).clicked();
+            let connect = pill_button(ui, p, None, &tr("Connect"), false).clicked();
             connect.then_some(Action::ConnectLastfm)
         }
     });
@@ -321,12 +334,12 @@ fn lastfm(ui: &mut Ui, model: &Model) -> Option<Action> {
 
 /// Who ListenBrainz is connected as, with Disconnect; or the token field, called "User token",
 /// with Connect. What was clicked, to send.
-fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action> {
+fn listenbrainz(ui: &mut Ui, p: &Palette, model: &Model, state: &mut State) -> Option<Action> {
     let name = tr("ListenBrainz");
     if let Some(user) = &model.settings.integrations.listenbrainz_user {
         let (_, disconnect) = row(ui, name, |ui| {
             ui.label(tr("Connected as {user}").replace("{user}", user));
-            ui.button(tr("Disconnect")).clicked()
+            pill_button(ui, p, None, &tr("Disconnect"), false).clicked()
         });
         return disconnect.then_some(Action::DisconnectListenBrainz);
     }
@@ -335,14 +348,17 @@ fn listenbrainz(ui: &mut Ui, model: &Model, state: &mut State) -> Option<Action>
         let token = field(&mut state.listenbrainz_token)
             .password(true)
             .hint_text(hint.as_ref());
-        let token = ui.add(token);
+        let token = text_field(ui, p, token);
         // The hint is AccessKit's placeholder, not its name; `widget_info` would also make it
         // a plain text input.
         ui.ctx()
             .accesskit_node_builder(token.id, |node| node.set_label(hint));
         let token = nonblank(&state.listenbrainz_token);
-        let button = egui::Button::new(tr("Connect"));
-        let clicked = ui.add_enabled(token.is_some(), button).clicked();
+        // Not `add_enabled_ui`, as in `updates`: the pill is the row's last, and must wrap.
+        if token.is_none() {
+            ui.disable();
+        }
+        let clicked = pill_button(ui, p, None, &tr("Connect"), false).clicked();
         clicked.then_some(token).flatten()
     });
     ui.weak(tr(
@@ -368,6 +384,7 @@ fn updates(
     row(ui, tr("Automatic updates"), |ui| {
         let automatic = tr("Check daily and download new versions");
         ui.checkbox(&mut updates.automatic, automatic)
+            .on_hover_cursor(CursorIcon::PointingHand)
     });
     let (_, clicked) = row(ui, "", |ui| {
         if let Some(update) = update {
@@ -458,7 +475,8 @@ fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
             }
         });
     });
-    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"));
+    ui.checkbox(&mut audio.exclusive, tr("Exclusive mode"))
+        .on_hover_cursor(CursorIcon::PointingHand);
     ui.weak(tr(
         "Bit-perfect: each track plays at its own sample rate and bit depth, without other \
          apps' sound and without volume control. Falls back to shared mode when the device \
@@ -469,13 +487,18 @@ fn audio(ui: &mut Ui, devices: &[String], audio: &mut Audio) {
             &mut audio.hi_res,
             true,
             tr("Hi-Res (up to 24-bit, 192 kHz)"),
-        );
-        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"));
+        )
+        .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.hi_res, false, tr("Lossless (16-bit, 44.1 kHz)"))
+            .on_hover_cursor(CursorIcon::PointingHand);
     });
     row(ui, tr("Normalization"), |ui| {
-        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"));
-        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"));
-        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"));
+        ui.radio_value(&mut audio.normalization, Normalization::Off, tr("Off"))
+            .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.normalization, Normalization::Track, tr("Track"))
+            .on_hover_cursor(CursorIcon::PointingHand);
+        ui.radio_value(&mut audio.normalization, Normalization::Album, tr("Album"))
+            .on_hover_cursor(CursorIcon::PointingHand);
     });
 }
 

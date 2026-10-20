@@ -82,6 +82,7 @@ pub fn play_button(ui: &mut egui::Ui, ctx: &Ctx, list: &[tidal::Track]) {
         ctx.send(Action::PlayTracks {
             tracks: list.to_vec(),
             start: 0,
+            source: super::playing_from(ctx.model),
         });
     }
 }

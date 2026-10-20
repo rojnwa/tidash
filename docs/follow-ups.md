@@ -39,9 +39,7 @@ Parked in M4:
   request timing out last; Failed should never overwrite Ready, `model.rs`); the lyrics and credits
   scroll offset carries over between tracks (`id_salt` not keyed by the track); the highlight lags a
   line change by up to 250 ms; a blank synced line shows "…" outside `tr` (`ui/lyrics.rs`).
-- "Added n tracks" and "Already in this playlist" go out through the error list, warn-coloured (R17);
-  a styled info notice (`library.rs`).
-- The "Added n tracks to {playlist}" notice reads the title through the cached GET, so a just-renamed
+- The "Added n tracks to {playlist}" toast reads the title through the cached GET, so a just-renamed
   playlist can show its old title once (`library.rs`).
 - Settings: a stale echo of edit A after B can make a third edit C build on A (B lost), and two quick
   edits can flicker once (the theme, say) until the second echo; a pending counter like
@@ -169,9 +167,6 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
   twice (name and placeholder) (`ui/settings.rs`).
 - "Album", "Artist" and "Playlist" share one msgid across senses (type line, column header, setting)
   without `msgctxt`, and their location comments miss `src/ui/tracks.rs` (`tidash.pot`).
-- The player bar's slider knob copies egui's private slider geometry (height / 2.5, `shrink(radius)`),
-  so an egui upgrade can move egui's handle out from under it; add a same-centre check
-  (`ui/player_bar.rs`).
 - Screenshot switch: a minimized or occluded window can hang it (the 20 s cap lives in `draw`; put the
   deadline in `logic`), it does not wait for a running theme `Transition`, and a run while Tidash
   runs exits silently (`main.rs`). The pageless-route list is in three places (`main.rs`, `model.rs`,
@@ -182,6 +177,26 @@ Parked in the design-system milestone (2026-10-11; its rulings are summarized in
   idle (`repaint_delay == MAX`); `dominant()` on partly transparent images. `testing::bounds` matches
   only `label()` (`Role::Label` nodes keep their text in `value`); the settings test pairs "Nord.json"
   with `presets::themes().nth(2)` instead of finding it by filename.
+
+## Interface polish (2026-10-19)
+
+- Task 2: the slider thumb pokes about 2 px through the focus ring at the rail's ends; the focus,
+  drag and accent paths are untested; `rails()`/`circles()` match loosely (`ui/player_bar.rs`).
+- Task 4: `every_page_ends_with_room` checks one side only (`ui/mod.rs`).
+- Task 5: every Settings row is now 40 px tall, checkbox, radio and shortcut rows too; judge the
+  density at acceptance (`ui/settings.rs`).
+- Task 6: the contrast assert checks constants only; separator spacing is not locked by a test; the
+  folder Rename, playlist Move to folder and queue Remove menus are untested after the rewiring.
+- Task 7: the header Play's source is untested; two types are named `Source`.
+- Task 8: no pointer test for a link under the hover-only artist overlay; focus stability from a
+  track to no track is untested.
+- Task 9: `NARROW` is a magic number; clicks are hit-tested at release; the drag test stops before
+  release; queue-panel links are untested; the underline may sit differently for names in a fallback
+  font face.
+- Task 10: wrapped toast lines are left-aligned; the toast test compares floats exactly
+  (`ui/toast.rs`).
+- Task 11: copies of a cover can disagree if one is requested at `TINT_PX`; the opacity is unclamped
+  if the clock runs backwards (`ui/mod.rs` `cover`).
 
 ## Player
 
@@ -274,8 +289,12 @@ on a 25-minute 24/192 track, warm page cache, spec §10).
 
 - Duplicates `cargo update` cannot settle: windows-sys 0.52/0.59 beside 0.60/0.61 (the winit fork,
   glutin, glutin_egl_sys and ring ask for 0.52, rustix 0.38 for 0.59), and `dpi` twice (the winit
-  fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`).
+  fork's 0.1.1, muda's 0.1.2) (`Cargo.lock`). The winit repoint (5d16056) resolved 14 crates
+  (anstyle-query, dirs-sys, errno, quinn-udp, rustix, socket2, tempfile, …) from 0.61.2 to 0.60.2.
 - egui, eframe and egui_extras 0.37 are out; Tidash stays on 0.36 until fastframe's egui fork moves.
+- The `winit` patch points at rojnwa/winit `0149e5d` (crmne's `ed7caa9` plus the window-minimum fix
+  for programmatic resizes). Repoint it at crmne's rev once https://github.com/crmne/winit/pull/4
+  merges, and drop the fork. Upstream: https://github.com/rust-windowing/winit/pull/4781.
 - `block` v0.1.6 draws a future-incompatibility warning from rustc: souvlaki 0.8.3
   (fastframe-now-playing's macOS backend) depends on it directly and through `cocoa` 0.24; upstream's
   to replace.

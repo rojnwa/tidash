@@ -1,7 +1,7 @@
 //! Shelves (a title, maybe "View all", then a sideways row of cards, a few tracks, or links)
 //! and the card grid.
 
-use super::widgets::{fade, focus_ring, icon_button, line};
+use super::widgets::{fade, focus_ring, icon_button, line, pill_button};
 use super::{Ctx, card, rows, tracks};
 use crate::i18n::tr;
 use crate::model::{Action, Route};
@@ -55,10 +55,11 @@ fn shelf(ui: &mut egui::Ui, s: &Shelf, ctx: &mut Ctx) {
             tracks::show(ui, ctx, "tracks", &list, false, None);
         }
         Layout::Links => {
+            let p = ctx.palette;
             ui.horizontal_wrapped(|ui| {
                 for item in &s.items {
                     if let Item::Link { title, api_path } = item
-                        && ui.button(title).clicked()
+                        && pill_button(ui, &p, None, title, false).clicked()
                     {
                         ctx.go(Route::Page(api_path.clone()));
                     }
@@ -100,6 +101,7 @@ fn heading(ui: &mut egui::Ui, ctx: &mut Ctx, s: &Shelf, cards: bool) -> f32 {
         }
         if let Some((more, text)) = more {
             let (rect, r) = ui.allocate_exact_size(text.size(), Sense::click());
+            let r = r.on_hover_cursor(egui::CursorIcon::PointingHand);
             r.widget_info(|| WidgetInfo::labeled(WidgetType::Link, ui.is_enabled(), &*view_all));
             let ink = theme::blend(p.secondary, p.text, fade(ui, &r, r.hovered()));
             ui.painter()
@@ -185,6 +187,7 @@ fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item, width: f32) {
         ctx.send(Action::PlayTracks {
             tracks: vec![t.clone()],
             start: 0,
+            source: None, // a lone track: its album is where it leads (spec §3.9)
         });
     }
 }

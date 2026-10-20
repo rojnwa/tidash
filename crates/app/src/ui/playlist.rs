@@ -138,7 +138,7 @@ mod tests {
             pass(&egui, &tx, &model, super::show, input);
         }
         let played = std::iter::from_fn(|| rx.try_recv().ok()).find_map(|a| match a {
-            Action::PlayTracks { tracks, start } => Some((tracks.len(), start)),
+            Action::PlayTracks { tracks, start, .. } => Some((tracks.len(), start)),
             _ => None, // the artwork
         });
         assert_eq!(played, Some((3, 0)));

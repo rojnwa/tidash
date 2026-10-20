@@ -1,6 +1,7 @@
 The icons in this folder are Lucide icons (https://lucide.dev), ISC, some derived
 from Feather (MIT). mic-vocal, folder, folder-open and folder-plus are Lucide's own
-files (lucide-static 0.469.0); the rest come from Spotifast
+files (lucide-static 0.469.0), list-start, link and folder-input too (Lucide 1.59.0);
+the rest come from Spotifast
 (https://github.com/crmne/spotifast), MIT. Each is drawn in white so the interface's
 tint colours it. The shared Lucide icons Tidash takes from fastframe-icons carry the
 same Lucide notice.

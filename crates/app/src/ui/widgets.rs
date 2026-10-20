@@ -5,14 +5,16 @@
 use crate::theme::{self, GLYPH, Icon, Palette};
 use egui::text::{LayoutJob, TextWrapping};
 use egui::{
-    Align, Color32, FontId, Galley, Layout, Mesh, Pos2, Rect, Response, RichText, Sense, Stroke,
-    StrokeKind, TextEdit, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType, pos2, vec2,
+    Align, Color32, CursorIcon, FontId, Galley, Layout, Mesh, Pos2, Rect, Response, RichText,
+    Sense, Stroke, StrokeKind, TextEdit, Ui, UiBuilder, Vec2, WidgetInfo, WidgetType, pos2, vec2,
 };
 use std::sync::Arc;
 
 /// A nav row's inset around its icon and text; the library's rows share it.
 pub(super) const NAV_PAD: f32 = 8.0;
 const NAV_ICON: f32 = 24.0;
+/// A nav row's height.
+pub(super) const NAV_ROW: f32 = NAV_ICON + 2.0 * NAV_PAD;
 
 /// `icon` at `size` points square, centred on `center`, tinted `tint`.
 pub(super) fn paint_icon(ui: &Ui, icon: Icon, center: Pos2, size: f32, tint: Color32) {
@@ -95,6 +97,7 @@ pub fn icon_button(
     }
     focus_ring(ui, &r, rect.width() / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A `fill` disc `diameter` across with `icon` in `glyph` at 0.55 of it. Hovered, an `accent`
@@ -124,6 +127,7 @@ pub fn circle_button(
     }
     focus_ring(ui, &r, diameter / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A bare `glyph`-point `icon` in `text` on a `TRANSPORT` square, the player's transport
@@ -137,6 +141,7 @@ pub fn glyph_button(ui: &mut Ui, p: &Palette, icon: Icon, label: &str, glyph: f3
     }
     focus_ring(ui, &r, rect.width() / 2.0);
     r.on_hover_text(label)
+        .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A 40 px pill with `label` (and `icon` before it), padded 20. Primary: `accent`
@@ -179,7 +184,56 @@ pub fn pill_button(
         ui.painter().galley(at, text, ink);
     }
     focus_ring(ui, &r, rect.height() / 2.0);
-    r
+    r.on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// A menu item (spec §3.7): a `GLYPH` `secondary` `icon`, then `label`, `MENU_ITEM` tall.
+/// Screen readers hear `label` alone.
+pub fn menu_button<'a>(
+    p: &Palette,
+    icon: Icon,
+    label: impl Into<egui::WidgetText>,
+) -> egui::Button<'a> {
+    let atoms = (icon.image(p.secondary, GLYPH), label.into());
+    egui::Button::new(atoms).min_size(vec2(0.0, theme::MENU_ITEM))
+}
+
+/// A `menu_button` ending in a `secondary` chevron, opening the submenu `add` beside it.
+pub fn submenu(
+    ui: &mut Ui,
+    p: &Palette,
+    icon: Icon,
+    label: impl Into<egui::WidgetText>,
+    add: impl FnOnce(&mut Ui),
+) {
+    let chevron = Icon::ChevronRight.image(p.secondary, GLYPH);
+    let button = menu_button(p, icon, label).right_text(chevron);
+    let sub = egui::containers::menu::SubMenuButton::from_button(button);
+    sub.ui(ui, |ui| {
+        menu_width(ui);
+        add(ui);
+    });
+}
+
+/// `add`'s menu, opened by right-clicking `resp`, in `theme::menu_style` (its submenus too).
+pub fn context_menu(resp: &Response, p: &Palette, add: impl FnOnce(&mut Ui)) {
+    let menu = egui::Popup::context_menu(resp).style(theme::menu_style(*p));
+    menu.show(|ui| {
+        menu_width(ui);
+        add(ui);
+    });
+}
+
+/// Makes the menu `ui` is the inside of at least `MENU_W` wide, its frame included.
+pub(super) fn menu_width(ui: &mut Ui) {
+    let frame = egui::Frame::menu(ui.style()).total_margin().sum().x;
+    ui.set_min_width(theme::MENU_W - frame);
+}
+
+/// The rule between a menu's groups: 1 px `outline` (egui's separator stroke, which
+/// `theme::style` makes that) with 5 above and below.
+pub fn menu_separator(ui: &mut Ui) {
+    ui.add(egui::Separator::default().spacing(11.0));
 }
 
 /// `text` in `heading()`: a side panel's, a Settings section's or a dialog's title.
@@ -198,7 +252,7 @@ pub fn nav_row(
     selected: bool,
     collapsed: bool,
 ) -> Response {
-    let height = NAV_ICON + 2.0 * NAV_PAD;
+    let height = NAV_ROW;
     let size = vec2(ui.available_width().max(height), height);
     let (rect, r) = ui.allocate_exact_size(size, Sense::click());
     r.widget_info(|| {
@@ -233,6 +287,7 @@ pub fn nav_row(
         }
     }
     focus_ring(ui, &r, theme::R_CARD);
+    let r = r.on_hover_cursor(CursorIcon::PointingHand);
     if collapsed { r.on_hover_text(label) } else { r }
 }
 
@@ -289,6 +344,25 @@ pub fn search_field(
     }
     let r = r.with_new_rect(rect);
     focus_ring(ui, &r, rect.height() / 2.0);
+    r
+}
+
+/// The house text field (spec §3.6): `edit` on a `PILL`-tall, fully round `surface` pill
+/// like the search's, its text inset 16 and centred, with the focus ring. Width, hint and the
+/// rest stay the caller's.
+pub fn text_field(ui: &mut Ui, p: &Palette, edit: TextEdit<'_>) -> Response {
+    let radius = theme::PILL / 2.0;
+    // A frame of our own skips egui's margin, fill and stroke: it brings them itself.
+    let frame = egui::Frame::new()
+        .fill(p.surface)
+        .corner_radius(radius)
+        .inner_margin(egui::Margin::symmetric(16, 0));
+    let edit = edit
+        .frame(frame)
+        .min_size(vec2(0.0, theme::PILL))
+        .vertical_align(Align::Center);
+    let r = ui.add(edit);
+    focus_ring(ui, &r, radius);
     r
 }
 
@@ -385,6 +459,37 @@ mod tests {
             let (pressed, _) = run(&ctx, vec![key(Key::Enter)], row);
             assert!(pressed[i].clicked(), "Enter on {i}");
         }
+    }
+
+    /// The cursor with the pointer over the middle of what `draw` adds.
+    fn hovered(ctx: &egui::Context, draw: impl Fn(&mut Ui) -> Response) -> CursorIcon {
+        let (r, _) = run(ctx, vec![], &draw);
+        let at = egui::Event::PointerMoved(r.rect.center());
+        run(ctx, vec![at], &draw).1.platform_output.cursor_icon
+    }
+
+    /// Enabled clickables show the hand, stock buttons too; disabled ones and plain text the
+    /// arrow.
+    #[test]
+    fn clickables_show_the_hand() {
+        let ctx = context();
+        let p = Palette::dark();
+        theme::apply(&ctx, &p);
+        let hand = CursorIcon::PointingHand;
+        let shuffle = |ui: &mut Ui| icon_button(ui, &p, Icon::Shuffle, "Shuffle", None);
+        assert_eq!(hovered(&ctx, shuffle), hand);
+        let play = |ui: &mut Ui| pill_button(ui, &p, Some(Icon::PlayFilled), "Play", true);
+        assert_eq!(hovered(&ctx, play), hand);
+        let home = |ui: &mut Ui| nav_row(ui, &p, Icon::House, "Home", false, false);
+        assert_eq!(hovered(&ctx, home), hand);
+        assert_eq!(hovered(&ctx, |ui| ui.button("Retry")), hand); // via `interact_cursor`
+        let off = |ui: &mut Ui| ui.add_enabled(false, egui::Button::new("Off"));
+        assert_eq!(hovered(&ctx, off), CursorIcon::Default);
+        let off = |ui: &mut Ui| ui.add_enabled_ui(false, play).inner;
+        assert_eq!(hovered(&ctx, off), CursorIcon::Default);
+        let text = |ui: &mut Ui| ui.label("Plain text");
+        assert_eq!(hovered(&ctx, text), CursorIcon::Default); // no I-beam
+        assert!(!ctx.global_style().interaction.selectable_labels);
     }
 
     #[test]
@@ -521,6 +626,33 @@ mod tests {
         field(vec![egui::Event::Text("abc".into())]);
         assert_eq!(text, "abc");
         assert!(ctx.memory(|m| m.has_focus(id)));
+    }
+
+    /// A text field is a pill tall, and a pointer's click on it lets you type.
+    #[test]
+    fn text_fields_are_a_pill_tall() {
+        let ctx = context();
+        let p = Palette::dark();
+        let mut text = String::new();
+        let mut field = |events| {
+            run(&ctx, events, |ui| {
+                text_field(ui, &p, TextEdit::singleline(&mut text).hint_text("Name"))
+            })
+            .0
+        };
+        let r = field(vec![]);
+        assert_eq!(r.rect.height(), theme::PILL);
+        let at = r.rect.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        field(vec![egui::Event::PointerMoved(at), button(true)]);
+        field(vec![button(false)]);
+        field(vec![egui::Event::Text("abc".into())]);
+        assert_eq!(text, "abc");
     }
 
     #[test]

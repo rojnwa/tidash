@@ -3,9 +3,11 @@
 //! built, and these rows are virtual. A playlist's rows drag the same way (`dragging`).
 
 use super::tracks::{self, ROW_H};
+use super::widgets::{context_menu, menu_button};
 use super::{Ctx, rows};
 use crate::i18n::tr;
 use crate::model::Action;
+use crate::theme::Icon;
 use egui::style::ScrollAnimation;
 use egui::{DragAndDrop, PointerButton, ScrollArea, Sense, vec2};
 use std::any::Any;
@@ -46,6 +48,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 let t = &q.tracks[i];
                 let size = vec2(ui.available_width(), ROW_H);
                 let (_, row) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                let row = tracks::hand(row);
                 let num = (i + 1).to_string();
                 // By index: a track queued twice plays at one of them.
                 let current = (q.current == Some(i)).then_some(tier);
@@ -60,8 +63,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
                     ctx.send(Action::PlayQueueIndex(i));
                 }
-                row.context_menu(|ui| {
-                    if ui.button(tr("Remove")).clicked() {
+                let p = ctx.palette;
+                context_menu(&row, &p, |ui| {
+                    let remove = menu_button(&p, Icon::X, tr("Remove"));
+                    if ui.add(remove).clicked() {
                         ctx.send(Action::RemoveFromQueue(i));
                         ui.close();
                     }
@@ -143,7 +148,7 @@ mod tests {
     use super::*;
     use crate::model::Route;
     use crate::ui::{Side, UiState, draw, testing};
-    use egui::{PointerButton, Pos2, pos2};
+    use egui::{CursorIcon, PointerButton, Pos2, pos2};
 
     #[test]
     fn drop_slot_rounds_and_clamps() {
@@ -179,9 +184,10 @@ mod tests {
         );
     }
 
-    /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`.
-    /// Released off the list (beside the panel, or below it over the player bar), a drag moves
-    /// nothing. A screen reader's click on a row plays it.
+    /// Drag the first row onto the top edge of the fourth: `MoveInQueue { from: 0, to: 3 }`,
+    /// the hand on the pressed row turning into egui's grab once it drags. Released off the list
+    /// (beside the panel, or below it over the player bar), a drag moves nothing. A screen
+    /// reader's click on a row plays it.
     #[test]
     fn dragging_a_row_moves_it() {
         let ctx = testing::context();
@@ -243,10 +249,13 @@ mod tests {
                 vec![button(to + egui::vec2(off, 0.0), false)],
             ]
         };
-        for input in drag(row4, 0.0) {
-            pass(input);
-        }
+        let cursors: Vec<_> = drag(row4, 0.0)
+            .into_iter()
+            .map(|input| pass(input).platform_output.cursor_icon)
+            .collect();
         assert_eq!(sent(), ["MoveInQueue { from: 0, to: 3 }"]);
+        let (hand, grab) = (CursorIcon::PointingHand, CursorIcon::Grabbing);
+        assert_eq!(cursors[..3], [hand, grab, grab], "pressed, then dragged");
         for input in drag(row4, -500.0) {
             pass(input);
         }

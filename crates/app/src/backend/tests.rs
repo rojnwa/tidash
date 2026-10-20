@@ -271,7 +271,12 @@ fn a_stream_load_in_flight_at_logout_stops_before_the_cache_clear() {
         let audio = Default::default();
         b.playback = Some(Playback::new(output, b.emit.clone(), b.msgs.clone(), audio));
         let tracks = vec![track()];
-        b.handle(Action::PlayTracks { tracks, start: 0 }).await;
+        b.handle(Action::PlayTracks {
+            tracks,
+            start: 0,
+            source: None,
+        })
+        .await;
         let sent = async {
             while server
                 .received_requests()
@@ -345,7 +350,14 @@ fn an_expired_session_is_removed_and_shown_once() {
     let (output, _, _renderer) = player::Player::spawn_manual();
     let mut p = Playback::new(output, b.emit.clone(), b.msgs.clone(), Default::default());
     let tracks = vec![track()];
-    p.handle(None, Action::PlayTracks { tracks, start: 0 });
+    p.handle(
+        None,
+        Action::PlayTracks {
+            tracks,
+            start: 0,
+            source: None,
+        },
+    );
     let playing = player::PlayerEvent::State(player::PlayState::Playing);
     p.on_msg(None, Msg::Player(playing));
     b.playback = Some(p);

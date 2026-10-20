@@ -447,8 +447,9 @@ impl App {
         self.ask_for_screenshot(ui.ctx());
     }
 
-    /// With `TIDASH_SCREENSHOT`, once: asks for the screenshot when the page has loaded and no
-    /// artwork is still loading, at least 1 s after start, or 20 s after it regardless.
+    /// With `TIDASH_SCREENSHOT`, once: asks for the screenshot when the page has loaded, no
+    /// artwork is still loading and nothing is still moving (no repaint asked for this pass, so
+    /// no fade mid-way), at least 1 s after start, or 20 s after it regardless.
     fn ask_for_screenshot(&mut self, ctx: &egui::Context) {
         let Some(since) = self.shot_since else {
             return;
@@ -461,7 +462,10 @@ impl App {
                 .pages
                 .get(route)
                 .is_some_and(|s| s.data.is_some());
-        let settled = page && !self.ui.images.loading() && waited >= Duration::from_secs(1);
+        let settled = page
+            && !self.ui.images.loading()
+            && !ctx.has_requested_repaint()
+            && waited >= Duration::from_secs(1);
         if settled || waited >= Duration::from_secs(20) {
             self.shot_since = None;
             let shot = egui::UserData::new(Shot);

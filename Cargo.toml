@@ -40,7 +40,8 @@ egui_glow = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6
 emath = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
 epaint = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
 epaint_default_fonts = { git = "https://github.com/crmne/egui", rev = "6ce633ba5f7f64d19ef6d204f9377da560bb546b" }
-winit = { git = "https://github.com/crmne/winit", rev = "ed7caa9023f10b397f5b6ec8284a840cbd8a6f65" }
+# crmne/winit ed7caa9 plus the window-minimum fix (crmne/winit#4); back to crmne's rev once it merges.
+winit = { git = "https://github.com/rojnwa/winit", rev = "0149e5d3c65962dc3ecbfb1d9f62651bb25c8071" }
 
 [profile.release]
 lto = "thin"

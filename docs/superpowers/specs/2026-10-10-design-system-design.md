@@ -187,6 +187,10 @@ egui text styles: Small 12, Body 14, Button 14, Heading 19, Monospace 13.
 |---|---|
 | Hover colour on rows, nav rows, icons | 150 ms (`ctx.animate_bool_with_time`) |
 | Card cover overlay | 300 ms fade |
+| Cover fade-in | 200 ms, first arrival only (`theme::COVER_FADE`) |
+| Slider hover (player bar) | 120 ms (`theme::SLIDER_HOVER`) |
+| Page fade-in | 150 ms (`theme::PAGE_FADE`) |
+| Toast fade | 150 ms in and out, shown 2.5 s (`theme::TOAST_FADE`, `theme::TOAST_SHOW`) |
 | Discs and icon buttons | hover scale 1.1, press 0.9 |
 | egui `animation_time` | 0.15 s (also the sidebar's slide) |
 | Theme change | fastframe `Reveal::Band`, 0.42 s |
@@ -209,8 +213,10 @@ From `Visuals::dark()` or `light()` by `dark`, then:
   they would be darker than the idle fill); `weak_bg_fill` the same.
 - Text styles of §4.3; `item_spacing` (8, 8); `button_padding` (16, 8); `interact_size` (40, 32); `menu_margin` 4.
 - Sliders: `slider_rail_height` 4, circle handle; the trailing fill is egui's selection fill globally. The player
-  bar's sliders differ (§5.7): a `surface_active` rail, `text` up to the value, and an app-drawn `text` knob with no
-  stroke (~13.6 px) over egui's handle, which takes the rail's colour.
+  bar's sliders differ (§5.7): egui's slider for input, keys and AccessKit, painting nothing seen; the app draws a
+  4 px `surface_active` rail on the row's centre line (the times' and the volume icon's), `text` up to the value, no
+  thumb. Hovered, dragged or focused, over 120 ms the rail grows to 6 px, the played part turns `accent` and a 12 px
+  stroke-less `text` thumb grows in at the value; focus adds the focus ring. Disabled, the rest look, faded.
 - Scroll bars stay `ScrollStyle::solid()` (the floating bars' fade repaints while idle, S3): 6 px wide; egui's solid
   bars always show their track (`surface`) and draw the handle at 55% text, full text hovered or dragged. TIDAL's
   hidden track is out of reach without the floating bars.
@@ -241,8 +247,8 @@ neither sidebar nor top bar (as today).
 ### 5.2 Sidebar
 
 - Window fill, 1 px outline on its right edge, 16 px side margins.
-- Below the collapse button everything scrolls as one (nav rows, Collection, All playlists, the tree), so the
-  library stays reachable in a short window.
+- Everything scrolls as one from the panel's top (nav rows, Collection, All playlists, the tree), so the
+  library stays reachable in a short window; Home's centre is level with the top bar's controls.
 - Nav rows (`nav_row`): 24 px icon, Label text, radius 12, padding 8; idle secondary, hovered surface_hover and text,
   selected surface_active and text. Home (`house`), Explore (`compass`).
 - "Collection" section header (Small, dim, sentence case as in TIDAL 2.43): Playlists, Albums, Tracks, Artists, Mixes,
@@ -252,16 +258,17 @@ neither sidebar nor top bar (as today).
   (today's two buttons, same labels and dialogs), then the library tree: rows with a 36 px cover (radius 2) or a folder icon, title Body strong, subtitle Small secondary; folders keep
   their open/closed chevron. Rename, move and delete menus are unchanged.
 - Back and Forward leave the sidebar for the top bar. Search and Settings leave it too.
-- Collapse: a 32 px `panel-left` `icon_button` at the sidebar's top (label "Collapse sidebar" / "Expand sidebar")
-  flips `sidebar_collapsed`. `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct
-  ids). Collapsed, nav rows show only their icon (tooltip and AccessKit label keep the name), section headers become a
-  1 px outline line (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the
-  title as tooltip and label; folders still open and close in place. Menus are unchanged.
+- Collapse: a 32 px `panel-left` `icon_button`, the top bar's first control, left of the Back/Forward pill (label
+  "Collapse sidebar" / "Expand sidebar"), flips `sidebar_collapsed`; it moves with the sidebar's edge as it slides.
+  `egui::Panel::show_switched` slides between the 240 px panel and a 78 px one (distinct ids). Collapsed, nav rows
+  show only their icon (tooltip and AccessKit label keep the name), section headers become a 1 px outline line
+  (the two New buttons stay, stacked), and library rows show only the 36 px cover or folder icon, with the title as
+  tooltip and label; folders still open and close in place. Menus are unchanged.
 
 ### 5.3 Top bar and search
 
 - 56 tall, inside the central panel above the page scroll; page padding on both sides. As in TIDAL 2.43:
-  history on the left, search and the gear on the right.
+  the sidebar toggle and history on the left, search and the gear on the right.
 - Drawn before the page, so it comes first in Tab and AccessKit order, on a sublayer above the page's, so it paints
   over and takes the clicks from what paints behind it. It has no fill: the album, playlist and mix backdrop, the
   artist hero and the coverless tint (§5.9) start at the window's top, behind it; the page's scroll viewport starts
@@ -305,6 +312,7 @@ neither sidebar nor top bar (as today).
   album Body in text; duration Body in secondary, tabular, right-aligned. Unavailable rows at 50% opacity. Disc rows:
   `disc-3` icon and "Disc n" in Small secondary.
 - Context menu, drag to reorder and keyboard activation are unchanged; the drop line is 2 px accent.
+- Artist and album names are pointer links, underlined on hover, with no Tab stop (interface polish §3.8).
 
 ### 5.6 Cards
 
@@ -321,12 +329,14 @@ neither sidebar nor top bar (as today).
   enough for its controls and the widest format pill the exclusive setting can show ("24/176.4 FLAC · Exclusive",
   or without " · Exclusive"), playing or not, so Play never moves; the left takes what is left.
 - Left: 52 px cover (radius 2); title Label; artists Small secondary.
+  The cover opens the playback source, the title the album, each artist that artist; all are focusable links
+  (interface polish §3.8).
 - Centre: Shuffle and Repeat (32, 16 px glyphs; active ones get a surface_active disc); Previous and Next bare 22 px
   `skip-back-filled` / `skip-forward-filled` glyphs and Play/Pause a bare 24 px `play-filled` / `pause-filled`
   glyph, in text, each in a 40 px hit box (`glyph_button`; TIDAL 2.43 draws no disc, hovered or not: hover scales
   the glyph).
   Below, the seek row (max 800 wide): times in Small secondary, tabular; egui's slider with the player bar's look
-  (§4.6: `surface_active` rail, `text` fill and a stroke-less `text` knob).
+  (§4.6: `surface_active` rail, `text` fill, a `text` thumb only on hover).
 - Right: the format badge (`badge`, tier colours) with the short format ("24/96 FLAC", plus " · Exclusive"), its
   hover text and AccessKit value the full badge text and its explanation; then Queue (`list-music`), Lyrics
   (`mic-vocal`), Credits (`info`) icon buttons, toggles drawn like Shuffle (text and a surface_active disc when their
@@ -340,10 +350,15 @@ neither sidebar nor top bar (as today).
   40 px cover. Lyrics: lines in 16 SemiBold, the current one in text and the rest in dim. Credits: role headers in
   Small secondary, names as links.
 - Menus, popovers, tooltips and dialogs are stock egui, styled by §4.6 (overlay fill, radius 12 and 20, shadow).
+  Menus and their submenus are roomier (`theme::menu_style`, interface polish §3.7): a 6 px margin, at least 200 px
+  wide; items 34 px tall, a 16 px `secondary` icon 12 in and a 12 px gap before the label; hovered, pressed or open,
+  `surface_hover` composited over `overlay` (opaque), radius 8; groups split by a 1 px `outline` rule with 5 px above
+  and below; a submenu item ends in a `secondary` chevron.
 - Settings: Heading per section, one row per setting, left to right: the label in a 180 px column (cut to it), then
   the controls in reading order; in a narrower content area the label sits above them. Appearance becomes a combo box:
   Follow system, Dark, Light, a separator, then the catalog's themes by `display_name`; beside it "Open themes folder";
-  under it the catalog status line. Primary actions (Apply, Log in) are primary pills; the rest stock buttons.
+  under it the catalog status line. Primary actions (Apply, Log in) are primary pills; every other button outside
+  menus is a secondary pill (interface polish §3.6).
 - Login: a centred column with the primary pill "Log in with TIDAL" and a Settings link.
 
 ### 5.9 Album-art tint

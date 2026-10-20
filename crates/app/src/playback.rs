@@ -305,10 +305,15 @@ impl Playback {
 
     pub fn handle(&mut self, c: Option<&Arc<Client>>, action: Action) {
         match action {
-            Action::PlayTracks { tracks, start } => {
+            Action::PlayTracks {
+                tracks,
+                start,
+                source,
+            } => {
                 log::debug!("play {} tracks from {start}", tracks.len());
                 self.end_here(c);
                 self.failures = 0;
+                self.queue.source = source;
                 if self.queue.replace(tracks, start).is_some() {
                     self.want_play = true;
                     self.start_current(c, None);

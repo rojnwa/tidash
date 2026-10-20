@@ -33,6 +33,7 @@ pub fn card(
     width: f32,
 ) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height(width)), Sense::click());
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
     resp.widget_info(|| {
         let label = if subtitle.is_empty() {
             title.to_owned()

@@ -110,6 +110,16 @@ pub fn right(at: Pos2, pressed: bool) -> egui::Event {
     }
 }
 
+/// A primary (left) button press at `at` if `pressed`, else its release.
+pub fn primary(at: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Default::default(),
+    }
+}
+
 /// One pass of `view` drawing `model`'s route, fed `input`: the events it gave, and its
 /// output.
 pub fn pass(

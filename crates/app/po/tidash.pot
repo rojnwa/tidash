@@ -174,11 +174,11 @@ msgstr ""
 msgid "Collection"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 msgid "Collapse sidebar"
 msgstr ""
 
-#: src/ui/sidebar.rs
+#: src/ui/top_bar.rs
 msgid "Expand sidebar"
 msgstr ""
 
@@ -214,6 +214,7 @@ msgid "Artist"
 msgstr ""
 
 #: src/ui/tracks.rs
+#: src/ui/player_bar.rs
 msgid "Go to album"
 msgstr ""
 
@@ -221,8 +222,40 @@ msgstr ""
 msgid "Go to artist"
 msgstr ""
 
+#: src/ui/player_bar.rs
+msgid "Playing from {name}"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Go to album {title}"
+msgstr ""
+
+#: src/ui/player_bar.rs
+msgid "Go to artist {name}"
+msgstr ""
+
 #: src/ui/tracks.rs
 msgid "Copy link"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Link copied"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Playing next"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Added to queue"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Added to favorites"
+msgstr ""
+
+#: src/ui/tracks.rs
+msgid "Removed from favorites"
 msgstr ""
 
 #: src/ui/collection.rs

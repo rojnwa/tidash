@@ -1,6 +1,6 @@
 //! The messages that move between UI and backend.
 
-use crate::model::{Load, PageData, PlaybackSnapshot, QueueSnapshot, Route};
+use crate::model::{Load, PageData, PlaybackSnapshot, QueueSnapshot, Route, Source};
 use crate::queue::Repeat;
 use std::time::Duration;
 
@@ -36,6 +36,8 @@ pub enum Action {
     PlayTracks {
         tracks: Vec<tidal::Track>,
         start: usize,
+        /// The page they are played from; none without one to go back to.
+        source: Option<Source>,
     },
     Play,
     Pause,
@@ -275,6 +277,8 @@ pub enum Event {
     /// List the themes folder again (Settings opened): `main`'s.
     RescanThemes,
     Error(String),
+    /// A short confirmation of a write with no visible result: the UI's (`UiState::apply`).
+    Toast(String),
     /// Dismiss the error with this id (`Model::errors`); one already gone is ignored.
     DismissError(u64),
     Navigate(Route),
