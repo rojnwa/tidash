@@ -1255,7 +1255,8 @@ mod tests {
     }
 
     /// Spec §3.11: one cover drawn in many places (five rows of one album, and the player bar
-    /// playing one of them) ends faded in everywhere by `COVER_FADE`, and stays.
+    /// playing one of them) fades in once, every copy in step over the whole `COVER_FADE`, and
+    /// stays. (egui advances a bool animation only on its first call in a pass.)
     #[test]
     fn one_cover_in_many_places_fades_once() {
         let ctx = testing::context();
@@ -1294,14 +1295,19 @@ mod tests {
         assert_eq!(covers(&pass(&mut state, 1.0)), [], "placeholders only");
         arrives(&ctx, &mut state, theme::ROW_COVER);
         arrives(&ctx, &mut state, theme::PLAYER_COVER);
-        let mut out = pass(&mut state, 1.05);
-        let fading = covers(&out);
-        assert!(fading.iter().any(|(_, a)| *a < 255), "fading: {fading:?}");
-        for time in [1.3, 1.4, 1.5] {
-            out = pass(&mut state, time);
-            let alphas: Vec<_> = covers(&out).into_iter().map(|(_, a)| a).collect();
-            assert_eq!(alphas, [255; 6], "at {time}");
+        let alphas = |out: &egui::FullOutput| -> Vec<u8> {
+            covers(out).into_iter().map(|(_, a)| a).collect()
+        };
+        pass(&mut state, 1.05); // it comes
+        // Mid-fade, every copy as far along: drawn six times, it fades no faster.
+        let mid = alphas(&pass(&mut state, 1.15));
+        let even = mid.len() == 6 && mid.iter().all(|a| *a == mid[0]);
+        assert!(even && 0 < mid[0] && mid[0] < 255, "mid-fade: {mid:?}");
+        for time in [1.3, 1.4] {
+            assert_eq!(alphas(&pass(&mut state, time)), [255; 6], "at {time}");
         }
+        let out = pass(&mut state, 1.5);
+        assert_eq!(alphas(&out), [255; 6], "still");
         let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
         assert_eq!(repaint, Duration::MAX, "repaints at rest");
     }
