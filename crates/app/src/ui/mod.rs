@@ -393,12 +393,30 @@ fn cover(
             });
         })
     });
-    // Keyed by image, and a first call returns its target: a cover cached when first drawn
-    // shows at once, one drawn first without fades in when it comes, a size swap never fades.
+    // The opacity, by image, with the pass it was last drawn in. Not drawn last pass (new, out
+    // of view, another page), it shows as it is now; only a texture coming while it is drawn
+    // fades. Every copy in a pass shares the first's step; a size swap keeps it at 1.
     let a = image.map_or(0.0, |img| {
+        let ctx = ui.ctx();
         let id = egui::Id::new(("cover", img.key()));
-        ui.ctx()
-            .animate_bool_with_time(id, tex.is_some(), theme::COVER_FADE)
+        let to = if tex.is_some() { 1.0 } else { 0.0 };
+        let now = ctx.cumulative_pass_nr();
+        // As egui's own: no step in a pass at the same time (a discarded one's rerun).
+        let step = ctx.input(|i| i.stable_dt.min(i.unstable_dt)) / theme::COVER_FADE;
+        let a = ctx.data_mut(|d| {
+            let a = match d.get_temp::<(u64, f32)>(id) {
+                Some((pass, a)) if pass == now => a,
+                Some((pass, a)) if pass + 1 == now && to > a => (a + step).min(to),
+                Some((pass, a)) if pass + 1 == now => (a - step).max(to),
+                _ => to,
+            };
+            d.insert_temp(id, (now, a));
+            a
+        });
+        if a != to {
+            ctx.request_repaint();
+        }
+        a
     });
     let painter = ui.painter();
     if a < 1.0 {
@@ -1226,7 +1244,10 @@ mod tests {
         assert_eq!(covers(&pass(&mut state, 0.0)), [], "the placeholder only");
         arrives(&ctx, &mut state, theme::PLAYER_COVER);
         let fading = covers(&pass(&mut state, 0.05));
-        assert!(matches!(fading[..], [(_, a)] if a < 255), "{fading:?}");
+        assert!(
+            matches!(fading[..], [(_, a)] if 0 < a && a < 255),
+            "{fading:?}"
+        );
         let shown = covers(&pass(&mut state, 0.3));
         assert!(matches!(shown[..], [(_, 255)]), "{shown:?}");
         let out = pass(&mut state, 0.4);
@@ -1254,9 +1275,34 @@ mod tests {
         assert_ne!(small[0].0, large[0].0, "the larger size shown");
     }
 
+    /// Spec §3.11: a cover whose texture came while it was not drawn (scrolled away, another
+    /// page; here nothing playing for a while) shows at once when drawn again, and rests.
+    #[test]
+    fn a_cover_loaded_out_of_view_shows_at_once() {
+        let ctx = testing::context();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut state = UiState::default();
+        let mut model = testing::at(Route::Home);
+        model.settings.accent_from_art = false;
+        model.playback.track = Some(covered());
+        let out = frame(&ctx, &tx, &mut state, &model, Some(0.0), vec![]);
+        assert_eq!(covers(&out), [], "the placeholder only");
+        model.playback.track = None;
+        for t in [0.1, 0.2] {
+            frame(&ctx, &tx, &mut state, &model, Some(t), vec![]);
+        }
+        arrives(&ctx, &mut state, theme::PLAYER_COVER);
+        model.playback.track = Some(covered());
+        let out = frame(&ctx, &tx, &mut state, &model, Some(0.3), vec![]);
+        let shown = covers(&out);
+        assert!(matches!(shown[..], [(_, 255)]), "drawn again: {shown:?}");
+        let repaint = out.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+        assert_eq!(repaint, Duration::MAX, "nothing pending");
+    }
+
     /// Spec §3.11: one cover drawn in many places (five rows of one album, and the player bar
     /// playing one of them) fades in once, every copy in step over the whole `COVER_FADE`, and
-    /// stays. (egui advances a bool animation only on its first call in a pass.)
+    /// stays.
     #[test]
     fn one_cover_in_many_places_fades_once() {
         let ctx = testing::context();
