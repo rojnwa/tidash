@@ -264,7 +264,8 @@ fn a_rows_field_and_button_line_up() {
 - [ ] **Step 2: Run them and see them fail** (field about 21 tall, Connect 32).
 - [ ] **Step 3: Implement** `text_field`; route `settings::field`, both login fields and `library::field` through
   it. Replace every stock `ui.button` / `egui::Button` outside menus with `pill_button(ui, &p, None, label, false)`
-  (login's Continue: `true`, the step's main action), keeping each `add_enabled` and its hover text. In `combo`,
+  (login's Continue too: the spec makes every former stock button secondary, ruling R9), keeping each
+  `add_enabled` and its hover text. In `combo`,
   scope `interact_size.y = theme::PILL` around the `ComboBox`.
 - [ ] **Step 4: Run the tests, then the whole suite.** Fix any test that looked for the old sizes only if the
   change is the intended one.
@@ -500,9 +501,9 @@ fn a_toast_comes_and_goes() {
   `request_repaint_after(time left until the fade-out)` while still; the pill: `overlay` fill, radius `R_CARD`, the
   popup shadow, `body()` text, padded like a menu item (12 × 8); AccessKit node with role `Status`, live `Polite`,
   label the text. `draw` passes the central panel's rect. Call `toast::show` where each action is sent: Copy link
-  "Link copied", Play next "Playing next", Add to queue "Added to queue", a playlist picked in `add_to_playlist`
-  "Added to {playlist}", the favourites menu item "Added to favorites" / "Removed from favorites" (the menu item
-  only, not page hearts).
+  "Link copied", Play next "Playing next", Add to queue "Added to queue", the favourites menu item "Added to
+  favorites" / "Removed from favorites" (the menu item only, not page hearts). Adding to a playlist toasts the
+  backend's answer through `Event::Toast` instead (ruling R14).
 - [ ] **Step 4: Run the tests, then the whole suite.** Expected: PASS.
 - [ ] **Step 5:** Motion table rows "Toast fade | 150 ms in and out, shown 2.5 s". **Commit** `feat(ui): toasts
   for actions with no visible result`.

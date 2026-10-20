@@ -39,9 +39,7 @@ Parked in M4:
   request timing out last; Failed should never overwrite Ready, `model.rs`); the lyrics and credits
   scroll offset carries over between tracks (`id_salt` not keyed by the track); the highlight lags a
   line change by up to 250 ms; a blank synced line shows "…" outside `tr` (`ui/lyrics.rs`).
-- "Added n tracks" and "Already in this playlist" go out through the error list, warn-coloured (R17);
-  a styled info notice (`library.rs`).
-- The "Added n tracks to {playlist}" notice reads the title through the cached GET, so a just-renamed
+- The "Added n tracks to {playlist}" toast reads the title through the cached GET, so a just-renamed
   playlist can show its old title once (`library.rs`).
 - Settings: a stale echo of edit A after B can make a third edit C build on A (B lost), and two quick
   edits can flicker once (the theme, say) until the second echo; a pending counter like

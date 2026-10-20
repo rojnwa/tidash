@@ -1,6 +1,6 @@
 # Tidash interface polish: design
 
-**Date:** 2026-10-19. **Status:** draft, awaiting approval. **Builds on:** `2026-10-10-design-system-design.md`
+**Date:** 2026-10-19. **Status:** built (2026-10-20); human acceptance pending (plan Task 13). **Builds on:** `2026-10-10-design-system-design.md`
 (its palette, sizes, motion table and rulings stay; this changes only what is named here).
 
 ## 1. Why
@@ -174,19 +174,23 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
   (150 ms); a new one replaces the old. Never takes focus or blocks clicks. AccessKit polite live region, so screen
   readers announce it.
 - Shown for actions with no visible result: Copy link ("Link copied"), Play next ("Playing next"), Add to queue
-  ("Added to queue"), add to a playlist ("Added to {playlist}"), favorites from a menu ("Added to favorites" /
-  "Removed from favorites"). Shown when the action is sent; a failure still shows today's error notice.
+  ("Added to queue"), favorites from a menu ("Added to favorites" / "Removed from favorites"), shown when the
+  action is sent. Adding to a playlist shows the backend's answer as a toast instead ("Added {n} track(s) to
+  {playlist}" or "Already in this playlist", formerly warn-coloured notices), so the toast never contradicts it.
+  A failure still shows today's error notice. (Builder's call during the build.)
 - Repaints only while fading or until its expiry (`request_repaint_after`), none at rest.
 
 ### 3.11 Motion
 
 - **Covers** (`ui/mod.rs` `cover`): when a cover's first texture arrives, it fades over the placeholder in 200 ms.
   A cover already loaded when it comes into view shows at once; a larger rendition replacing a smaller one swaps
-  without a fade. (Idea: key the fade by image, starting it only when the cover was first drawn without a
-  texture; egui's `animate_bool_with_time` returns its target at once on first call, which gives exactly that.)
-- **Pages** (`page()`): on every route change (Back/Forward too), and when a page's data arrives after its spinner,
-  the page's content fades in over 150 ms (opacity only, no slide). Input works from the first frame; the top bar,
-  sidebar and player bar don't fade. (Builder's call.)
+  without a fade. Built as a per-image opacity with the pass it was last drawn in: a cover not drawn in the
+  previous pass shows its current state at once.
+- **Pages** (`ui::draw`, around the route's content): on every route change (Back/Forward too), and when a page's
+  data arrives after its spinner, the content below the top bar fades in over 150 ms (opacity only, no slide),
+  keyed by the route and whether its data is in. Titles, spinners and failure messages fade with it. The first page
+  a window draws shows at once. Input works from the first frame; the top bar, sidebar and player bar don't fade.
+  (Builder's call.)
 - **Buttons**: covered by §3.6 (house pills already fade on hover over `HOVER`).
 - Durations join the motion table (design-system spec §4.5): cover fade 200 ms, page fade 150 ms, toast fade
   150 ms, slider hover 120 ms.
