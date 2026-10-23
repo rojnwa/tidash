@@ -149,8 +149,10 @@ pub enum Msg {
     Scrobbled(Outcome),
     /// A scrobbling service is connected as this user, or disconnected (`None`).
     Connected(Service, Option<String>),
-    /// `Action::PlaySource`'s tracks, fetched (`pages::play`): played from the start.
+    /// `Action::PlaySource`'s tracks, fetched with `client` (`pages::play`): played from the
+    /// start, unless that session has ended since.
     Play {
+        client: Arc<Client>,
         tracks: Vec<tidal::Track>,
         source: Source,
     },
