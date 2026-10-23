@@ -677,7 +677,12 @@ pub fn draw(
             Route::Settings => settings::show(ui, &mut ctx, &mut state.settings),
         }
     });
-    toast::paint(ui.ctx(), &palette, central.response.rect);
+    // Centred on the window, not the content area beside the sidebar; above the player bar.
+    let over = egui::Rect::from_x_y_ranges(
+        ui.ctx().content_rect().x_range(),
+        central.response.rect.y_range(),
+    );
+    toast::paint(ui.ctx(), &palette, over);
     state.transition.paint(ui.ctx()); // over everything
     events
 }

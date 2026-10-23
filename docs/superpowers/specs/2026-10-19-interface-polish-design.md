@@ -170,10 +170,10 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
 
 ### 3.10 Toasts
 
-- One toast at a time, bottom-centre of the content area, just above the player bar: `overlay` fill, radius 12,
-  the popup shadow, `body()` text, padded like a menu item. Fades in (150 ms), stays about 2.5 s, fades out
-  (150 ms); a new one replaces the old. Never takes focus or blocks clicks. AccessKit polite live region, so screen
-  readers announce it.
+- One toast at a time, centred on the window (not the content area beside the sidebar), just above the player
+  bar: `overlay` fill, radius 12, the popup shadow, `body()` text, padded like a menu item. Fades in (150 ms), stays
+  about 2.5 s, fades out (150 ms); a new one replaces the old. Never takes focus or blocks clicks. AccessKit polite
+  live region, so screen readers announce it.
 - Shown for actions with no visible result: Copy link ("Link copied"), Play next ("Playing next"), Add to queue
   ("Added to queue"), favorites from a menu ("Added to favorites" / "Removed from favorites"), shown when the
   action is sent. Adding to a playlist shows the backend's answer as a toast instead ("Added {n} track(s) to
