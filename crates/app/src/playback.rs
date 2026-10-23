@@ -5,7 +5,7 @@ mod stream;
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
-use crate::model::{Action, Event, OutputInfo, PlaybackSnapshot};
+use crate::model::{Action, Event, OutputInfo, PlaybackSnapshot, Source};
 use crate::queue::Queue;
 use crate::scrobble::{self, Listen, Outcome, Service};
 use crate::settings::{self, replay_gain};
@@ -149,6 +149,11 @@ pub enum Msg {
     Scrobbled(Outcome),
     /// A scrobbling service is connected as this user, or disconnected (`None`).
     Connected(Service, Option<String>),
+    /// `Action::PlaySource`'s tracks, fetched (`pages::play`): played from the start.
+    Play {
+        tracks: Vec<tidal::Track>,
+        source: Source,
+    },
 }
 
 /// A player error this far from where the track was last restarted is a new hiccup.
@@ -447,7 +452,8 @@ impl Playback {
             | Msg::NowPlaying(_)
             | Msg::Scrobble(_)
             | Msg::Scrobbled(_)
-            | Msg::Connected(..) => {} // the backend's
+            | Msg::Connected(..)
+            | Msg::Play { .. } => {} // the backend's
             Msg::Player(PlayerEvent::State(s)) => {
                 self.state = s;
                 if s == PlayState::Stopped {

@@ -1,9 +1,10 @@
-//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9), and a
-//! track link's album; and the favorite writes, which make a collection tab stale.
+//! The page loader: a route's saved copy at once, then the fresh one (spec §6, §9), a track
+//! link's album, and a page's tracks to play; and the favorite writes, which make a
+//! collection tab stale.
 
 use crate::backend::{Emitter, session_expired};
 use crate::i18n::tr;
-use crate::model::{CollectionTab, Event, PageData, Route};
+use crate::model::{CollectionTab, Event, PageData, Route, Source};
 use crate::playback::Msg;
 use std::sync::Arc;
 use tidal::{Client, Favorite, Item};
@@ -91,6 +92,26 @@ pub async fn open_track(c: Arc<Client>, id: u64, emit: Arc<Emitter>, msgs: Unbou
         Err(e) => emit.send(Event::Error(format!(
             "{}: {e}",
             tr("Could not open the track")
+        ))),
+    }
+}
+
+/// `source`'s tracks, fetched fresh, for the backend to play (`Msg::Play`); an empty list plays
+/// nothing, and a failure is one error. The backend spawns it.
+pub async fn play(c: Arc<Client>, source: Source, emit: Arc<Emitter>, msgs: UnboundedSender<Msg>) {
+    match fetch(&c, &source.route).await {
+        Ok(
+            PageData::Album { tracks, .. }
+            | PageData::Playlist { tracks, .. }
+            | PageData::Mix { tracks, .. },
+        ) if !tracks.is_empty() => {
+            let _ = msgs.send(Msg::Play { tracks, source }); // backend gone = app closing
+        }
+        Ok(_) => {}
+        Err(e) if session_expired(&e, &c, &msgs) => {}
+        Err(e) => emit.send(Event::Error(format!(
+            "{}: {e}",
+            tr("Could not load the tracks")
         ))),
     }
 }
@@ -383,6 +404,47 @@ pub(crate) mod tests {
         let (events, expired) = events_of(open(1)).await; // 404
         assert!(matches!(events[..], [Event::Error(_)]), "{events:?}");
         assert!(!expired);
+    }
+
+    /// A play hands its page's tracks to the backend with its source; a page TIDAL refuses
+    /// is one error and plays nothing.
+    #[tokio::test]
+    async fn play_hands_over_the_tracks() {
+        const MIX: &str = include_str!("../../tidal/tests/fixtures/mix_page.json");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/pages/mix"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(MIX, "application/json"))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        let c = client(&server.uri(), &cache("play"));
+        let source = Source {
+            route: Route::Mix("m1".into()),
+            name: "Mix".into(),
+        };
+        let run = || async {
+            let (tx, events) = channel();
+            let emit = Arc::new(Emitter {
+                tx,
+                waker: Box::new(|| {}),
+            });
+            let (msgs, mut played) = unbounded_channel();
+            play(Arc::clone(&c), source.clone(), emit, msgs).await;
+            (
+                events.try_iter().collect::<Vec<_>>(),
+                played.try_recv().ok(),
+            )
+        };
+        let (events, played) = run().await;
+        assert!(events.is_empty(), "{events:?}");
+        assert!(matches!(
+            played,
+            Some(Msg::Play { tracks, source: s }) if !tracks.is_empty() && s == source
+        ));
+        let (events, played) = run().await; // 404 now
+        assert!(matches!(events[..], [Event::Error(_)]), "{events:?}");
+        assert!(played.is_none());
     }
 
     #[tokio::test]

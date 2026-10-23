@@ -39,6 +39,9 @@ pub enum Action {
         /// The page they are played from; none without one to go back to.
         source: Option<Source>,
     },
+    /// Fetches the tracks of `Source::route` (an album, playlist or mix) and plays them from
+    /// the start, from that page. A newer play supersedes it while it fetches.
+    PlaySource(Source),
     Play,
     Pause,
     /// Pause if playing or loading, else play: the backend decides, from its own state.

@@ -158,11 +158,17 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
 ### 3.9 Playback source
 
 - `Action::PlayTracks` carries an optional source: the route playback started from and a human-readable name.
-  Set by: the page header's Play (`header.rs`: the page's route and title) and a track row's double-click/Enter
-  (`tracks.rs`: the current page's route and its title: album, playlist, mix, artist, collection tab). No source
-  (the cover falls back to the album) for a single-track card on a shelf (`shelf.rs`; album/playlist/mix cards
-  only navigate, their play buttons stay deferred per `docs/follow-ups.md`) and for search results
-  (`Route::Search` keeps no query to return to). (Builder's calls, from the builder check.)
+  Set by: the page header's Play (`header.rs`: the page's route and title), a track row's click/Enter
+  (`tracks.rs`: the current page's route and its title: album, playlist, mix, artist, collection tab), and an
+  album/playlist/mix card's play disc or a sidebar playlist's cover (`Action::PlaySource`: that item's route and
+  title, its tracks fetched first). No source (the cover falls back to the album) for a single-track card on a
+  shelf (`shelf.rs`) and for search results (`Route::Search` keeps no query to return to). (Builder's calls,
+  from the builder check.)
+- Play controls outside a page: hovered (or focused), an album/playlist/mix card shows a `TRANSPORT` `accent`
+  disc in its cover's bottom right corner, rising 8 px as it fades in over `OVERLAY`; it is its own Tab stop
+  ("Play {title}"). An expanded sidebar playlist row shows `SCRIM` and a white play glyph over its cover, which
+  grows under the pointer; a click on the cover plays, on the rest of the row opens, and its menu has Play. While
+  that item's tracks play, each shows pause and toggles instead of starting over.
 - The queue keeps it with its tracks and exposes it in its snapshot. Each `PlayTracks` replaces it; Play next, Add
   to queue, remove and reorder leave it. It lives as long as the queue (the queue is not saved across restarts, so
   neither is the source; the mockup's "survives restarts" was wrong).

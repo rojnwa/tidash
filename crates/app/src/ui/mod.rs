@@ -29,6 +29,7 @@ use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::{Action, Event, Load, Model, PageData, Route, Source};
 use crate::theme::{self, Palette};
+use player::PlayState;
 use std::borrow::Cow;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -308,6 +309,28 @@ pub fn playing_from(model: &Model) -> Option<Source> {
     };
     let route = route.clone();
     Some(Source { route, name })
+}
+
+/// Whether `route`'s tracks are the queue's and under way: `Some(true)` while playing or
+/// buffering, `Some(false)` paused.
+pub fn under_way(model: &Model, route: &Route) -> Option<bool> {
+    model.queue.source.as_ref().filter(|s| s.route == *route)?;
+    match model.playback.state? {
+        PlayState::Playing | PlayState::Buffering => Some(true),
+        PlayState::Paused => Some(false),
+        PlayState::Stopped => None,
+    }
+}
+
+/// A play button's click for `route`'s tracks, `name` its title: pauses or resumes them while
+/// they are under way, else plays them from the start.
+pub fn play_list(ctx: &Ctx, route: &Route, name: &str) {
+    if under_way(ctx.model, route).is_some() {
+        ctx.send(Action::TogglePlay);
+    } else {
+        let (route, name) = (route.clone(), name.to_owned());
+        ctx.send(Action::PlaySource(Source { route, name }));
+    }
 }
 
 /// The current track's data in `slot` (lyrics or credits), once ready. A slot of another

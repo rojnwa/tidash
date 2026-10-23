@@ -183,6 +183,8 @@ struct Backend {
     pkce: Option<Pkce>,
     /// The search in flight, one of `tasks`: a newer search aborts it.
     search_task: Option<AbortHandle>,
+    /// A `PlaySource` fetching its tracks, one of `tasks`: any newer play aborts it.
+    play_task: Option<AbortHandle>,
     client: Option<Arc<Client>>,
     /// The session's page, search and favorites requests. Logout and expiry abort them and
     /// wait, so none of their replies or cache writes come after (`stop_requests`).
@@ -241,6 +243,7 @@ impl Backend {
             store,
             pkce: None,
             search_task: None,
+            play_task: None,
             client: None,
             tasks: JoinSet::new(),
             folders: HashSet::new(),
@@ -302,6 +305,15 @@ impl Backend {
             Msg::NowPlaying(l) => self.scrobbling(|s| async move { s.now_playing(l).await }),
             Msg::Scrobble(l) => self.scrobbling(|s| async move { s.scrobble(l).await }),
             Msg::Scrobbled(out) => self.scrobbled(out).await,
+            Msg::Play { tracks, source } => {
+                let source = Some(source);
+                self.handle(Action::PlayTracks {
+                    tracks,
+                    start: 0,
+                    source,
+                })
+                .await;
+            }
             Msg::Connected(service, user) => {
                 let connected = user.is_some();
                 self.set_user(service, user).await;
@@ -538,6 +550,16 @@ impl Backend {
                     self.spawn(load);
                 }
             }
+            Action::PlaySource(source) => {
+                if let Some(c) = self.client.clone() {
+                    if let Some(old) = self.play_task.take() {
+                        old.abort();
+                    }
+                    let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
+                    let play = crate::pages::play(c, source, emit, msgs);
+                    self.play_task = Some(self.spawn(play));
+                }
+            }
             Action::OpenTrack(id) => {
                 if let Some(c) = self.client.clone() {
                     let (emit, msgs) = (self.emit.clone(), self.msgs.clone());
@@ -637,21 +659,31 @@ impl Backend {
             | Action::RemoveFromQueue(_)
             | Action::PlayQueueIndex(_)
             | Action::SetShuffle(_)
-            | Action::SetRepeat(_) => match &mut self.playback {
-                Some(p) => p.handle(self.client.as_ref(), action),
-                None if matches!(
+            | Action::SetRepeat(_) => {
+                // A track picked meanwhile must not be replaced once the fetch lands.
+                if matches!(
                     action,
-                    Action::PlayTracks { .. }
-                        | Action::Play
-                        | Action::TogglePlay
-                        | Action::PlayQueueIndex(_)
-                ) =>
+                    Action::PlayTracks { .. } | Action::PlayQueueIndex(_)
+                ) && let Some(old) = self.play_task.take()
                 {
-                    self.emit
-                        .send(Event::Error(tr("No audio output device").into_owned()));
+                    old.abort();
                 }
-                None => {}
-            },
+                match &mut self.playback {
+                    Some(p) => p.handle(self.client.as_ref(), action),
+                    None if matches!(
+                        action,
+                        Action::PlayTracks { .. }
+                            | Action::Play
+                            | Action::TogglePlay
+                            | Action::PlayQueueIndex(_)
+                    ) =>
+                    {
+                        self.emit
+                            .send(Event::Error(tr("No audio output device").into_owned()));
+                    }
+                    None => {}
+                }
+            }
         }
     }
 

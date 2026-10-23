@@ -154,7 +154,8 @@ pub fn route_of(item: &Item) -> Option<Route> {
     })
 }
 
-/// A card `width` wide for `item`: a click opens its page, or plays a track.
+/// A card `width` wide for `item`: a click opens its page, or plays a track. An album's,
+/// playlist's or mix's play disc plays its tracks.
 fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item, width: f32) {
     let (image, title, subtitle, round) = match item {
         Item::Album(a) => (a.image(), &a.title, tracks::names(&a.artists), false),
@@ -167,7 +168,14 @@ fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item, width: f32) {
         Item::Track(t) => (t.album.image(), &t.title, tracks::artists(t), false),
         Item::Link { title, .. } => (None, title, String::new(), false),
     };
-    let resp = card::card(
+    let list = match item {
+        Item::Album(_) | Item::Playlist(_) | Item::Mix(_) => route_of(item),
+        _ => None,
+    };
+    let play = list
+        .as_ref()
+        .map(|r| super::under_way(ctx.model, r) == Some(true));
+    let (resp, played) = card::card(
         ui,
         &ctx.palette,
         ctx.images,
@@ -176,8 +184,12 @@ fn item_card(ui: &mut egui::Ui, ctx: &mut Ctx, item: &Item, width: f32) {
         title,
         &subtitle,
         round,
+        play,
         width,
     );
+    if played && let Some(r) = &list {
+        super::play_list(ctx, r, title);
+    }
     if !resp.clicked() {
         return;
     }
@@ -198,6 +210,7 @@ mod tests {
     use crate::model::Route;
     use crate::theme::{CARD_GAP, card_columns};
     use crate::ui::testing::{album, at, bounds, click, context, pass_with};
+    use egui::vec2;
     use tidal::{Item, Layout, Shelf};
 
     /// A rail of `n` albums.
@@ -287,6 +300,61 @@ mod tests {
             .expect("two shelves");
         let gap = second - card(&out, 1).bottom();
         assert!((gap - crate::theme::MODULE_GAP).abs() < 0.5, "{gap}");
+    }
+
+    /// A playlist card's disc, under the pointer, plays the playlist from its page; the rest
+    /// of the card still opens it. While the playlist plays, the disc says Pause and toggles.
+    /// An artist's card has none.
+    #[test]
+    fn a_cards_disc_plays_its_list() {
+        use crate::model::{Action, Event, Model};
+        use crate::ui::testing::{artist, playing, playlist, primary, shown};
+        let egui = context();
+        egui.enable_accesskit();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut sent = || -> Vec<String> {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .filter(|a| !matches!(a, Action::LoadImage { .. }))
+                .map(|a| format!("{a:?}"))
+                .collect()
+        };
+        let shelves = [Shelf {
+            items: vec![Item::Playlist(playlist()), Item::Artist(artist(3))],
+            ..rail(0)
+        }];
+        let pass = |m: &Model, input| {
+            pass_with(&egui, &tx, m, input, |ui, ctx| {
+                super::shelves(ui, &shelves, ctx)
+            })
+        };
+        let click_at = |m: &Model, at| {
+            let moved = vec![egui::Event::PointerMoved(at)];
+            [moved, vec![primary(at, true)], vec![primary(at, false)]]
+                .into_iter()
+                .flat_map(|input| pass(m, input).0)
+                .collect::<Vec<_>>()
+        };
+        let mut m = at(Route::Home);
+        let out = pass(&m, vec![]).1;
+        assert!(!shown(&out).contains(&"Play Artist 3".into()));
+        let events = click_at(&m, bounds(&out, "Play Playlist").center());
+        assert!(events.is_empty(), "the card stays shut: {events:?}");
+        let play = r#"PlaySource(Source { route: Playlist("p-1"), name: "Playlist" })"#;
+        assert_eq!(sent(), [play]);
+        let events = click_at(
+            &m,
+            bounds(&out, "Playlist, TIDAL").left_top() + vec2(10.0, 10.0),
+        );
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Playlist(u))] if u == "p-1"),
+            "{events:?}"
+        );
+        assert_eq!(sent(), Vec::<String>::new());
+
+        playing(&mut m, Route::Playlist("p-1".into()), "Playlist");
+        let out = pass(&m, vec![]).1;
+        pass(&m, vec![click(&out, "Pause Playlist")]);
+        assert_eq!(sent(), ["TogglePlay"]);
     }
 
     #[test]

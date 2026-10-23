@@ -114,20 +114,35 @@ pub fn circle_button(
     let (rect, r) = ui.allocate_exact_size(Vec2::splat(diameter), Sense::click());
     r.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), label));
     if ui.is_rect_visible(rect) {
-        let s = scale(ui, &r);
-        let hovered = if fill == p.accent {
-            p.accent_hover
-        } else {
-            fill.blend(p.surface_hover)
-        };
-        let fill = theme::blend(fill, hovered, fade(ui, &r, r.hovered()));
-        let painter = ui.painter();
-        painter.circle_filled(rect.center(), diameter / 2.0 * s, fill);
-        paint_icon(ui, icon, rect.center(), diameter * 0.55 * s, glyph);
+        paint_disc(ui, p, &r, rect, icon, fill, glyph);
     }
     focus_ring(ui, &r, diameter / 2.0);
     r.on_hover_text(label)
         .on_hover_cursor(CursorIcon::PointingHand)
+}
+
+/// `circle_button`'s look for `r`, painted across `rect`: callers that interact before they
+/// can paint (one over a card's cover) use it alone.
+pub(super) fn paint_disc(
+    ui: &Ui,
+    p: &Palette,
+    r: &Response,
+    rect: Rect,
+    icon: Icon,
+    fill: Color32,
+    glyph: Color32,
+) {
+    let s = scale(ui, r);
+    let hovered = if fill == p.accent {
+        p.accent_hover
+    } else {
+        fill.blend(p.surface_hover)
+    };
+    let fill = theme::blend(fill, hovered, fade(ui, r, r.hovered()));
+    let diameter = rect.width();
+    ui.painter()
+        .circle_filled(rect.center(), diameter / 2.0 * s, fill);
+    paint_icon(ui, icon, rect.center(), diameter * 0.55 * s, glyph);
 }
 
 /// A bare `glyph`-point `icon` in `text` on a `TRANSPORT` square, the player's transport

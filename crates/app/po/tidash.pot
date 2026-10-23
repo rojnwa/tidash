@@ -856,3 +856,15 @@ msgstr ""
 #: src/ui/settings.rs
 msgid "This copy cannot update itself; download the new version from GitHub."
 msgstr ""
+
+#: src/pages.rs
+msgid "Could not load the tracks"
+msgstr ""
+
+#: src/ui/card.rs
+msgid "Play {title}"
+msgstr ""
+
+#: src/ui/card.rs
+msgid "Pause {title}"
+msgstr ""

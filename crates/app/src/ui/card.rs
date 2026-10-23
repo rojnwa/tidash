@@ -1,11 +1,15 @@
 //! A card (spec §5.6): square artwork (round for artists) at the card's full width, a title
 //! line and a subtitle line. Hovered or focused, the cover's lower half darkens.
 
-use super::widgets::{focus_ring, line, vertical_gradient};
+use super::widgets::{focus_ring, line, paint_disc, vertical_gradient};
+use crate::i18n::tr;
 use crate::images::TextureCache;
 use crate::model::Action;
-use crate::theme::{self, Palette};
-use egui::{Color32, Mesh, Painter, Rect, Sense, Vec2, WidgetInfo, WidgetType, pos2, vec2};
+use crate::theme::{self, Icon, Palette, TRANSPORT};
+use egui::{
+    Color32, CursorIcon, Mesh, Painter, Rect, Sense, UiBuilder, Vec2, WidgetInfo, WidgetType, pos2,
+    vec2,
+};
 use std::f32::consts::FRAC_PI_2;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -13,6 +17,10 @@ use tokio::sync::mpsc::UnboundedSender;
 const GAP: f32 = 8.0;
 /// Each text line.
 const LINE: f32 = 22.0;
+/// The play disc's inset from the cover's bottom right corner, and how far it rises as it
+/// fades in.
+const PLAY_INSET: f32 = 8.0;
+const RISE: f32 = 8.0;
 
 /// A card `width` wide, from the cover's top to the subtitle's bottom.
 pub fn height(width: f32) -> f32 {
@@ -20,6 +28,9 @@ pub fn height(width: f32) -> f32 {
 }
 
 /// One card `width` wide; the caller acts on its clicks. Screen readers hear "title, subtitle".
+/// With `play` (`Some(true)` while the card's tracks play), an `accent` disc rises into the
+/// cover's bottom right corner on hover or focus, a Tab stop of its own: play, or pause while
+/// they play. The card's response, and whether the disc was clicked.
 #[expect(clippy::too_many_arguments)] // one caller, each part named at the call
 pub fn card(
     ui: &mut egui::Ui,
@@ -30,10 +41,11 @@ pub fn card(
     title: &str,
     subtitle: &str,
     round: bool,
+    play: Option<bool>,
     width: f32,
-) -> egui::Response {
+) -> (egui::Response, bool) {
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height(width)), Sense::click());
-    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let resp = resp.on_hover_cursor(CursorIcon::PointingHand);
     resp.widget_info(|| {
         let label = if subtitle.is_empty() {
             title.to_owned()
@@ -43,19 +55,48 @@ pub fn card(
         WidgetInfo::labeled(WidgetType::Button, true, label)
     });
     let art = Rect::from_min_size(rect.min, Vec2::splat(width));
+    // Over the card, so it takes the clicks there; after it, so Tab meets it next. It is
+    // painted later, over the cover.
+    let corner = art.max - Vec2::splat(PLAY_INSET + TRANSPORT / 2.0);
+    let disc = Rect::from_center_size(corner, Vec2::splat(TRANSPORT));
+    let button = play.map(|playing| {
+        let b = ui.interact(disc, resp.id.with("play"), Sense::click());
+        let (icon, label) = if playing {
+            (Icon::PauseFilled, tr("Pause {title}"))
+        } else {
+            (Icon::PlayFilled, tr("Play {title}"))
+        };
+        let label = label.replace("{title}", title);
+        b.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &label));
+        let b = b.on_hover_text(label);
+        (icon, b.on_hover_cursor(CursorIcon::PointingHand))
+    });
+    let played = button.as_ref().is_some_and(|(_, b)| b.clicked());
     let radius = if round { width / 2.0 } else { theme::R_ART };
     focus_ring(ui, &resp.clone().with_new_rect(art), radius);
     if resp.gained_focus() {
         resp.scroll_to_me(None); // the lines too: Tab along a shelf or down a grid
     }
     if !ui.is_rect_visible(rect) {
-        return resp;
+        return (resp, played);
     }
     super::cover(ui, images, tx, image, art, radius);
-    let on = resp.hovered() || resp.has_focus();
+    let on_disc = |(_, b): &(Icon, egui::Response)| b.hovered() || b.has_focus();
+    let on = resp.hovered() || resp.has_focus() || button.as_ref().is_some_and(on_disc);
     let shade = ui.ctx().animate_bool_with_time(resp.id, on, theme::OVERLAY);
     if shade > 0.0 {
         lower_half(ui.painter(), art, round, theme::SCRIM.gamma_multiply(shade));
+    }
+    if let Some((icon, b)) = &button {
+        let rise = b.id.with("rise"); // `b.id`'s is the hover fade's
+        let risen = ui.ctx().animate_bool_with_time(rise, on, theme::OVERLAY);
+        if risen > 0.0 {
+            let mut ui = ui.new_child(UiBuilder::new().max_rect(art));
+            ui.multiply_opacity(risen);
+            let at = disc.translate(vec2(0.0, (1.0 - risen) * RISE));
+            paint_disc(&ui, p, b, at, *icon, p.accent, p.on_accent);
+            focus_ring(&ui, b, TRANSPORT / 2.0);
+        }
     }
     let lines = [
         (title, theme::body_strong(), p.text),
@@ -66,7 +107,7 @@ pub fn card(
         ui.painter()
             .galley(at, line(ui, text, font, color, width), color);
     }
-    resp
+    (resp, played)
 }
 
 /// `color` over `art`'s lower half, clear at its middle to full at its bottom, inside the
