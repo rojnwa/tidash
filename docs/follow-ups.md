@@ -121,9 +121,9 @@ Parked in M5:
 
 Parked in the design-system milestone (2026-10-11; its rulings are summarized in the plan's Outcome).
 
-- Not built: play and favourite buttons on cards (playing an album or playlist by id needs a backend
-  action that does not exist yet); the track row's "…" button (the context menu covers it); Shuffle on
-  page headers, beside Play, as TIDAL 2.43 has it.
+- Not built: favourite buttons on cards (album, playlist and mix cards have a play disc since
+  `Action::PlaySource`); the track row's "…" button (the context menu covers it); Shuffle on page
+  headers, beside Play, as TIDAL 2.43 has it.
 - With Exclusive on, a window at the 960×540 minimum leaves the player's title column ~31 px: the
   right column is sized from its measured controls and the widest short pill ("24/176.4 FLAC ·
   Exclusive") so Play never moves (Rulings 25, 28; this replaced M4's estimated 420 pt); a longer

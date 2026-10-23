@@ -88,8 +88,8 @@ pub fn artists(t: &tidal::Track) -> String {
     names(&t.artists)
 }
 
-/// Double-clicking an available row, or activating it from the keyboard or a screen reader,
-/// sends `PlayTracks` for the whole list; right-clicking opens its menu. With `discs`,
+/// Clicking an available row (not one of its names), or activating it from the keyboard or a
+/// screen reader, sends `PlayTracks` for the whole list; right-clicking opens its menu. With `discs`,
 /// multi-disc lists get a header row per disc; otherwise the album title is a column. `id`
 /// tells apart two lists on one page. With `edit` (and no `discs`), rows can be removed from
 /// the playlist and dragged to reorder it.
@@ -152,8 +152,8 @@ pub fn show(
                         (i + 1).to_string()
                     };
                     let current = (playing == Some(t.id)).then_some(tier);
-                    paint_row(ui, ctx, &resp, num, t, !discs, !discs, current);
-                    if t.stream_ready && (resp.double_clicked() || activated(&resp)) {
+                    let opened = paint_row(ui, ctx, &resp, num, t, !discs, !discs, current);
+                    if t.stream_ready && !opened && activated(&resp) {
                         ctx.send(Action::PlayTracks {
                             tracks: tracks.to_vec(),
                             start: i,
@@ -185,9 +185,10 @@ pub fn show(
     });
 }
 
-/// Enter, Space or a screen reader "click" on `row`, without the mouse.
+/// A primary click, Enter, Space or a screen reader "click" on `row`. Not the second click of
+/// a double click: the first already played it, and a second `PlayTracks` would restart it.
 pub fn activated(row: &egui::Response) -> bool {
-    row.clicked() && !row.clicked_by(PointerButton::Primary)
+    row.clicked() && !row.double_clicked()
 }
 
 /// The hand over `row`, but not while it is dragged: egui's drag and drop shows its grab then,
@@ -260,7 +261,7 @@ fn cell(
 /// shows the hand), opened by a primary click. No Tab stops: the row's Enter and its menu's
 /// Go to album / Go to artist serve the keyboard. A name spans its glyphs, found by their
 /// source bytes: a right-to-left run keeps its glyphs in visual order. A name the "…" cuts
-/// ends at it; one with nothing left but the "…" is no link.
+/// ends at it; one with nothing left but the "…" is no link. Whether a click opened one.
 fn links(
     ui: &Ui,
     ctx: &mut Ctx,
@@ -268,12 +269,12 @@ fn links(
     (at, galley): (Pos2, Arc<Galley>),
     names: impl IntoIterator<Item = (Range<usize>, Route)>,
     ink: Color32,
-) {
+) -> bool {
     let Some(pointer) = row.hover_pos().filter(|_| !row.dragged()) else {
-        return;
+        return false;
     };
     let Some(line) = galley.rows.first() else {
-        return;
+        return false;
     };
     // A cut text's "…" carries the source byte of the first glyph it hid (or the last shown).
     let cut = usize::from(galley.elided);
@@ -298,12 +299,14 @@ fn links(
             let foot = rect.bottom() - 0.5;
             ui.painter()
                 .hline(rect.x_range(), foot, Stroke::new(1.0, ink));
-            if row.clicked_by(PointerButton::Primary) {
+            let open = row.clicked_by(PointerButton::Primary);
+            if open {
                 ctx.go(to);
             }
-            return;
+            return open;
         }
     }
+    false
 }
 
 /// The column header (spec §5.5), `ROW_HEADER` tall: "#", "Title" (over the cover too),
@@ -334,7 +337,8 @@ fn header(ui: &mut Ui, p: &Palette, album: bool) {
 /// Paints track `t`'s row (`row` its response, `ui` its own): `num`, or a play glyph hovered
 /// and a playing one when `current` (the playing row's tier colour, which its title takes
 /// too); the cover with `cover`; the title, artists, the album with `album`, and the duration,
-/// each cut to its column. An unavailable track's row is at half opacity.
+/// each cut to its column. An unavailable track's row is at half opacity. Whether a click
+/// opened one of its names, which then plays nothing.
 #[expect(clippy::too_many_arguments)] // two callers, each part named at the call
 pub fn paint_row(
     ui: &mut Ui,
@@ -345,7 +349,7 @@ pub fn paint_row(
     cover: bool,
     album: bool,
     current: Option<Color32>,
-) {
+) -> bool {
     row.widget_info(|| {
         let label = format!(
             "{num}. {}, {}, {}",
@@ -358,7 +362,7 @@ pub fn paint_row(
     focus_ring(ui, row, theme::R_ROW); // and scrolls a row Tab reaches into view
     let (rect, p) = (row.rect, ctx.palette);
     if !ui.is_rect_visible(rect) {
-        return;
+        return false;
     }
     if !t.stream_ready {
         ui.multiply_opacity(0.5);
@@ -385,6 +389,7 @@ pub fn paint_row(
     }
     let ink = current.unwrap_or(p.text);
     put(title, &t.title, theme::body_strong(), ink, Align::Min);
+    let mut opened = false;
     if let Some(laid) = put(artist, &artists(t), theme::body(), p.text, Align::Min) {
         let mut from = 0;
         let names = t.artists.iter().map(|a| {
@@ -392,14 +397,15 @@ pub fn paint_row(
             from = bytes.end + SEP.len(); // as `names` joins them
             (bytes, Route::Artist(a.id))
         });
-        links(ui, ctx, row, laid, names, p.text);
+        opened = links(ui, ctx, row, laid, names, p.text);
     }
     if album && let Some(laid) = put(album_x, &t.album.title, theme::body(), p.text, Align::Min) {
         let name = (0..t.album.title.len(), Route::Album(t.album.id));
-        links(ui, ctx, row, laid, [name], p.text);
+        opened |= links(ui, ctx, row, laid, [name], p.text);
     }
     let length = duration(t.duration);
     put(time, &length, theme::body(), p.secondary, Align::Max);
+    opened
 }
 
 /// A track row's context menu; with `edit`, the playlist's rows and this one's index in them,
@@ -611,9 +617,9 @@ mod tests {
         }
     }
 
-    /// Spec §3.8: a primary click on an artist or the album in a row opens it; on the title
-    /// it does not, and a double click there still plays. Hovered, a name is underlined (1 px
-    /// `text` along its foot, under it alone) under the row's hand.
+    /// Spec §3.8: a primary click on an artist or the album in a row opens it and plays
+    /// nothing; on the title it plays, once even when it is a double click. Hovered, a name is
+    /// underlined (1 px `text` along its foot, under it alone) under the row's hand.
     #[test]
     fn names_in_a_row_navigate() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -632,19 +638,20 @@ mod tests {
             matches!(events[..], [Event::Navigate(Route::Album(1))]),
             "{events:?}"
         );
+        assert!(rx.try_recv().is_err(), "a name plays nothing");
         let title = char_at(&out, "Track 1", 2);
         let ctx = testing::context();
         let events = click_at(&ctx, &tx, &model, &list, 800.0, title);
         assert!(events.is_empty(), "{events:?}");
-        assert!(rx.try_recv().is_err(), "one click plays nothing");
-        let again = [vec![primary(title, true)], vec![primary(title, false)]];
-        for input in again {
-            pass(&ctx, &tx, &model, &list, input);
-        }
         assert!(matches!(
             rx.try_recv(),
             Ok(Action::PlayTracks { start: 0, .. })
         ));
+        let again = [vec![primary(title, true)], vec![primary(title, false)]];
+        for input in again {
+            pass(&ctx, &tx, &model, &list, input);
+        }
+        assert!(rx.try_recv().is_err(), "a double click plays once");
 
         let (at, galley) = painted(&out, names);
         let x = |i: usize| at.x + galley.pos_from_cursor(CCursor::new(i)).min.x;
@@ -830,7 +837,7 @@ mod tests {
         assert!(to(1) && to(2) && !to(3), "{opened:?}");
     }
 
-    /// Tab to the first row and press Enter: it plays, as a double click would.
+    /// Tab to the first row and press Enter: it plays, as a click would.
     #[test]
     fn enter_on_a_focused_row_plays() {
         let ctx = testing::context();
@@ -852,7 +859,7 @@ mod tests {
         ));
     }
 
-    /// Spec §3.9: a row double-clicked on a playlist plays from that playlist; on Search, from
+    /// Spec §3.9: a row clicked on a playlist plays from that playlist; on Search, from
     /// nowhere to return to.
     #[test]
     fn a_row_plays_from_its_page() {
@@ -860,7 +867,7 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let list = vec![track()];
         let mut source = |model: &Model| {
-            let ctx = testing::context(); // no click left over from the last double click
+            let ctx = testing::context(); // no click left over to make this one a double click
             let at = Pos2::new(100.0, crate::theme::ROW_HEADER + super::ROW_H / 2.0);
             let button = |pressed| egui::Event::PointerButton {
                 pos: at,
@@ -869,7 +876,7 @@ mod tests {
                 modifiers: Default::default(),
             };
             pass(&ctx, &tx, model, &list, vec![egui::Event::PointerMoved(at)]);
-            for pressed in [true, false, true, false] {
+            for pressed in [true, false] {
                 pass(&ctx, &tx, model, &list, vec![button(pressed)]);
             }
             match rx.try_recv() {

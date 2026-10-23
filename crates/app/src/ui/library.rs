@@ -3,14 +3,16 @@
 
 use super::Ctx;
 use super::widgets::{
-    NAV_PAD, context_menu, fade, focus_ring, icon_button, line, menu_button, menu_width,
-    paint_icon, pill_button, submenu, text_field,
+    NAV_PAD, context_menu, fade, focus_ring, icon_button, line, menu_button, menu_separator,
+    menu_width, paint_icon, pill_button, submenu, text_field,
 };
 use crate::i18n::{tr, tr_n};
 use crate::model::{Action, Model, PlaylistEdit, Route};
 use crate::theme::{self, GLYPH, Icon, Palette, SIDEBAR_COVER};
 use egui::collapsing_header::CollapsingState;
-use egui::{Rect, Response, Sense, Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2};
+use egui::{
+    Color32, PointerButton, Rect, Response, Sense, Ui, Vec2, WidgetInfo, WidgetType, pos2, vec2,
+};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use tidal::FolderItem;
@@ -226,8 +228,9 @@ fn folder(ui: &mut Ui, ctx: &mut Ctx, state: &mut State, id: &str, collapsed: bo
     }
 }
 
-/// Playlist `p`, in folder `parent`: its cover, title and track count. It opens its page, and
-/// its menu moves it or, if it is the user's own, deletes it.
+/// Playlist `p`, in folder `parent`: its cover, title and track count. It opens its page;
+/// expanded, a click on its cover plays it (`cover_play`). Its menu plays it, moves it or, if
+/// it is the user's own, deletes it.
 fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, collapsed: bool) {
     let route = Route::Playlist(p.uuid.clone());
     let selected = *ctx.model.route() == route;
@@ -238,6 +241,7 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
         n => tr_n("{n} track", "{n} tracks", n),
     };
     let (image, images, tx) = (p.image(), &mut *ctx.images, ctx.tx);
+    let mut cover = None;
     let resp = row(
         ui,
         &ctx.palette,
@@ -248,6 +252,7 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
         collapsed,
         |ui, square| {
             super::cover(ui, images, tx, image.as_ref(), square, theme::R_ART);
+            cover = Some(square);
         },
     );
     resp.widget_info(|| {
@@ -258,11 +263,27 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
             &p.title,
         )
     });
-    if resp.clicked() {
-        ctx.go(route);
+    let playing = super::under_way(ctx.model, &route) == Some(true);
+    // Collapsed, the cover is all the row shows: a click opens it, the menu plays it.
+    let on_cover =
+        (cover.filter(|_| !collapsed)).is_some_and(|square| cover_play(ui, &resp, square, playing));
+    if on_cover && resp.clicked_by(PointerButton::Primary) {
+        super::play_list(ctx, &route, &p.title);
+    } else if resp.clicked() {
+        ctx.go(route.clone());
     }
     let pal = ctx.palette;
     context_menu(&resp, &pal, |ui| {
+        let (icon, label) = if playing {
+            (Icon::PauseFilled, tr("Pause"))
+        } else {
+            (Icon::PlayFilled, tr("Play"))
+        };
+        if ui.add(menu_button(&pal, icon, label)).clicked() {
+            super::play_list(ctx, &route, &p.title);
+            ui.close();
+        }
+        menu_separator(ui);
         submenu(ui, &pal, Icon::FolderInput, tr("Move to folder"), |ui| {
             let here = (parent != "root").then_some(parent);
             for (to, name) in destinations(ctx.model) {
@@ -287,6 +308,30 @@ fn playlist(ui: &mut Ui, ctx: &mut Ctx, p: &tidal::Playlist, parent: &str, colla
             ui.close();
         }
     });
+}
+
+/// Over the cover `square` of `row`, while hovered: `SCRIM` and a white play glyph (pause
+/// while `playing`), which grows under the pointer. Whether the pointer is on the cover.
+fn cover_play(ui: &Ui, row: &Response, square: Rect, playing: bool) -> bool {
+    let on = row.hover_pos().is_some_and(|at| square.contains(at));
+    let anim = |salt, on| {
+        let id = row.id.with(salt); // `row.id`'s is the row's hover fade
+        ui.ctx().animate_bool_with_time(id, on, theme::HOVER)
+    };
+    let shown = anim("cover", row.hovered());
+    if shown > 0.0 {
+        let grow = anim("cover-on", on);
+        ui.painter()
+            .rect_filled(square, theme::R_ART, theme::SCRIM.gamma_multiply(shown));
+        let icon = if playing {
+            Icon::PauseFilled
+        } else {
+            Icon::PlayFilled
+        };
+        let (size, ink) = (GLYPH * (1.0 + 0.25 * grow), Color32::WHITE);
+        paint_icon(ui, icon, square.center(), size, ink.gamma_multiply(shown));
+    }
+    on
 }
 
 /// Where a playlist can move: the top level (`None`), then every folder listed, by name.
@@ -543,7 +588,9 @@ fn field(ui: &mut egui::Ui, p: &Palette, label: &str, text: &mut String, focus: 
 mod tests {
     use super::*;
     use crate::model::{Action, Event, Model, Route};
-    use crate::ui::testing::{at, click, disabled, middle, pass_with, playlist, right, shown};
+    use crate::ui::testing::{
+        at, click, disabled, middle, pass_with, playlist, primary, right, shown,
+    };
     use egui::Key;
     use tidal::FolderItem;
     use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -703,5 +750,40 @@ mod tests {
         assert!(shown(&out).contains(&"Delete the folder Road?".into()));
         tree.pass(&m, vec![click(&out, "Delete")]);
         assert_eq!(tree.sent(), [r#"EditPlaylist(DeleteFolder { id: "f" })"#]);
+    }
+
+    /// A primary click on a playlist's cover plays it, from its page; one on the rest of the
+    /// row opens it. Its menu plays it too, or, while it plays, pauses it.
+    #[test]
+    fn a_playlist_plays_from_its_cover_or_menu() {
+        let mut tree = Tree::new();
+        let mut m = model(vec![FolderItem::Playlist(playlist())]);
+        let row = crate::ui::testing::bounds(&tree.settle(&m), "Playlist");
+        let click_at = |tree: &mut Tree, at| {
+            let moved = vec![egui::Event::PointerMoved(at)];
+            [moved, vec![primary(at, true)], vec![primary(at, false)]]
+                .into_iter()
+                .flat_map(|input| tree.pass(&m, input).0)
+                .collect::<Vec<_>>()
+        };
+        let cover = pos2(row.left() + NAV_PAD + SIDEBAR_COVER / 2.0, row.center().y);
+        let events = click_at(&mut tree, cover);
+        assert!(events.is_empty(), "{events:?}");
+        let play = r#"PlaySource(Source { route: Playlist("p-1"), name: "Playlist" })"#;
+        assert_eq!(tree.sent(), [play]);
+        let events = click_at(&mut tree, row.center());
+        assert!(
+            matches!(&events[..], [Event::Navigate(Route::Playlist(u))] if u == "p-1"),
+            "{events:?}"
+        );
+        assert_eq!(tree.sent(), Vec::<String>::new());
+
+        let out = tree.menu(&m, "Playlist");
+        tree.pass(&m, vec![click(&out, "Play")]);
+        assert_eq!(tree.sent(), [play]);
+        crate::ui::testing::playing(&mut m, Route::Playlist("p-1".into()), "Playlist");
+        let out = tree.menu(&m, "Playlist");
+        tree.pass(&m, vec![click(&out, "Pause")]);
+        assert_eq!(tree.sent(), ["TogglePlay"]);
     }
 }

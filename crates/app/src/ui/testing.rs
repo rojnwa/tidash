@@ -243,6 +243,22 @@ pub fn tracks(n: u64) -> Vec<tidal::Track> {
     (1..=n).map(track).collect()
 }
 
+/// `m` playing the tracks of `route` (titled `name`), started from there.
+pub fn playing(m: &mut Model, route: Route, name: &str) {
+    let source = Some(crate::model::Source {
+        route,
+        name: name.into(),
+    });
+    m.apply(Event::Queue(crate::model::QueueSnapshot {
+        source,
+        ..Default::default()
+    }));
+    m.apply(Event::Playback(crate::model::PlaybackSnapshot {
+        state: Some(player::PlayState::Playing),
+        ..Default::default()
+    }));
+}
+
 /// TIDAL's own (no creator name, creator id 0).
 pub fn playlist() -> tidal::Playlist {
     tidal::Playlist {

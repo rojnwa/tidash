@@ -144,7 +144,8 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
   "…" cut to the column.
 - Track lists (`tracks.rs` rows, every list that uses them): each artist name in the Artist column and the album
   name in the Album column is its own link, with the same hover. The rest of the row keeps today's behaviour
-  (hover fill, double-click to play, drag to reorder, right-click menu). Names cut with "…" stay clickable for the
+  (hover fill, drag to reorder, right-click menu) and plays on a single click; a click on a name opens it without
+  playing, and the second click of a double click plays nothing more. Names cut with "…" stay clickable for the
   part shown.
 - In track lists, links are pointer conveniences: they take no Tab stop (the row, its Enter/Space and its menu's Go
   to album / Go to artist cover keyboard and screen-reader users). The menu's "Go to artist" is unchanged.
@@ -157,11 +158,17 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
 ### 3.9 Playback source
 
 - `Action::PlayTracks` carries an optional source: the route playback started from and a human-readable name.
-  Set by: the page header's Play (`header.rs`: the page's route and title) and a track row's double-click/Enter
-  (`tracks.rs`: the current page's route and its title: album, playlist, mix, artist, collection tab). No source
-  (the cover falls back to the album) for a single-track card on a shelf (`shelf.rs`; album/playlist/mix cards
-  only navigate, their play buttons stay deferred per `docs/follow-ups.md`) and for search results
-  (`Route::Search` keeps no query to return to). (Builder's calls, from the builder check.)
+  Set by: the page header's Play (`header.rs`: the page's route and title), a track row's click/Enter
+  (`tracks.rs`: the current page's route and its title: album, playlist, mix, artist, collection tab), and an
+  album/playlist/mix card's play disc or a sidebar playlist's cover (`Action::PlaySource`: that item's route and
+  title, its tracks fetched first). No source (the cover falls back to the album) for a single-track card on a
+  shelf (`shelf.rs`) and for search results (`Route::Search` keeps no query to return to). (Builder's calls,
+  from the builder check.)
+- Play controls outside a page: hovered (or focused), an album/playlist/mix card shows a `TRANSPORT` `accent`
+  disc in its cover's bottom right corner, rising 8 px as it fades in over `OVERLAY`; it is its own Tab stop
+  ("Play {title}"). An expanded sidebar playlist row shows `SCRIM` and a white play glyph over its cover, which
+  grows under the pointer; a click on the cover plays, on the rest of the row opens, and its menu has Play. While
+  that item's tracks play, each shows pause and toggles instead of starting over.
 - The queue keeps it with its tracks and exposes it in its snapshot. Each `PlayTracks` replaces it; Play next, Add
   to queue, remove and reorder leave it. It lives as long as the queue (the queue is not saved across restarts, so
   neither is the source; the mockup's "survives restarts" was wrong).
@@ -169,10 +176,10 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
 
 ### 3.10 Toasts
 
-- One toast at a time, bottom-centre of the content area, just above the player bar: `overlay` fill, radius 12,
-  the popup shadow, `body()` text, padded like a menu item. Fades in (150 ms), stays about 2.5 s, fades out
-  (150 ms); a new one replaces the old. Never takes focus or blocks clicks. AccessKit polite live region, so screen
-  readers announce it.
+- One toast at a time, centred on the window (not the content area beside the sidebar), just above the player
+  bar: `overlay` fill, radius 12, the popup shadow, `body()` text, padded like a menu item. Fades in (150 ms), stays
+  about 2.5 s, fades out (150 ms); a new one replaces the old. Never takes focus or blocks clicks. AccessKit polite
+  live region, so screen readers announce it.
 - Shown for actions with no visible result: Copy link ("Link copied"), Play next ("Playing next"), Add to queue
   ("Added to queue"), favorites from a menu ("Added to favorites" / "Removed from favorites"), shown when the
   action is sent. Adding to a playlist shows the backend's answer as a toast instead ("Added {n} track(s) to
@@ -210,7 +217,7 @@ Every new user-facing string goes through `tr()` and into `crates/app/po/tidash.
 - The headless view tests (`ui/testing.rs` helpers) cover new behaviour: the hand cursor on a hovered control
   (`platform_output.cursor_icon`), no selectable labels, the page's bottom space, slider thumb at rest vs hovered,
   toggle in the top bar, menu item height, `PlayTracks`' source and the cover's navigation (source and fallback),
-  row links navigating without breaking double-click, a toast appearing and expiring with no idle repaint, a cover
+  row links navigating without playing the row, a toast appearing and expiring with no idle repaint, a cover
   fading on first arrival but not when cached, the page fade ending with no repaint.
 - GUI checks the builder can't do (real hover feel, GlazeWM resize) go into one human acceptance list at the end.
   Screenshots via `TIDASH_SCREENSHOT` are fine.

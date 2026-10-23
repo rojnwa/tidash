@@ -122,18 +122,23 @@ mod tests {
         let left = Duration::from_secs_f32(TOAST_SHOW - 1.0);
         let delay = repaint(&out);
         assert!(Duration::ZERO < delay && delay <= left, "{delay:?}");
-        // The pill, opaque, `PAGE_PAD` above the content area's bottom (the player bar's top).
+        // The pill, opaque, `PAGE_PAD` above the content area's bottom (the player bar's top),
+        // centred on the window, not on the content area beside the sidebar.
         let foot = 600.0 - theme::PLAYER_BAR - theme::PAGE_PAD;
         let pill = out.shapes.iter().any(|s| match &s.shape {
-            egui::Shape::Rect(r) => r.fill == Palette::dark().overlay && r.rect.bottom() == foot,
+            egui::Shape::Rect(r) => {
+                r.fill == Palette::dark().overlay
+                    && r.rect.bottom() == foot
+                    && (r.rect.center().x - 400.0).abs() <= 0.5
+            }
             _ => false,
         });
         assert!(pill, "no pill painted");
 
-        // A double click where it sits plays the row under it.
+        // A click where it sits plays the row under it.
         let at = testing::middle(&out, "Link copied");
         pass(1.02, None, vec![egui::Event::PointerMoved(at)]);
-        for (i, pressed) in [true, false, true, false].into_iter().enumerate() {
+        for (i, pressed) in [true, false].into_iter().enumerate() {
             pass(
                 1.04 + 0.02 * i as f64,
                 None,
