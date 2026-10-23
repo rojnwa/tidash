@@ -52,7 +52,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                 let num = (i + 1).to_string();
                 // By index: a track queued twice plays at one of them.
                 let current = (q.current == Some(i)).then_some(tier);
-                tracks::paint_row(ui, ctx, &row, num, t, true, false, current);
+                let opened = tracks::paint_row(ui, ctx, &row, num, t, true, false, current);
                 if row.drag_started_by(PointerButton::Primary) {
                     let drag = QueueDrag {
                         from: i,
@@ -60,7 +60,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut Ctx) {
                     };
                     DragAndDrop::set_payload(ui.ctx(), drag);
                 }
-                if t.stream_ready && (row.double_clicked() || tracks::activated(&row)) {
+                if t.stream_ready && !opened && tracks::activated(&row) {
                     ctx.send(Action::PlayQueueIndex(i));
                 }
                 let p = ctx.palette;

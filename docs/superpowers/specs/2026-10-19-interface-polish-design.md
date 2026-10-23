@@ -144,7 +144,8 @@ One shared style for every context menu and its submenus: track rows (`tracks.rs
   "…" cut to the column.
 - Track lists (`tracks.rs` rows, every list that uses them): each artist name in the Artist column and the album
   name in the Album column is its own link, with the same hover. The rest of the row keeps today's behaviour
-  (hover fill, double-click to play, drag to reorder, right-click menu). Names cut with "…" stay clickable for the
+  (hover fill, drag to reorder, right-click menu) and plays on a single click; a click on a name opens it without
+  playing, and the second click of a double click plays nothing more. Names cut with "…" stay clickable for the
   part shown.
 - In track lists, links are pointer conveniences: they take no Tab stop (the row, its Enter/Space and its menu's Go
   to album / Go to artist cover keyboard and screen-reader users). The menu's "Go to artist" is unchanged.
@@ -210,7 +211,7 @@ Every new user-facing string goes through `tr()` and into `crates/app/po/tidash.
 - The headless view tests (`ui/testing.rs` helpers) cover new behaviour: the hand cursor on a hovered control
   (`platform_output.cursor_icon`), no selectable labels, the page's bottom space, slider thumb at rest vs hovered,
   toggle in the top bar, menu item height, `PlayTracks`' source and the cover's navigation (source and fallback),
-  row links navigating without breaking double-click, a toast appearing and expiring with no idle repaint, a cover
+  row links navigating without playing the row, a toast appearing and expiring with no idle repaint, a cover
   fading on first arrival but not when cached, the page fade ending with no repaint.
 - GUI checks the builder can't do (real hover feel, GlazeWM resize) go into one human acceptance list at the end.
   Screenshots via `TIDASH_SCREENSHOT` are fine.
