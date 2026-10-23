@@ -413,6 +413,47 @@ fn an_old_sessions_late_expiry_leaves_a_new_login_alone() {
     assert_eq!(store.get(), ["clear"], "the new session is not cleared");
 }
 
+/// A play's tracks fetched by a session that has ended since (logged out, then in again)
+/// land after the queue was reset: they are dropped. The current session's play.
+#[test]
+fn a_play_fetched_by_an_ended_session_is_dropped() {
+    let rt = runtime();
+    let (mut b, events, _msgs) = new_backend(Arc::new(Calls::default()), Ok(None));
+    // The stream load a play starts goes nowhere.
+    let local = || "http://127.0.0.1:9/v1/".parse().expect("a URL");
+    b.cfg = ClientConfig {
+        api_base: local(),
+        auth_base: local(),
+        ..ClientConfig::default()
+    };
+    let (output, _, _renderer) = player::Player::spawn_manual();
+    let audio = Default::default();
+    b.playback = Some(Playback::new(output, b.emit.clone(), b.msgs.clone(), audio));
+    b.log_in(session("old"));
+    let old = b.client.clone().expect("logged in");
+    let play = |client| Msg::Play {
+        client,
+        tracks: vec![track()],
+        source: crate::model::Source {
+            route: Route::Mix("m1".into()),
+            name: "Mix".into(),
+        },
+    };
+    let queued = || {
+        let queue = |ev| matches!(ev, Event::Queue(q) if !q.tracks.is_empty());
+        events.try_iter().any(queue)
+    };
+    rt.block_on(b.handle(Action::Logout));
+    rt.block_on(b.on_msg(play(Arc::clone(&old))));
+    assert!(!queued(), "played logged out");
+    b.log_in(session("new"));
+    let new = b.client.clone().expect("logged in again");
+    rt.block_on(b.on_msg(play(old)));
+    assert!(!queued(), "played in the next session");
+    rt.block_on(b.on_msg(play(new)));
+    assert!(queued(), "the current session's play");
+}
+
 /// A play report that goes out after Logout (from a task still holding the old client)
 /// with a stale token refreshes it, but must not write it back to the store.
 #[test]

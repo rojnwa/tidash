@@ -105,7 +105,12 @@ pub async fn play(c: Arc<Client>, source: Source, emit: Arc<Emitter>, msgs: Unbo
             | PageData::Playlist { tracks, .. }
             | PageData::Mix { tracks, .. },
         ) if !tracks.is_empty() => {
-            let _ = msgs.send(Msg::Play { tracks, source }); // backend gone = app closing
+            let play = Msg::Play {
+                client: c,
+                tracks,
+                source,
+            };
+            let _ = msgs.send(play); // backend gone = app closing
         }
         Ok(_) => {}
         Err(e) if session_expired(&e, &c, &msgs) => {}
@@ -440,7 +445,8 @@ pub(crate) mod tests {
         assert!(events.is_empty(), "{events:?}");
         assert!(matches!(
             played,
-            Some(Msg::Play { tracks, source: s }) if !tracks.is_empty() && s == source
+            Some(Msg::Play { client, tracks, source: s })
+                if Arc::ptr_eq(&client, &c) && !tracks.is_empty() && s == source
         ));
         let (events, played) = run().await; // 404 now
         assert!(matches!(events[..], [Event::Error(_)]), "{events:?}");

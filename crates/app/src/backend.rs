@@ -305,7 +305,19 @@ impl Backend {
             Msg::NowPlaying(l) => self.scrobbling(|s| async move { s.now_playing(l).await }),
             Msg::Scrobble(l) => self.scrobbling(|s| async move { s.scrobble(l).await }),
             Msg::Scrobbled(out) => self.scrobbled(out).await,
-            Msg::Play { tracks, source } => {
+            Msg::Play {
+                client,
+                tracks,
+                source,
+            } => {
+                // Fetched before a logout, an expiry or another login: not this session's.
+                if !self
+                    .client
+                    .as_ref()
+                    .is_some_and(|c| Arc::ptr_eq(c, &client))
+                {
+                    return;
+                }
                 let source = Some(source);
                 self.handle(Action::PlayTracks {
                     tracks,
